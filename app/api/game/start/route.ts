@@ -41,7 +41,10 @@ export async function POST(req: Request) {
     if (players.length < 2) return NextResponse.json({ error: "Need at least 2 players in lobby" }, { status: 400 });
 
     // get fixtures from your own internal API (server-side fetch)
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const host = req.headers.get("host");
+const proto = host?.includes("localhost") ? "http" : "https";
+const base = host ? `${proto}://${host}` : "http://localhost:3000";
+
     const fxRes = await fetch(`${base}/api/fixtures?gameweek=${gw}`, { cache: "no-store" });
     if (!fxRes.ok) return NextResponse.json({ error: "Failed to load fixtures" }, { status: 502 });
 

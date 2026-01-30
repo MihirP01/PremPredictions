@@ -72,19 +72,6 @@ export default function MiniGamePlayPage() {
     return () => { cancelled = true; };
   }, []);
   
-  useEffect(() => {
-  if (!gw) return;
-
-  const gameRef = doc(db, "rooms", roomCode, "games", `gw-${gw}`);
-
-  return onSnapshot(gameRef, (snap) => {
-    const state = snap.data()?.state;
-
-    if (state === "DRAFT") {
-      router.push(`/room/${roomCode}/minigame/play`);
-    }
-  });
-}, [roomCode, gw]);
   // load fixtures for GW
   useEffect(() => {
     if (gw == null) return;
@@ -108,19 +95,26 @@ export default function MiniGamePlayPage() {
     });
   }, [roomCode, gw]);
 
-  const current = useMemo(() => {
+    const current = useMemo(() => {
     if (!game) return null;
     const order = game.order || [];
     const fixtureIds = game.fixtureIds || [];
     const turn = game.currentTurn ?? 0;
     if (!order.length || !fixtureIds.length) return null;
 
-    const playerIndex = turn % order.length;
-    const fixtureIndex = Math.floor(turn / order.length);
-    const uidTurn = order[playerIndex];
+    const P = order.length;
+    const fixtureIndex = Math.floor(turn / P);
+    if (fixtureIndex >= fixtureIds.length) return null;
+
+    const turnInFixture = turn % P;
+
+    // ✅ ROTATION: each new fixture shifts who goes first
+    const rotatedIndex = (turnInFixture + fixtureIndex) % P;
+
+    const uidTurn = order[rotatedIndex];
     const fixtureId = fixtureIds[fixtureIndex];
 
-    return { uidTurn, fixtureId, fixtureIndex, playerIndex, turn };
+    return { uidTurn, fixtureId, fixtureIndex, turn, rotatedIndex, turnInFixture };
   }, [game]);
 
   const amITurn = !!user && !!current && current.uidTurn === user.uid;

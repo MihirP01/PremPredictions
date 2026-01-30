@@ -45,14 +45,12 @@ export default function FixturesPage() {
   const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
   const router = useRouter();
   const { user, loading } = useAuth();
-
-  const [gw, setGw] = useState<number | null>(null);
-
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [picksByFixture, setPicksByFixture] = useState<PicksByFixture>({});
   const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>({});
   const [error, setError] = useState<string | null>(null);
+  const [gw, setGw] = useState<number>(1);
 useEffect(() => {
   let cancelled = false;
 

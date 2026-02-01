@@ -1,6 +1,26 @@
 import "./globals.css";
 import { AuthProvider } from "../components/AuthProvider";
 
+export const metadata = {
+  title: "PL Predictions",
+  applicationName: "PL Predictions",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "PL Predictions",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -8,10 +28,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="text-foreground">
-        <div className="min-h-screen bg-app">
-          <AuthProvider>{children}</AuthProvider>
-        </div>
+      <body className="min-h-[100dvh]">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

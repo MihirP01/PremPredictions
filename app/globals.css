@@ -1,36 +1,37 @@
 @import "tailwindcss";
 
-/* ===== Theme tokens (single source of truth) ===== */
+/* ===== Theme tokens ===== */
 :root {
-  /* App background (blue-green gradient, light) */
+  /* Light: blue-green fluid */
   --app-bg: linear-gradient(135deg, #d9f2f0, #a7e1dc, #6fc3bf);
 
-  /* Surfaces */
   --surface: rgba(255, 255, 255, 0.82);
   --surface-2: rgba(255, 255, 255, 0.92);
   --input: rgba(255, 255, 255, 0.72);
 
-  /* Text */
   --foreground: #0b1220;
   --muted: rgba(11, 18, 32, 0.65);
 
-  /* Borders / ring */
   --border: rgba(11, 18, 32, 0.12);
 
-  /* Accent */
-  --accent: #0ea5a4; /* teal */
+  --accent: #0ea5a4;
   --accent-foreground: #061018;
 
-  /* Status */
   --danger: #dc2626;
 
-  /* Shadows */
   --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.1);
+
+  /* Solid fallback under Safari UI */
+  --app-solid: #0f2027;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --app-bg: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    /*
+      Dark mode: still dark, but teal/blue-green rather than navy-only.
+      (This is the main “why it’s still navy” fix.)
+    */
+    --app-bg: linear-gradient(135deg, #06181c, #0b3b3a, #0ea5a4);
 
     --surface: rgba(10, 12, 16, 0.72);
     --surface-2: rgba(10, 12, 16, 0.84);
@@ -41,39 +42,75 @@
 
     --border: rgba(238, 242, 255, 0.14);
 
-    --accent: #2dd4bf; /* brighter teal for dark */
+    --accent: #2dd4bf;
     --accent-foreground: #04110f;
 
     --danger: #f87171;
 
     --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
+
+    --app-solid: #06181c;
   }
 }
 
-/* ===== Tailwind theme mapping (keeps your setup compatible) ===== */
+/* ===== Tailwind v4 inline theme mapping ===== */
 @theme inline {
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-/* ===== Base document styling (Safari-safe) ===== */
+/* ===== Reset ===== */
 html,
 body {
-  min-height: 100%;
+  background-color: var(--app-solid);
+}
+
+/*
+  Paint gradient on BOTH html and body.
+  iOS Safari can be inconsistent if only one has the background.
+*/
+html {
+  background-image: var(--app-bg);
+  
 }
 
 body {
+  min-height: 100%;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: var(--app-bg);
-  background-attachment: fixed;
+
+  background-color: var(--app-solid);
+  background-image: var(--app-bg);
+
+  overscroll-behavior-y: none;
 }
 
-/* ===== Semantic utility classes (your app should use these) ===== */
+/* Next.js App Router root wrapper(s) */
+body > div {
+  min-height: 100dvh;
+  background: transparent;
+}
+
+/* Full height coverage (dynamic viewport on iOS) */
+html,
+body,
+body > div {
+  min-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  body > div {
+    min-height: 100dvh;
+  }
+}
+
+/* ===== Semantic utility classes ===== */
 .bg-app {
-  background: var(--app-bg);
+  background-image: var(--app-bg);
 }
 
 .bg-surface {
@@ -118,7 +155,6 @@ body {
   box-shadow: var(--shadow-card);
 }
 
-/* Optional: nicer default focus ring color */
 :focus-visible {
   outline: none;
 }

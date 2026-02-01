@@ -151,14 +151,16 @@ export default function MiniGamePlayPage() {
 
   if (gw == null || fixtures == null) {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="text-sm text-muted">Loading…</div>
       </div>
     );
   }
   if (!game) {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="text-sm text-muted">Game not started yet.</div>
       </div>
     );
@@ -211,7 +213,8 @@ export default function MiniGamePlayPage() {
   );
 
   return (
-    <div className="min-h-screen p-6 bg-app">
+    <div className="min-h-[100dvh] p-6 bg-app">
+
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between">
           <div>

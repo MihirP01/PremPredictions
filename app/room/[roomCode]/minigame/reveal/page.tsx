@@ -228,7 +228,8 @@ export default function RevealPage() {
 
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="text-sm text-muted">Loading reveal…</div>
       </div>
     );
@@ -237,7 +238,8 @@ export default function RevealPage() {
   const state = String(game.state ?? "").toUpperCase();
   if (state !== "REVEAL") {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-3 border border-subtle">
           <div className="text-xl font-semibold text-foreground">
             Reveal not ready
@@ -255,7 +257,8 @@ export default function RevealPage() {
   }
 
   return (
-    <div className="min-h-screen p-6 bg-app">
+    <div className="min-h-[100dvh] p-6 bg-app">
+
       <div className="max-w-4xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>

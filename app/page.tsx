@@ -13,5 +13,9 @@ export default function Page() {
     router.replace(user ? "/room-gate" : "/login");
   }, [loading, user, router]);
 
-  return <div className="p-6">Loading…</div>;
+  return (
+    <div className="min-h-screen bg-app flex items-center justify-center">
+      <div className="text-sm text-muted">Loading…</div>
+    </div>
+  );
 }

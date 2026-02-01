@@ -154,7 +154,7 @@ export default function RoomPage() {
   });
 
   return (
-    <div className="min-h-screen p-6 bg-app">
+    <div className="min-h-[100dvh] p-6 bg-app">
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-foreground">

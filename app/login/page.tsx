@@ -54,7 +54,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-app">
+    <div className="min-h-[100dvh] flex items-center justify-center p-6 bg-app">
       <div className="w-full max-w-md bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <h1 className="text-2xl font-semibold text-foreground">
           {mode === "signin" ? "Sign in" : "Create account"}

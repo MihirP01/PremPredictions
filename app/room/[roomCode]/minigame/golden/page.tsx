@@ -269,7 +269,8 @@ export default function GoldenPage() {
   if (loading || !user) return null;
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="text-sm text-muted">Loading golden…</div>
       </div>
     );
@@ -277,7 +278,8 @@ export default function GoldenPage() {
 
   if (String(game.state).toUpperCase() !== "GOLDEN") {
     return (
-      <div className="min-h-screen p-6 bg-app">
+      <div className="min-h-[100dvh] p-6 bg-app">
+
         <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 border border-subtle">
           <div className="text-lg font-semibold text-foreground">
             Not in Golden phase
@@ -295,7 +297,8 @@ export default function GoldenPage() {
     : fixtures.map((f) => f.fixtureId);
 
   return (
-    <div className="min-h-screen p-6 bg-app">
+    <div className="min-h-[100dvh] p-6 bg-app">
+
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>

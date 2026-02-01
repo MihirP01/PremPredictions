@@ -35,13 +35,22 @@ const MAX_GW = 38;
 
 function fmtKickoff(iso: string) {
   const dt = new Date(iso);
-  const dateStr = dt.toLocaleDateString();
-  const timeStr = dt.toLocaleTimeString([], {
+
+  const date = dt.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const time = dt.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
-  return `${dateStr} • ${timeStr}`;
+
+  return `${date} • ${time}`;
 }
+
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
@@ -197,7 +206,8 @@ export default function FixturesPage() {
   const isLoading = fixtures === null;
 
   return (
-    <div className="min-h-screen p-6 bg-app">
+    <div className="min-h-[100dvh] p-6 bg-app">
+
       <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">

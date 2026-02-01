@@ -76,7 +76,7 @@ html {
 }
 
 body {
-  min-height: 100%;
+  min-height: 100vh;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -91,6 +91,7 @@ body {
 body > div {
   min-height: 100dvh;
   background: transparent;
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Full height coverage (dynamic viewport on iOS) */

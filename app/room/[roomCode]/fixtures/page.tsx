@@ -36,40 +36,53 @@ const MAX_GW = 38;
 function fmtKickoff(iso: string) {
   const dt = new Date(iso);
   const dateStr = dt.toLocaleDateString();
-  const timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeStr = dt.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${dateStr} • ${timeStr}`;
+}
+
+function fmtScore(s?: string | null) {
+  if (!s) return "—";
+  return String(s).replace("-", "–");
 }
 
 export default function FixturesPage() {
   const params = useParams<{ roomCode: string }>();
-  const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
+  const roomCode = useMemo(
+    () => String(params.roomCode).toUpperCase(),
+    [params.roomCode],
+  );
   const router = useRouter();
   const { user, loading } = useAuth();
+
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [picksByFixture, setPicksByFixture] = useState<PicksByFixture>({});
   const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>({});
   const [error, setError] = useState<string | null>(null);
   const [gw, setGw] = useState<number>(1);
-useEffect(() => {
-  let cancelled = false;
 
-  (async () => {
-    try {
-      const res = await fetch("/api/current-gameweek");
-      const data = await res.json();
-      const current = Number(data?.currentGameweek ?? 1);
+  useEffect(() => {
+    let cancelled = false;
 
-      if (!cancelled) setGw(Number.isFinite(current) ? current : 1);
-    } catch {
-      if (!cancelled) setGw(1);
-    }
-  })();
+    (async () => {
+      try {
+        const res = await fetch("/api/current-gameweek");
+        const data = await res.json();
+        const current = Number(data?.currentGameweek ?? 1);
+        if (!cancelled) setGw(Number.isFinite(current) ? current : 1);
+      } catch {
+        if (!cancelled) setGw(1);
+      }
+    })();
 
-  return () => {
-    cancelled = true;
-  };
-}, []);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Auth guard
   useEffect(() => {
     if (loading) return;
@@ -88,7 +101,10 @@ useEffect(() => {
         });
         setPlayers(list);
       },
-      (e) => setError(`Failed to load players: ${e?.message ?? "permission denied"}`)
+      (e) =>
+        setError(
+          `Failed to load players: ${e?.message ?? "permission denied"}`,
+        ),
     );
     return () => unsub();
   }, [roomCode]);
@@ -111,7 +127,9 @@ useEffect(() => {
     })().catch((e) => {
       if (!cancelled) {
         setFixtures([]);
-        setError(`Failed to load fixtures for GW ${gw}. ${e?.message ?? ""}`.trim());
+        setError(
+          `Failed to load fixtures for GW ${gw}. ${e?.message ?? ""}`.trim(),
+        );
       }
     });
 
@@ -120,7 +138,7 @@ useEffect(() => {
     };
   }, [gw]);
 
-  // Load minigame picks + golden for selected GW (if none exist, we just show blanks)
+  // Load minigame picks + golden for selected GW
   useEffect(() => {
     let cancelled = false;
 
@@ -129,9 +147,8 @@ useEffect(() => {
       setPicksByFixture({});
       setGoldenByUid({});
 
-      // picks
       const picksSnap = await getDocs(
-        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks")
+        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
       );
 
       const byFx: PicksByFixture = {};
@@ -140,20 +157,21 @@ useEffect(() => {
         const fixtureId = Number(data.fixtureId);
         const uid = String(data.uid);
         const score = String(data.score);
-
         if (!byFx[fixtureId]) byFx[fixtureId] = {};
         byFx[fixtureId][uid] = score;
       }
 
-      // golden
       const goldenSnap = await getDocs(
-        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden")
+        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
       );
 
       const gByUid: GoldenByUid = {};
       for (const d of goldenSnap.docs) {
         const data = d.data() as any;
-        gByUid[d.id] = { fixtureId: Number(data.fixtureId), score: String(data.score) };
+        gByUid[d.id] = {
+          fixtureId: Number(data.fixtureId),
+          score: String(data.score),
+        };
       }
 
       if (!cancelled) {
@@ -161,8 +179,6 @@ useEffect(() => {
         setGoldenByUid(gByUid);
       }
     })().catch((e) => {
-      // Important: this should NOT hard-fail the page — many weeks won't have minigame data.
-      // Only show an error if it's a real permission issue.
       const msg = String(e?.message ?? "");
       if (!cancelled && msg.toLowerCase().includes("permission")) {
         setError(`Failed to load minigame picks: ${msg}`);
@@ -174,71 +190,116 @@ useEffect(() => {
     };
   }, [roomCode, gw]);
 
-  const gameweeks = useMemo(() => Array.from({ length: MAX_GW }, (_, i) => i + 1), []);
+  const gameweeks = useMemo(
+    () => Array.from({ length: MAX_GW }, (_, i) => i + 1),
+    [],
+  );
   const isLoading = fixtures === null;
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen p-6 bg-app">
+      <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Fixtures</h1>
-            <div className="text-sm text-gray-500">Room {roomCode}</div>
+            <h1 className="text-2xl font-semibold text-foreground">
+              PL Fixtures
+            </h1>
+            <div className="text-sm text-muted">
+              {roomCode} • GW {gw} Fixtures
+            </div>
           </div>
 
           <button
             onClick={() => router.push(`/room/${roomCode}`)}
-            className="text-sm border rounded-lg px-4 py-2"
+            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
           >
             Back
           </button>
         </div>
 
-        {/* GW nav (like before) */}
+        {/* GW nav */}
         <div className="flex items-center justify-center gap-3">
           <button
-            className="px-3 py-2 rounded-lg border bg-white disabled:opacity-50"
             disabled={isLoading || gw === MIN_GW}
             onClick={() => setGw((x) => Math.max(MIN_GW, x - 1))}
+            className="
+    h-10 w-10
+    flex items-center justify-center
+    rounded-lg
+    bg-surface
+    border border-subtle
+    text-foreground
+    hover:bg-surface-2
+    disabled:opacity-40
+  "
           >
             ←
           </button>
 
-          <select
-            className="px-3 py-2 rounded-lg border bg-white"
-            value={gw}
-            disabled={isLoading}
-            onChange={(e) => setGw(Number(e.target.value))}
-          >
-            {gameweeks.map((n) => (
-              <option key={n} value={n}>
-                GW {n}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={gw}
+              disabled={isLoading}
+              onChange={(e) => setGw(Number(e.target.value))}
+              className="
+      h-10
+      px-6
+      rounded-lg
+      border border-teal-500
+      bg-surface
+      text-foreground
+      text-sm font-medium
+      text-center
+      appearance-none
+      flex items-center justify-center
+      focus:outline-none
+      focus:ring-2
+      focus:ring-teal-500
+    "
+            >
+              {gameweeks.map((n) => (
+                <option key={n} value={n}>
+                  GW {n}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button
-            className="px-3 py-2 rounded-lg border bg-white disabled:opacity-50"
             disabled={isLoading || gw === MAX_GW}
             onClick={() => setGw((x) => Math.min(MAX_GW, x + 1))}
+            className="
+    h-10 w-10
+    flex items-center justify-center
+    rounded-lg
+    bg-surface
+    border border-subtle
+    text-foreground
+    hover:bg-surface-2
+    disabled:opacity-40
+  "
           >
             →
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3">
+          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
             {error}
           </div>
         )}
 
         {/* Fixtures */}
         <div className="space-y-4">
-          {isLoading && <div className="text-center text-gray-500">Loading fixtures…</div>}
+          {isLoading && (
+            <div className="text-center text-muted">Loading fixtures…</div>
+          )}
 
           {!isLoading && fixtures.length === 0 && (
-            <div className="text-center text-gray-500">No fixtures available for this gameweek.</div>
+            <div className="text-center text-muted">
+              No fixtures available for this gameweek.
+            </div>
           )}
 
           {!isLoading &&
@@ -247,33 +308,45 @@ useEffect(() => {
               const actual = f.result ?? null;
 
               return (
-                <div key={f.fixtureId} className="border rounded-xl p-4">
+                <div
+                  key={f.fixtureId}
+                  className="border border-subtle rounded-xl p-4 bg-surface-2"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold">
+                      <div className="font-semibold text-sm text-foreground">
                         {f.home.name} vs {f.away.name}
                       </div>
-                      <div className="text-xs text-gray-500">{fmtKickoff(f.kickoff)}</div>
-                      <div className="text-xs text-gray-500 uppercase">{f.status}</div>
+                      <div className="text-xs text-muted">
+                        {fmtKickoff(f.kickoff)}
+                      </div>
+                      <div className="text-xs text-muted uppercase">
+                        {f.status}
+                      </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-sm text-gray-600">Result</div>
-                      <div className="text-lg font-semibold">
+                      <div className="text-sm text-muted">Result</div>
+                      <div className="text-lm font-semibold text-foreground">
                         {actual ? actual.replace("-", " – ") : "TBD"}
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4">
-                    <div className="text-sm font-semibold mb-2">Room Predictions</div>
+                    <div className="text-sm font-semibold mb-2 text-foreground">
+                      Room Predictions
+                    </div>
 
                     {players.length === 0 ? (
-                      <div className="text-sm text-gray-500">No players found.</div>
+                      <div className="text-sm text-muted">
+                        No players found.
+                      </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {players.map((p) => {
-                          const pred = picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
+                          const pred =
+                            picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
                           const golden = goldenByUid[p.uid];
                           const isGolden =
                             !!golden &&
@@ -283,18 +356,21 @@ useEffect(() => {
                           return (
                             <div
                               key={p.uid}
-                              className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+                              className="flex items-center justify-between bg-surface border border-subtle rounded-lg px-3 py-2"
                             >
-                              <div className="text-sm font-medium">{p.displayName}</div>
-                              <div className="flex items-center gap-2">
-                                {isGolden && (
-                                  <span className="text-xs bg-yellow-100 rounded-full px-2 py-1">
-                                    Golden
-                                  </span>
-                                )}
-                                <div className="text-sm text-gray-700">
-                                  {pred ? pred.replace("-", " – ") : "—"}
-                                </div>
+                              <div className="text-sm font-medium text-foreground truncate">
+                                {p.displayName}
+                              </div>
+
+                              <div
+                                className={[
+                                  "inline-block rounded-lg px-2 py-1 border border-subtle  whitespace-nowrap text-sm font-bold",
+                                  isGolden
+                                    ? "bg-yellow-300 text-black"
+                                    : "bg-surface-2 text-foreground",
+                                ].join(" ")}
+                              >
+                                {fmtScore(pred.replace("-", " - "))}
                               </div>
                             </div>
                           );
@@ -303,7 +379,7 @@ useEffect(() => {
                     )}
 
                     {Object.keys(picksByFixture).length === 0 && (
-                      <div className="text-xs text-gray-500 mt-2">
+                      <div className="text-xs text-muted mt-2">
                         No minigame picks saved for this GW yet.
                       </div>
                     )}

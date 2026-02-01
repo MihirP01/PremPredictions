@@ -13,7 +13,9 @@ function outcome(h: number, a: number) {
 
 function parseScore(s: string | null | undefined) {
   if (!s) return null;
-  const m = String(s).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  const m = String(s)
+    .trim()
+    .match(/^(\d+)\s*-\s*(\d+)$/);
   if (!m) return null;
   return { h: Number(m[1]), a: Number(m[2]) };
 }
@@ -35,30 +37,45 @@ export async function POST(req: Request) {
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
 
-    if (!rc) return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
+    if (!rc)
+      return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     if (!Number.isFinite(gwn) || gwn < 1 || gwn > 38)
       return NextResponse.json({ error: "Bad gw" }, { status: 400 });
 
     const gameRef = adminDb.doc(`rooms/${rc}/games/gw-${gwn}`);
     const gameSnap = await gameRef.get();
-    if (!gameSnap.exists) return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    if (!gameSnap.exists)
+      return NextResponse.json({ error: "Game not found" }, { status: 404 });
 
     const game = gameSnap.data() as any;
     const players: string[] = Array.isArray(game.players) ? game.players : [];
-    const fixtureIds: number[] = Array.isArray(game.fixtureIds) ? game.fixtureIds : [];
+    const fixtureIds: number[] = Array.isArray(game.fixtureIds)
+      ? game.fixtureIds
+      : [];
     if (players.length === 0 || fixtureIds.length === 0)
-      return NextResponse.json({ error: "Missing players/fixtures" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing players/fixtures" },
+        { status: 400 },
+      );
 
     // Get fixtures + results from your internal API
     const host = req.headers.get("host");
     const proto = host?.includes("localhost") ? "http" : "https";
     const base = host ? `${proto}://${host}` : "http://localhost:3000";
 
-    const fxRes = await fetch(`${base}/api/fixtures?gameweek=${gwn}`, { cache: "no-store" });
-    if (!fxRes.ok) return NextResponse.json({ error: "Failed to load fixtures" }, { status: 502 });
+    const fxRes = await fetch(`${base}/api/fixtures?gameweek=${gwn}`, {
+      cache: "no-store",
+    });
+    if (!fxRes.ok)
+      return NextResponse.json(
+        { error: "Failed to load fixtures" },
+        { status: 502 },
+      );
 
     const fxData = await fxRes.json();
-    const fixtures: any[] = Array.isArray(fxData.fixtures) ? fxData.fixtures : [];
+    const fixtures: any[] = Array.isArray(fxData.fixtures)
+      ? fxData.fixtures
+      : [];
 
     // Build actual results map fixtureId -> "x-y" (only if finished)
     const actualByFixture = new Map<number, string>();
@@ -70,11 +87,17 @@ export async function POST(req: Request) {
 
     // If no results yet, nothing to score
     if (actualByFixture.size === 0) {
-      return NextResponse.json({ ok: true, scored: 0, message: "No finished results yet." });
+      return NextResponse.json({
+        ok: true,
+        scored: 0,
+        message: "No finished results yet.",
+      });
     }
 
     // Read all picks docs for this GW
-    const picksSnap = await adminDb.collection(`rooms/${rc}/games/gw-${gwn}/picks`).get();
+    const picksSnap = await adminDb
+      .collection(`rooms/${rc}/games/gw-${gwn}/picks`)
+      .get();
     const picks = picksSnap.docs.map((d) => d.data() as any);
 
     // Map uid|fixtureId -> score
@@ -88,12 +111,20 @@ export async function POST(req: Request) {
     }
 
     // Read golden docs (doc id is uid)
-    const goldenSnap = await adminDb.collection(`rooms/${rc}/games/gw-${gwn}/golden`).get();
-    const goldenByUid = new Map<string, { fixtureId: number; locked: boolean }>();
+    const goldenSnap = await adminDb
+      .collection(`rooms/${rc}/games/gw-${gwn}/golden`)
+      .get();
+    const goldenByUid = new Map<
+      string,
+      { fixtureId: number; locked: boolean }
+    >();
     for (const d of goldenSnap.docs) {
       const data = d.data() as any;
       const uid = d.id;
-      goldenByUid.set(uid, { fixtureId: Number(data.fixtureId), locked: !!data.locked });
+      goldenByUid.set(uid, {
+        fixtureId: Number(data.fixtureId),
+        locked: !!data.locked,
+      });
     }
 
     // Compute + write scores per user (only for fixtures that have actual results)
@@ -139,7 +170,7 @@ export async function POST(req: Request) {
           breakdown,
           computedAt: FieldValue.serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
 
       scoredUsers++;
@@ -149,6 +180,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, scored: scoredUsers });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "score failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "score failed" },
+      { status: 500 },
+    );
   }
 }

@@ -22,7 +22,7 @@ export default function RoomPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
     () => String(params.roomCode).toUpperCase(),
-    [params.roomCode]
+    [params.roomCode],
   );
 
   const { user, loading } = useAuth();
@@ -56,7 +56,9 @@ export default function RoomPage() {
       setLeaderUid(roomSnap.data()?.leaderUid ?? null);
 
       // ensure user is a member (if they hit URL directly)
-      const memberSnap = await getDoc(doc(db, "rooms", roomCode, "players", user.uid));
+      const memberSnap = await getDoc(
+        doc(db, "rooms", roomCode, "players", user.uid),
+      );
       if (!memberSnap.exists()) {
         await setDoc(doc(db, "rooms", roomCode, "players", user.uid), {
           displayName: user.email?.split("@")[0] || "Player",
@@ -132,9 +134,12 @@ export default function RoomPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to recalculate scores.");
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to recalculate scores.");
 
-      setRecalcMsg(`✅ Scores updated for GW${gw} (scored ${data?.scored ?? "?"} users)`);
+      setRecalcMsg(
+        `✅ Scores updated for GW${gw} (scored ${data?.scored ?? "?"} users)`,
+      );
     } catch (e: any) {
       setRecalcMsg(null);
       setError(e?.message ?? "Failed to recalculate scores.");
@@ -142,12 +147,19 @@ export default function RoomPage() {
       setRecalcLoading(false);
     }
   }
+  const sortedPlayers = [...players].sort((a, b) => {
+    if (a.role === "leader") return -1;
+    if (b.role === "leader") return 1;
+    return a.displayName.localeCompare(b.displayName);
+  });
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen p-6 bg-app">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Room {roomCode}</h1>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Room: <span className="italic font-thin text-xl">{roomCode}</span>
+          </h1>
           <div className="flex gap-2">
             <LogoutButton />
           </div>
@@ -156,21 +168,21 @@ export default function RoomPage() {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => router.push(`/room/${roomCode}/fixtures`)}
-            className="text-sm bg-black text-white rounded-lg px-4 py-2"
+            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
           >
             Fixtures
           </button>
 
           <button
             onClick={() => router.push(`/room/${roomCode}/minigame`)}
-            className="text-sm bg-black text-white rounded-lg px-4 py-2"
+            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
           >
-            Predict Next Week
+            Predictions
           </button>
 
           <button
             onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
-            className="text-sm bg-black text-white rounded-lg px-4 py-2"
+            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
           >
             Leaderboard
           </button>
@@ -178,54 +190,63 @@ export default function RoomPage() {
 
         {/* Leader tools */}
         {isLeader && (
-          <div className="border rounded-xl p-4 space-y-2">
-            <div className="font-semibold">Leader tools</div>
-            <div className="text-sm text-gray-600">
-              Manually pull latest finished results and recompute scores for the current GW.
+          <div className="border border-subtle rounded-xl p-4 space-y-2 bg-surface-2">
+            <div className="font-semibold text-foreground">
+              Room Leader Tools
             </div>
-
             <button
               onClick={recalcScores}
               disabled={recalcLoading || gw == null}
-              className="text-sm bg-black text-white rounded-lg px-4 py-2 disabled:opacity-60"
+              className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 disabled:opacity-60"
             >
-              {recalcLoading ? "Updating…" : `Update Results / Recalculate (GW${gw ?? "?"})`}
+              {recalcLoading
+                ? "Updating…"
+                : `Update Results / Recalculate (GW${gw ?? "?"})`}
             </button>
 
-            {recalcMsg && <div className="text-sm text-green-700">{recalcMsg}</div>}
+            {recalcMsg && (
+              <div className="text-sm text-foreground">{recalcMsg}</div>
+            )}
           </div>
         )}
 
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && <div className="text-sm text-danger">{error}</div>}
 
-        <div className="border rounded-xl p-4">
-          <div className="font-semibold mb-2">Players</div>
+        <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+          <div className="font-semibold mb-2 text-foreground">Players</div>
           <div className="space-y-2">
-            {players.map((p) => (
+            {sortedPlayers.map((p) => (
               <div
                 key={p.uid}
-                className="flex items-center justify-between border-b last:border-0 py-2"
+                className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
               >
-                <div>
-                  <div className="font-medium">{p.displayName}</div>
-                  <div className="text-xs text-gray-500">{p.role}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-medium text-foreground">
+                    {p.displayName}
+                  </div>
+
+                  {p.role === "leader" && (
+                    <span
+                      className="inline-flex items-center justify-center text-yellow-400"
+                      title="Room leader"
+                      aria-label="Room leader"
+                    >
+                      ★
+                    </span>
+                  )}
                 </div>
 
-                {isLeader && user?.uid !== p.uid && (
+                {/*{isLeader && user?.uid !== p.uid && (
                   <button
                     onClick={() => kick(p.uid)}
-                    className="text-sm border rounded-lg px-3 py-1"
+                    className="text-sm border border-subtle rounded-lg px-3 py-1 bg-surface hover:bg-surface-2"
                   >
                     Kick
                   </button>
-                )}
+                )}*/}
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="text-sm text-gray-500">
-          Next: scoring is now persisted in Firestore via /api/game/score.
         </div>
       </div>
     </div>

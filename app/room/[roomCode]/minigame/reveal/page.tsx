@@ -42,7 +42,10 @@ function fmtScore(s?: string | null) {
 
 export default function RevealPage() {
   const params = useParams<{ roomCode: string }>();
-  const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
+  const roomCode = useMemo(
+    () => String(params.roomCode).toUpperCase(),
+    [params.roomCode],
+  );
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -51,8 +54,12 @@ export default function RevealPage() {
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
 
   const [picks, setPicks] = useState<PickDoc[]>([]);
-  const [goldensByUid, setGoldensByUid] = useState<Record<string, GoldenDoc>>({});
-  const [displayNamesByUid, setDisplayNamesByUid] = useState<Record<string, string>>({});
+  const [goldensByUid, setGoldensByUid] = useState<Record<string, GoldenDoc>>(
+    {},
+  );
+  const [displayNamesByUid, setDisplayNamesByUid] = useState<
+    Record<string, string>
+  >({});
 
   const routedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +99,9 @@ export default function RevealPage() {
         const data = snap.exists() ? (snap.data() as any) : null;
         setGame(data);
 
-        const st = String(data?.state ?? "").trim().toUpperCase();
+        const st = String(data?.state ?? "")
+          .trim()
+          .toUpperCase();
 
         if (routedRef.current) return;
 
@@ -108,7 +117,7 @@ export default function RevealPage() {
           router.replace(`/room/${roomCode}/minigame`);
         }
       },
-      () => setError("Failed to load game state.")
+      () => setError("Failed to load game state."),
     );
 
     return () => unsub();
@@ -120,7 +129,9 @@ export default function RevealPage() {
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}`, { cache: "no-store" });
+      const r = await fetch(`/api/fixtures?gameweek=${gw}`, {
+        cache: "no-store",
+      });
       const d = await r.json().catch(() => ({}));
       const fx: Fixture[] = Array.isArray(d?.fixtures) ? d.fixtures : [];
       if (!cancelled) setFixtures(fx);
@@ -135,14 +146,16 @@ export default function RevealPage() {
   useEffect(() => {
     if (gw == null) return;
 
-    const qPicks = query(collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"));
+    const qPicks = query(
+      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+    );
     return onSnapshot(
       qPicks,
       (snap) => {
         const list: PickDoc[] = snap.docs.map((d) => d.data() as any);
         setPicks(list);
       },
-      () => setError("Failed to listen for picks.")
+      () => setError("Failed to listen for picks."),
     );
   }, [roomCode, gw]);
 
@@ -150,7 +163,9 @@ export default function RevealPage() {
   useEffect(() => {
     if (gw == null) return;
 
-    const qGolden = query(collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"));
+    const qGolden = query(
+      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
+    );
     return onSnapshot(
       qGolden,
       (snap) => {
@@ -158,12 +173,11 @@ export default function RevealPage() {
         for (const d of snap.docs) map[d.id] = d.data() as any;
         setGoldensByUid(map);
       },
-      () => setError("Failed to listen for goldens.")
+      () => setError("Failed to listen for goldens."),
     );
   }, [roomCode, gw]);
 
   // listen lobby display names (best-effort) so we can show names instead of UIDs
-  // We'll read from room players collection (membership) for labels
   useEffect(() => {
     const qPlayers = query(collection(db, "rooms", roomCode, "players"));
     return onSnapshot(
@@ -176,7 +190,7 @@ export default function RevealPage() {
         }
         setDisplayNamesByUid(map);
       },
-      () => {}
+      () => {},
     );
   }, [roomCode]);
 
@@ -199,7 +213,8 @@ export default function RevealPage() {
 
   const picksByUserFixture = useMemo(() => {
     const m = new Map<string, string>(); // key = uid|fixtureId
-    for (const p of picks) m.set(`${p.uid}|${p.fixtureId}`, String(p.score ?? "").trim());
+    for (const p of picks)
+      m.set(`${p.uid}|${p.fixtureId}`, String(p.score ?? "").trim());
     return m;
   }, [picks]);
 
@@ -212,18 +227,24 @@ export default function RevealPage() {
   if (loading || !user) return null;
 
   if (gw == null || fixtures == null || !game) {
-    return <div className="min-h-screen p-6 bg-gray-50">Loading reveal…</div>;
+    return (
+      <div className="min-h-screen p-6 bg-app">
+        <div className="text-sm text-muted">Loading reveal…</div>
+      </div>
+    );
   }
 
   const state = String(game.state ?? "").toUpperCase();
   if (state !== "REVEAL") {
     return (
-      <div className="min-h-screen p-6 bg-gray-50">
-        <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6 space-y-3">
-          <div className="text-xl font-semibold">Reveal not ready</div>
-          <div className="text-sm text-gray-600">Current state: {game.state}</div>
+      <div className="min-h-screen p-6 bg-app">
+        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-3 border border-subtle">
+          <div className="text-xl font-semibold text-foreground">
+            Reveal not ready
+          </div>
+          <div className="text-sm text-muted">Current state: {game.state}</div>
           <button
-            className="text-sm border rounded-lg px-4 py-2"
+            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
             onClick={() => router.push(`/room/${roomCode}/minigame`)}
           >
             Back
@@ -234,19 +255,20 @@ export default function RevealPage() {
   }
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen p-6 bg-app">
+      <div className="max-w-4xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Reveal</h1>
-            <div className="text-sm text-gray-500">Room {roomCode} • GW {gw}</div>
-            <div className="text-xs text-gray-500">
-              Golden locked: {lockedCount}/{players.length}
+            <h1 className="text-2xl font-semibold text-foreground">
+              Predictions Overview
+            </h1>
+            <div className="text-sm text-muted">
+              {roomCode} • GW {gw}
             </div>
           </div>
 
           <button
-            className="text-sm border rounded-lg px-4 py-2"
+            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
             onClick={() => router.push(`/room/${roomCode}`)}
           >
             Exit
@@ -254,55 +276,62 @@ export default function RevealPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3">
+          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
             {error}
           </div>
         )}
 
         {!allLocked && (
-          <div className="border rounded-xl p-4">
-            <div className="font-semibold">Waiting for all golden picks…</div>
-            <div className="text-sm text-gray-600 mt-1">
+          <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+            <div className="font-semibold text-foreground">
+              Waiting for all golden picks…
+            </div>
+            <div className="text-sm text-muted mt-1">
               This screen will fill in as players lock.
             </div>
           </div>
         )}
 
         {/* Picks table */}
-        <div className="overflow-auto border rounded-xl">
+        <div className="overflow-auto border border-subtle rounded-xl bg-surface-2">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-surface">
               <tr>
-                <th className="text-left p-3 border-b">Fixture</th>
+                <th className="w-[260px] text-left p-3 border-b border-subtle text-foreground">
+                  Fixture
+                </th>
+
                 {players.map((uid) => (
-                  <th key={uid} className="text-left p-3 border-b whitespace-nowrap">
-                    {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                    {goldensByUid[uid]?.locked ? (
-                      <span className="ml-2 text-xs bg-yellow-100 rounded-full px-2 py-0.5">
-                        Golden
-                      </span>
-                    ) : null}
+                  <th
+                    key={uid}
+                    className="w-[110px] text-left p-3 border-b border-subtle whitespace-nowrap font-semibold"
+                  >
+                    <span className="block truncate">
+                      {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                    </span>
                   </th>
                 ))}
-                <th className="text-left p-3 border-b whitespace-nowrap">Actual</th>
+
+                <th className="w-[110px] text-left p-3 border-b border-subtle whitespace-nowrap text-foreground">
+                  Actual
+                </th>
               </tr>
             </thead>
-
             <tbody>
               {fixtureIds.map((fid) => {
                 const f = fixtureMap.get(fid);
-                const title = f ? `${f.home.name} vs ${f.away.name}` : `Fixture ${fid}`;
+                const title = f
+                  ? `${f.home.name} vs ${f.away.name}`
+                  : `Fixture ${fid}`;
                 const actual = f?.result ? fmtScore(f.result) : "TBD";
 
                 return (
-                  <tr key={fid} className="border-b last:border-0">
+                  <tr
+                    key={fid}
+                    className="border-b border-subtle last:border-0"
+                  >
                     <td className="p-3 align-top">
-                      <div className="font-medium">{title}</div>
-                      {f && (
-                        <div className="text-xs text-gray-500">
-                          {new Date(f.kickoff).toLocaleString()} • {String(f.status).toUpperCase()}
-                        </div>
-                      )}
+                      <div className="font-medium text-foreground">{title}</div>
                     </td>
 
                     {players.map((uid) => {
@@ -314,8 +343,10 @@ export default function RevealPage() {
                         <td key={uid} className="p-3 align-top">
                           <div
                             className={[
-                              "inline-block rounded-lg px-2 py-1",
-                              isGolden ? "bg-yellow-100 font-semibold" : "bg-gray-50",
+                              "inline-flex items-center justify-center rounded-lg px-2 py-1 border border-subtle whitespace-nowrap min-w-[56px]",
+                              isGolden
+                                ? "bg-yellow-300 font-bold text-black"
+                                : "bg-surface-2 text-foreground",
                             ].join(" ")}
                           >
                             {fmtScore(sc)}
@@ -325,7 +356,7 @@ export default function RevealPage() {
                     })}
 
                     <td className="p-3 align-top">
-                      <div className="inline-block rounded-lg px-2 py-1 bg-gray-50">
+                      <div className="inline-flex items-center justify-center rounded-lg px-2 py-1 bg-surface-2 border border-subtle text-foreground whitespace-nowrap min-w-[56px]">
                         {actual}
                       </div>
                     </td>
@@ -334,10 +365,6 @@ export default function RevealPage() {
               })}
             </tbody>
           </table>
-        </div>
-
-        <div className="text-xs text-gray-500">
-          Next: leaderboard/points calculation (we’ll compute 2x/4x for each player’s golden fixture).
         </div>
       </div>
     </div>

@@ -1,26 +1,124 @@
 @import "tailwindcss";
 
+/* ===== Theme tokens (single source of truth) ===== */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* App background (blue-green gradient, light) */
+  --app-bg: linear-gradient(135deg, #d9f2f0, #a7e1dc, #6fc3bf);
+
+  /* Surfaces */
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-2: rgba(255, 255, 255, 0.92);
+  --input: rgba(255, 255, 255, 0.72);
+
+  /* Text */
+  --foreground: #0b1220;
+  --muted: rgba(11, 18, 32, 0.65);
+
+  /* Borders / ring */
+  --border: rgba(11, 18, 32, 0.12);
+
+  /* Accent */
+  --accent: #0ea5a4; /* teal */
+  --accent-foreground: #061018;
+
+  /* Status */
+  --danger: #dc2626;
+
+  /* Shadows */
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+
+    --surface: rgba(10, 12, 16, 0.72);
+    --surface-2: rgba(10, 12, 16, 0.84);
+    --input: rgba(10, 12, 16, 0.6);
+
+    --foreground: #eef2ff;
+    --muted: rgba(238, 242, 255, 0.7);
+
+    --border: rgba(238, 242, 255, 0.14);
+
+    --accent: #2dd4bf; /* brighter teal for dark */
+    --accent-foreground: #04110f;
+
+    --danger: #f87171;
+
+    --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* ===== Tailwind theme mapping (keeps your setup compatible) ===== */
 @theme inline {
-  --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ===== Base document styling (Safari-safe) ===== */
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--app-bg);
+  background-attachment: fixed;
+}
+
+/* ===== Semantic utility classes (your app should use these) ===== */
+.bg-app {
+  background: var(--app-bg);
+}
+
+.bg-surface {
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bg-surface-2 {
+  background: var(--surface-2);
+}
+
+.bg-input {
+  background: var(--input);
+}
+
+.text-foreground {
+  color: var(--foreground);
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+.border-subtle {
+  border-color: var(--border);
+}
+
+.bg-accent {
+  background: var(--accent);
+}
+
+.text-accent-foreground {
+  color: var(--accent-foreground);
+}
+
+.text-danger {
+  color: var(--danger);
+}
+
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+/* Optional: nicer default focus ring color */
+:focus-visible {
+  outline: none;
 }

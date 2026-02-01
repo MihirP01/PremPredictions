@@ -25,8 +25,13 @@ function loadPrivateKey() {
   const first = k.split("\n")[0]?.trim();
   const last = k.trim().split("\n").slice(-1)[0]?.trim();
 
-  if (first !== "-----BEGIN PRIVATE KEY-----" || last !== "-----END PRIVATE KEY-----") {
-    throw new Error("FIREBASE_PRIVATE_KEY does not have correct PEM header/footer.");
+  if (
+    first !== "-----BEGIN PRIVATE KEY-----" ||
+    last !== "-----END PRIVATE KEY-----"
+  ) {
+    throw new Error(
+      "FIREBASE_PRIVATE_KEY does not have correct PEM header/footer.",
+    );
   }
 
   // ✅ crypto self-test (if this throws, it's definitely the key string formatting)

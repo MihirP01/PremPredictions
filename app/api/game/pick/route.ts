@@ -17,11 +17,14 @@ export async function POST(req: Request) {
     const userUid = String(uid || "");
     const sc = String(score || "").trim();
 
-    if (!rc) return NextResponse.json({ error: "Missing roomCode" }, { status: 400 });
+    if (!rc)
+      return NextResponse.json({ error: "Missing roomCode" }, { status: 400 });
     if (!Number.isFinite(gwn) || gwn < 1 || gwn > 38)
       return NextResponse.json({ error: "Bad gw" }, { status: 400 });
-    if (!userUid) return NextResponse.json({ error: "Missing uid" }, { status: 400 });
-    if (!scoreOk(sc)) return NextResponse.json({ error: "Bad score" }, { status: 400 });
+    if (!userUid)
+      return NextResponse.json({ error: "Missing uid" }, { status: 400 });
+    if (!scoreOk(sc))
+      return NextResponse.json({ error: "Bad score" }, { status: 400 });
 
     const gameRef = adminDb.doc(`rooms/${rc}/games/gw-${gwn}`);
     const picksCol = adminDb.collection(`rooms/${rc}/games/gw-${gwn}/picks`);
@@ -35,19 +38,24 @@ export async function POST(req: Request) {
       if (game.state !== "DRAFT") throw new Error("Game not in DRAFT");
 
       const order: string[] = Array.isArray(game.order) ? game.order : [];
-      const fixtureIds: number[] = Array.isArray(game.fixtureIds) ? game.fixtureIds : [];
+      const fixtureIds: number[] = Array.isArray(game.fixtureIds)
+        ? game.fixtureIds
+        : [];
       const currentTurn: number = Number(game.currentTurn ?? 0);
 
       if (!order.length) throw new Error("No players in order");
       if (!fixtureIds.length) throw new Error("No fixtures");
 
       const P = order.length;
-      const totalTurns: number = Number(game.totalTurns ?? P * fixtureIds.length);
+      const totalTurns: number = Number(
+        game.totalTurns ?? P * fixtureIds.length,
+      );
 
       if (currentTurn >= totalTurns) throw new Error("Draft already complete");
 
       const fixtureIndex = Math.floor(currentTurn / P);
-      if (fixtureIndex >= fixtureIds.length) throw new Error("Draft already complete");
+      if (fixtureIndex >= fixtureIds.length)
+        throw new Error("Draft already complete");
 
       const turnInFixture = currentTurn % P;
 
@@ -65,16 +73,20 @@ export async function POST(req: Request) {
       // Uniqueness: score can't be taken twice for same fixture
       // (Transaction-safe, OK for your scale)
       const existingSnap = await tx.get(
-        picksCol.where("fixtureId", "==", fixtureId).where("score", "==", sc)
+        picksCol.where("fixtureId", "==", fixtureId).where("score", "==", sc),
       );
-      if (!existingSnap.empty) throw new Error("Score already taken for this fixture");
+      if (!existingSnap.empty)
+        throw new Error("Score already taken for this fixture");
 
       const pickId = `${userUid}_${fixtureId}`;
-      const pickRef = adminDb.doc(`rooms/${rc}/games/gw-${gwn}/picks/${pickId}`);
+      const pickRef = adminDb.doc(
+        `rooms/${rc}/games/gw-${gwn}/picks/${pickId}`,
+      );
 
       // Optional safety: prevent same user picking same fixture twice
       const alreadyPickedSnap = await tx.get(pickRef);
-      if (alreadyPickedSnap.exists) throw new Error("You already picked this fixture");
+      if (alreadyPickedSnap.exists)
+        throw new Error("You already picked this fixture");
 
       // -------- WRITES AFTER --------
       tx.set(
@@ -85,7 +97,7 @@ export async function POST(req: Request) {
           score: sc,
           createdAt: new Date(),
         },
-        { merge: false }
+        { merge: false },
       );
 
       const nextTurn = currentTurn + 1;
@@ -99,6 +111,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "pick failed" }, { status: 400 });
+    return NextResponse.json(
+      { error: e?.message ?? "pick failed" },
+      { status: 400 },
+    );
   }
 }

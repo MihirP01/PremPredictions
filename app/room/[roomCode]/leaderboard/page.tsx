@@ -4,12 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
-import {
-  collection,
-  getDocs,
-  onSnapshot,
-  query,
-} from "firebase/firestore";
+import { collection, getDocs, onSnapshot, query } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
 
@@ -35,7 +30,11 @@ function parseScore(s?: string | null) {
   return { home: Number(m[1]), away: Number(m[2]) };
 }
 
-function calculatePoints(predScore: string | null, actualScore: string | null, isGolden: boolean) {
+function calculatePoints(
+  predScore: string | null,
+  actualScore: string | null,
+  isGolden: boolean,
+) {
   const p = parseScore(predScore);
   const a = parseScore(actualScore);
   if (!p || !a) return 0;
@@ -56,7 +55,10 @@ function parseGwId(id: string): number | null {
 
 export default function LeaderboardMatrixPage() {
   const params = useParams<{ roomCode: string }>();
-  const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
+  const roomCode = useMemo(
+    () => String(params.roomCode).toUpperCase(),
+    [params.roomCode],
+  );
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -67,7 +69,9 @@ export default function LeaderboardMatrixPage() {
   const [error, setError] = useState<string | null>(null);
 
   // matrix: userUid -> gw -> points
-  const [pointsByUserByGw, setPointsByUserByGw] = useState<Record<string, Record<number, number>>>({});
+  const [pointsByUserByGw, setPointsByUserByGw] = useState<
+    Record<string, Record<number, number>>
+  >({});
 
   // cache fixtures per GW to avoid extra API calls
   const fixturesCacheRef = useRef<Record<number, Fixture[]>>({});
@@ -110,7 +114,10 @@ export default function LeaderboardMatrixPage() {
         });
         setPlayers(list);
       },
-      (e) => setError(`Failed to load players: ${e?.message ?? "permission denied"}`)
+      (e) =>
+        setError(
+          `Failed to load players: ${e?.message ?? "permission denied"}`,
+        ),
     );
     return () => unsub();
   }, [roomCode]);
@@ -129,7 +136,10 @@ export default function LeaderboardMatrixPage() {
 
         if (!cancelled) setPlayedGws(gws);
       } catch (e: any) {
-        if (!cancelled) setError(`Failed to load played weeks: ${e?.message ?? "permission denied"}`);
+        if (!cancelled)
+          setError(
+            `Failed to load played weeks: ${e?.message ?? "permission denied"}`,
+          );
       }
     })();
 
@@ -142,7 +152,8 @@ export default function LeaderboardMatrixPage() {
     if (fixturesCacheRef.current[gw]) return fixturesCacheRef.current[gw];
 
     const res = await fetch(`/api/fixtures?gameweek=${gw}`);
-    if (!res.ok) throw new Error(`fixtures fetch failed (GW ${gw}, status ${res.status})`);
+    if (!res.ok)
+      throw new Error(`fixtures fetch failed (GW ${gw}, status ${res.status})`);
     const data = await res.json();
     const fx: Fixture[] = Array.isArray(data?.fixtures) ? data.fixtures : [];
     fixturesCacheRef.current[gw] = fx;
@@ -150,7 +161,9 @@ export default function LeaderboardMatrixPage() {
   }
 
   async function getPicksForGw(gw: number): Promise<PicksByFixture> {
-    const snap = await getDocs(collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"));
+    const snap = await getDocs(
+      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+    );
 
     const byFx: PicksByFixture = {};
     for (const d of snap.docs) {
@@ -165,17 +178,26 @@ export default function LeaderboardMatrixPage() {
   }
 
   async function getGoldenForGw(gw: number): Promise<GoldenByUid> {
-    const snap = await getDocs(collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"));
+    const snap = await getDocs(
+      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
+    );
 
     const g: GoldenByUid = {};
     for (const d of snap.docs) {
       const data = d.data() as any;
-      g[d.id] = { fixtureId: Number(data.fixtureId), score: String(data.score) };
+      g[d.id] = {
+        fixtureId: Number(data.fixtureId),
+        score: String(data.score),
+      };
     }
     return g;
   }
 
-  function computeGwTotals(fx: Fixture[], picks: PicksByFixture, golden: GoldenByUid) {
+  function computeGwTotals(
+    fx: Fixture[],
+    picks: PicksByFixture,
+    golden: GoldenByUid,
+  ) {
     const totals: Record<string, number> = {};
     for (const p of players) totals[p.uid] = 0;
 
@@ -185,7 +207,8 @@ export default function LeaderboardMatrixPage() {
       for (const p of players) {
         const pred = picks?.[fixture.fixtureId]?.[p.uid] ?? null;
         const g = golden[p.uid];
-        const isGolden = !!g && g.fixtureId === fixture.fixtureId && g.score === (pred ?? "");
+        const isGolden =
+          !!g && g.fixtureId === fixture.fixtureId && g.score === (pred ?? "");
         totals[p.uid] += calculatePoints(pred, actual, isGolden);
       }
     }
@@ -210,8 +233,6 @@ export default function LeaderboardMatrixPage() {
         for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
       }
 
-      // Only calculate weeks that actually have a minigame doc
-      // (prevents rate-limit bursts on Football-Data)
       const weeksToCompute = playedGws.filter((g) => g >= 1 && g <= currentGw);
 
       try {
@@ -244,15 +265,14 @@ export default function LeaderboardMatrixPage() {
     };
   }, [players, playedGws, currentGw, roomCode]);
 
-  const weeks = useMemo(() => Array.from({ length: currentGw }, (_, i) => i + 1), [currentGw]);
+  const weeks = useMemo(
+    () => Array.from({ length: currentGw }, (_, i) => i + 1),
+    [currentGw],
+  );
 
   const userTotal = (uid: string) =>
     weeks.reduce((sum, gw) => sum + (pointsByUserByGw?.[uid]?.[gw] ?? 0), 0);
-  
-  const grandTotal = () =>
-    players.reduce((sum, p) => sum + userTotal(p.uid), 0);
 
-  // Sort users by total desc
   const sortedPlayers = useMemo(() => {
     const list = [...players];
     list.sort((a, b) => userTotal(b.uid) - userTotal(a.uid));
@@ -260,65 +280,86 @@ export default function LeaderboardMatrixPage() {
   }, [players, pointsByUserByGw, currentGw]);
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen p-6 bg-app">
+      <div className="max-w-6xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Leaderboard</h1>
-            <div className="text-sm text-gray-500">Room {roomCode}</div>
-            <div className="text-xs text-gray-500">Showing GW1–GW{currentGw}</div>
+            <h1 className="text-2xl font-semibold text-foreground">
+              Leaderboard
+            </h1>
+            <div className="text-sm text-muted">
+              {roomCode} • GW1 - GW{currentGw}
+            </div>
           </div>
 
           <button
             onClick={() => router.push(`/room/${roomCode}`)}
-            className="text-sm border rounded-lg px-4 py-2"
+            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
           >
             Back
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3">
+          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
             {error}
           </div>
         )}
 
-        {busy && <div className="text-sm text-gray-500">Building leaderboard…</div>}
+        {busy && (
+          <div className="text-sm text-muted">Building leaderboard…</div>
+        )}
 
-        <div className="overflow-x-auto border rounded-xl">
-          <table className="min-w-[900px] w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr className="text-left">
-                <th className="p-3">Player</th>
-                {weeks.map((w) => (
-                  <th key={w} className="p-3 text-center">
-                    GW{w}
+        <div className="overflow-x-auto border border-subtle rounded-xl bg-surface-2">
+          <table className="w-full table-fixed text-sm">
+            <thead className="bg-surface">
+              <tr>
+                {/* Sticky first column helps on horizontal scroll */}
+                <th className="w-[50px] p-3 text-left border-b border-subtle text-foreground sticky left-0 bg-surface z-10"></th>
+
+                {sortedPlayers.map((p) => (
+                  <th
+                    key={p.uid}
+                    className="w-120px] p-3 text-center border-b border-subtle font-semibold"
+                  >
+                    <span className="block truncate">{p.displayName}</span>
                   </th>
                 ))}
-                <th className="p-3 text-center font-semibold">Total</th>
               </tr>
             </thead>
 
             <tbody>
-              {sortedPlayers.map((p) => (
-                <tr key={p.uid} className="border-t">
-                  <td className="p-3 font-medium">{p.displayName}</td>
+              {weeks.map((gw) => (
+                <tr key={gw} className="border-b border-subtle last:border-0">
+                  <td className="w-[120px] p-3 font-semibold text-foreground sticky left-0 bg-surface-2 z-10">
+                    GW{gw}
+                  </td>
 
-                  {weeks.map((w) => (
-                    <td key={w} className="p-3 text-center">
-                      {pointsByUserByGw?.[p.uid]?.[w] ?? 0}
+                  {sortedPlayers.map((p) => (
+                    <td key={p.uid} className="p-3 text-center text-foreground">
+                      <span className="inline-flex min-w-[44px] justify-center whitespace-nowrap">
+                        {pointsByUserByGw?.[p.uid]?.[gw] ?? 0}
+                      </span>
                     </td>
                   ))}
-
-                  <td className="p-3 text-center font-semibold">{userTotal(p.uid)}</td>
                 </tr>
               ))}
+
+              <tr className="border-t border-subtle bg-surface font-semibold">
+                <td className="w-[120px] p-3 text-foreground sticky left-0 bg-surface z-10">
+                  Total
+                </td>
+
+                {sortedPlayers.map((p) => (
+                  <td key={p.uid} className="p-3 text-center text-foreground">
+                    <span className="inline-flex min-w-[44px] justify-center whitespace-nowrap">
+                      {userTotal(p.uid)}
+                    </span>
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
-        </div>
-
-        <div className="text-xs text-gray-500">
-          Weeks with no minigame played show 0. Golden doubles points (result ×2, exact ×2) per your rules.
         </div>
       </div>
     </div>

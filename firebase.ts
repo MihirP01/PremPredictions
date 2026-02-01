@@ -17,7 +17,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
-
 // IMPORTANT: do NOT initialize Analytics in Next App Router (window not defined)
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 

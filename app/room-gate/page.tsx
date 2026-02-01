@@ -2,7 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, runTransaction, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
 
@@ -34,7 +40,9 @@ export default function RoomGatePage() {
       const snap = await getDoc(doc(db, "users", user.uid));
       const data = snap.data();
 
-      setDisplayName(data?.displayName || user.email?.split("@")[0] || "Player");
+      setDisplayName(
+        data?.displayName || user.email?.split("@")[0] || "Player",
+      );
 
       const existing = data?.currentRoomCode;
       if (existing) router.replace(`/room/${existing}`);
@@ -73,7 +81,7 @@ export default function RoomGatePage() {
       await setDoc(
         doc(db, "users", user.uid),
         { displayName, currentRoomCode: code },
-        { merge: true }
+        { merge: true },
       );
 
       router.replace(`/room/${code}`);
@@ -115,7 +123,11 @@ export default function RoomGatePage() {
           joinedAt: serverTimestamp(),
         });
 
-        tx.set(doc(db, "users", user.uid), { displayName, currentRoomCode: code }, { merge: true });
+        tx.set(
+          doc(db, "users", user.uid),
+          { displayName, currentRoomCode: code },
+          { merge: true },
+        );
       });
 
       router.replace(`/room/${code}`);
@@ -130,36 +142,40 @@ export default function RoomGatePage() {
   if (loading) return <div className="p-6">Loading…</div>;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow p-6 space-y-4">
-        <h1 className="text-2xl font-semibold">Join or Create a Room</h1>
+    <div className="min-h-screen flex items-center justify-center p-6 bg-app">
+      <div className="w-full max-w-lg bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+        <h1 className="text-2xl font-semibold text-foreground">
+          Join or Create a Room
+        </h1>
 
         <div>
-          <label className="text-sm text-gray-600">Display name</label>
+          <label className="text-sm text-muted">Display name</label>
           <input
-            className="w-full border rounded-lg p-2"
+            className="w-full rounded-lg p-2 bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </div>
 
         <div>
-          <label className="text-sm text-gray-600">Room code (4–8 A–Z / 0–9)</label>
+          <label className="text-sm text-muted">
+            Room code (4–8 A–Z / 0–9)
+          </label>
           <input
-            className="w-full border rounded-lg p-2 uppercase"
+            className="w-full rounded-lg p-2 uppercase bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value)}
             placeholder="AB12"
           />
         </div>
 
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && <div className="text-sm text-danger">{error}</div>}
 
         <div className="flex gap-3">
           <button
             disabled={busy}
             onClick={joinRoom}
-            className="flex-1 bg-black text-white rounded-lg p-2 disabled:opacity-60"
+            className="flex-1 rounded-lg p-2 bg-accent text-accent-foreground disabled:opacity-60"
           >
             Join room
           </button>
@@ -167,7 +183,7 @@ export default function RoomGatePage() {
           <button
             disabled={busy}
             onClick={createRoom}
-            className="flex-1 border rounded-lg p-2 disabled:opacity-60"
+            className="flex-1 rounded-lg p-2 bg-surface text-foreground border border-subtle hover:bg-surface-2 disabled:opacity-60"
           >
             Create room
           </button>

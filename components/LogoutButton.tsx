@@ -23,7 +23,23 @@ export default function LogoutButton() {
     <button
       onClick={doLogout}
       disabled={busy}
-      className="text-sm border rounded-lg px-3 py-2 disabled:opacity-60"
+      className="
+        text-sm
+        px-3 py-2
+        rounded-lg
+        border border-subtle
+        bg-surface
+        text-foreground
+        hover:bg-surface-2
+        disabled:opacity-60
+        transition
+
+        focus:outline-none
+        focus-visible:ring-2
+        focus-visible:ring-teal-500
+        focus-visible:ring-offset-2
+        focus-visible:ring-offset-surface
+      "
     >
       {busy ? "Logging out…" : "Log out"}
     </button>

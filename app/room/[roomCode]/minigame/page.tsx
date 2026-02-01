@@ -17,11 +17,13 @@ import {
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 
+type LobbyPlayer = { uid: string; displayName: string };
+
 export default function MiniGameLobbyPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
     () => String(params.roomCode).toUpperCase(),
-    [params.roomCode]
+    [params.roomCode],
   );
 
   const { user, loading } = useAuth();
@@ -100,7 +102,7 @@ export default function MiniGameLobbyPage() {
 
       try {
         const roomPlayerSnap = await getDoc(
-          doc(db, "rooms", roomCode, "players", user.uid)
+          doc(db, "rooms", roomCode, "players", user.uid),
         );
         if (roomPlayerSnap.exists()) {
           const dn = (roomPlayerSnap.data() as any)?.displayName;
@@ -135,7 +137,15 @@ export default function MiniGameLobbyPage() {
     if (!user || gameweek == null) return;
 
     const gwId = `gw-${gameweek}`;
-    const lobbyRef = doc(db, "rooms", roomCode, "games", gwId, "lobby", user.uid);
+    const lobbyRef = doc(
+      db,
+      "rooms",
+      roomCode,
+      "games",
+      gwId,
+      "lobby",
+      user.uid,
+    );
     lobbyRefRef.current = lobbyRef;
 
     let stopped = false;
@@ -150,7 +160,7 @@ export default function MiniGameLobbyPage() {
           joinedAt: serverTimestamp(), // merge keeps existing if set earlier
           lastSeenAt: serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
     };
 
@@ -191,61 +201,66 @@ export default function MiniGameLobbyPage() {
         list.sort((a, b) => a.displayName.localeCompare(b.displayName));
         setPlayers(list);
       },
-      () => setError("Failed to listen for lobby players.")
+      () => setError("Failed to listen for lobby players."),
     );
 
     return () => unsub();
   }, [user, roomCode, gameweek]);
 
   // 6) Auto-redirect everyone when the leader starts the game
- const redirectedRef = useRef(false);
+  const routedRef = useRef(false);
 
-const routedRef = useRef(false);
+  useEffect(() => {
+    if (!user) return;
+    if (!roomCode) return;
+    if (gameweek == null) return;
 
-useEffect(() => {
-  if (!user) return;
-  if (!roomCode) return;
-  if (gameweek == null) return;
+    const gameRef = doc(
+      db,
+      "rooms",
+      roomCode.toUpperCase(),
+      "games",
+      `gw-${gameweek}`,
+    );
 
-  const gameRef = doc(db, "rooms", roomCode.toUpperCase(), "games", `gw-${gameweek}`);
+    const unsub = onSnapshot(
+      gameRef,
+      (snap) => {
+        const raw = (snap.data() as any)?.state;
+        const st = String(raw ?? "")
+          .trim()
+          .toUpperCase();
 
-  const unsub = onSnapshot(
-    gameRef,
-    (snap) => {
-      const raw = (snap.data() as any)?.state;
-      const st = String(raw ?? "").trim().toUpperCase();
+        // DEBUG (keep for now)
+        console.log("[minigame lobby] state:", raw, "=>", st);
 
-      // DEBUG (keep for now)
-      console.log("[minigame lobby] state:", raw, "=>", st);
+        if (routedRef.current) return;
 
-      if (routedRef.current) return;
+        if (st === "DRAFT") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/play`);
+          return;
+        }
 
-      if (st === "DRAFT") {
-        routedRef.current = true;
-        router.replace(`/room/${roomCode}/minigame/play`);
-        return;
-      }
+        if (st === "GOLDEN") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/golden`);
+          return;
+        }
 
-      if (st === "GOLDEN") {
-        routedRef.current = true;
-        router.replace(`/room/${roomCode}/minigame/golden`);
-        return;
-      }
+        if (st === "REVEAL") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/reveal`);
+          return;
+        }
+      },
+      (err) => {
+        console.log("[minigame lobby] snapshot error:", err?.message || err);
+      },
+    );
 
-      if (st === "REVEAL") {
-        routedRef.current = true;
-        router.replace(`/room/${roomCode}/minigame/reveal`);
-        return;
-      }
-    },
-    (err) => {
-      console.log("[minigame lobby] snapshot error:", err?.message || err);
-    }
-  );
-
-  return () => unsub();
-}, [user, roomCode, gameweek, router]);
-type LobbyPlayer = { uid: string; displayName: string };
+    return () => unsub();
+  }, [user, roomCode, gameweek, router]);
 
   async function safeLeaveLobby() {
     const ref = lobbyRefRef.current;
@@ -292,7 +307,7 @@ type LobbyPlayer = { uid: string; displayName: string };
           roomCode,
           gw: gameweek,
           leaderUid: user.uid,
-        }), 
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -311,51 +326,52 @@ type LobbyPlayer = { uid: string; displayName: string };
   if (loading) return null;
 
   return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen p-6 bg-app">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Mini-game Lobby</h1>
-            <div className="text-sm text-gray-500">
-              Room {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
+            <h1 className="text-2xl font-semibold text-foreground">
+              Predictor Lobby
+            </h1>
+            <div className="text-sm text-muted">
+              {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
             </div>
-            <div className="text-sm text-gray-500">You are: {myDisplayName}</div>
+            <div className="text-sm text-muted">You are: {myDisplayName}</div>
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={onBack}
-              className="text-sm border rounded-lg px-4 py-2"
+              className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
             >
               Back
-            </button>
-
-            <button
-              onClick={onLogout}
-              disabled={loggingOut}
-              className="text-sm border rounded-lg px-4 py-2 disabled:opacity-60"
-            >
-              {loggingOut ? "Logging out…" : "Log out"}
             </button>
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && <div className="text-sm text-danger">{error}</div>}
 
-        <div className="border rounded-xl p-4">
-          <div className="font-semibold mb-2">Players in Mini-game Lobby</div>
+        <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+          <div className="font-semibold mb-2 text-foreground">
+            Players in Mini-game Lobby
+          </div>
           <div className="space-y-2">
             {players.length === 0 ? (
-              <div className="text-sm text-gray-500">No one is in the lobby yet.</div>
+              <div className="text-sm text-muted">
+                No one is in the lobby yet.
+              </div>
             ) : (
               players.map((p) => (
                 <div
                   key={p.uid}
-                  className="flex items-center justify-between border-b last:border-0 py-2"
+                  className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
                 >
-                  <div className="font-medium">{p.displayName}</div>
+                  <div className="font-medium text-foreground">
+                    {p.displayName}
+                  </div>
+
                   {p.uid === leaderUid && (
-                    <span className="text-xs bg-gray-100 rounded-full px-2 py-1">
+                    <span className="text-xs px-2 py-1 rounded-full bg-surface border border-subtle text-muted">
                       Leader
                     </span>
                   )}
@@ -365,17 +381,19 @@ type LobbyPlayer = { uid: string; displayName: string };
           </div>
         </div>
 
-        <div className="border rounded-xl p-4 space-y-2">
-          <div className="font-semibold">Mini-game Controls</div>
+        <div className="border border-subtle rounded-xl p-4 space-y-2 bg-surface-2">
+          <div className="font-semibold text-foreground">
+            Mini-game Controls
+          </div>
 
           {isLeader ? (
             <>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted">
                 When everyone is in this lobby, start the round-robin.
               </div>
 
               <button
-                className="bg-black text-white rounded-lg px-4 py-2 disabled:opacity-60"
+                className="rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
                 disabled={starting || gameweek == null || players.length < 2}
                 onClick={startMiniGame}
               >
@@ -383,13 +401,13 @@ type LobbyPlayer = { uid: string; displayName: string };
               </button>
 
               {players.length < 2 && (
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-muted">
                   Need at least 2 players in the lobby to start.
                 </div>
               )}
             </>
           ) : (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted">
               Waiting for the leader to start…
             </div>
           )}

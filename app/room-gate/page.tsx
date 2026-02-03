@@ -75,7 +75,15 @@ export default function RoomGatePage() {
         .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
       setMemberRooms(joinedRooms);
       setRoomsLoading(false);
-    })();
+
+      // Auto-open saved current room when still a valid joined room.
+      if (existing && joinedRooms.some((r) => r.roomCode === existing)) {
+        router.replace(`/room/${existing}`);
+      }
+    })().catch(() => {
+      setRoomsLoading(false);
+      setError("Failed to load room data.");
+    });
   }, [loading, user, router]);
 
   const openJoinedRoom = async (targetRoomCode: string) => {

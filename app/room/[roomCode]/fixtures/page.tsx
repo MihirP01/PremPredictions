@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
 import {
   collection,
-  doc,
   getDocs,
   onSnapshot,
   query,
@@ -29,6 +29,10 @@ type PicksByFixture = Record<number, Record<string, string>>;
 
 // goldenByUid[uid] = { fixtureId, score }
 type GoldenByUid = Record<string, { fixtureId: number; score: string }>;
+type RoomPlayerDoc = { displayName?: string };
+type PickDoc = { fixtureId?: number; uid?: string; score?: string };
+type GoldenDoc = { fixtureId?: number; score?: string };
+type FixturesResponse = { fixtures?: Fixture[]; generatedAt?: string };
 
 const MIN_GW = 1;
 const MAX_GW = 38;
@@ -57,6 +61,26 @@ function fmtScore(s?: string | null) {
   return String(s).replace("-", "–");
 }
 
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "string" || typeof value === "number") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function fmtDateTime(d: Date) {
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 export default function FixturesPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -72,6 +96,14 @@ export default function FixturesPage() {
   const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>({});
   const [error, setError] = useState<string | null>(null);
   const [gw, setGw] = useState<number>(1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [refreshingFixtures, setRefreshingFixtures] = useState(false);
+  const [fixturesGeneratedAt, setFixturesGeneratedAt] = useState<Date | null>(
+    null,
+  );
+  const [fixturesRefreshedAt, setFixturesRefreshedAt] = useState<Date | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -105,8 +137,8 @@ export default function FixturesPage() {
       q,
       (snap) => {
         const list: Player[] = snap.docs.map((d) => {
-          const data = d.data() as any;
-          return { uid: d.id, displayName: data?.displayName || "Player" };
+          const data = d.data() as RoomPlayerDoc;
+          return { uid: d.id, displayName: data.displayName || "Player" };
         });
         setPlayers(list);
       },
@@ -118,34 +150,48 @@ export default function FixturesPage() {
     return () => unsub();
   }, [roomCode]);
 
+  const loadFixtures = useCallback(
+    async (opts?: { force?: boolean; showSpinner?: boolean }) => {
+      const force = !!opts?.force;
+      const showSpinner = opts?.showSpinner ?? true;
+
+      if (showSpinner) setFixtures(null);
+      setError(null);
+
+      const nonce = force ? `&t=${Date.now()}` : "";
+      const res = await fetch(`/api/fixtures?gameweek=${gw}${nonce}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`fixtures ${res.status}`);
+
+      const data = (await res.json()) as FixturesResponse;
+      const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
+      setFixtures(fx);
+      setFixturesGeneratedAt(asDate(data.generatedAt));
+      setFixturesRefreshedAt(new Date());
+    },
+    [gw],
+  );
+
   // Load fixtures for selected GW
   useEffect(() => {
     let cancelled = false;
-
     (async () => {
-      setError(null);
-      setFixtures(null);
-
-      const res = await fetch(`/api/fixtures?gameweek=${gw}`);
-      if (!res.ok) throw new Error(`fixtures ${res.status}`);
-
-      const data = await res.json();
-      const fx: Fixture[] = Array.isArray(data?.fixtures) ? data.fixtures : [];
-
-      if (!cancelled) setFixtures(fx);
-    })().catch((e) => {
-      if (!cancelled) {
-        setFixtures([]);
-        setError(
-          `Failed to load fixtures for GW ${gw}. ${e?.message ?? ""}`.trim(),
-        );
+      try {
+        await loadFixtures({ showSpinner: true });
+      } catch (e) {
+        if (!cancelled) {
+          const message = e instanceof Error ? e.message : "";
+          setFixtures([]);
+          setError(`Failed to load fixtures for GW ${gw}. ${message}`.trim());
+        }
       }
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [gw]);
+  }, [gw, loadFixtures]);
 
   // Load minigame picks + golden for selected GW
   useEffect(() => {
@@ -162,7 +208,7 @@ export default function FixturesPage() {
 
       const byFx: PicksByFixture = {};
       for (const d of picksSnap.docs) {
-        const data = d.data() as any;
+        const data = d.data() as PickDoc;
         const fixtureId = Number(data.fixtureId);
         const uid = String(data.uid);
         const score = String(data.score);
@@ -176,7 +222,7 @@ export default function FixturesPage() {
 
       const gByUid: GoldenByUid = {};
       for (const d of goldenSnap.docs) {
-        const data = d.data() as any;
+        const data = d.data() as GoldenDoc;
         gByUid[d.id] = {
           fixtureId: Number(data.fixtureId),
           score: String(data.score),
@@ -205,12 +251,25 @@ export default function FixturesPage() {
   );
   const isLoading = fixtures === null;
 
+  async function refreshFixtures() {
+    if (refreshingFixtures) return;
+    setRefreshingFixtures(true);
+    try {
+      await loadFixtures({ force: true, showSpinner: false });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "";
+      setError(`Failed to refresh fixtures for GW ${gw}. ${message}`.trim());
+    } finally {
+      setRefreshingFixtures(false);
+    }
+  }
+
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="relative z-30 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
               PL Fixtures
@@ -220,16 +279,41 @@ export default function FixturesPage() {
             </div>
           </div>
 
-          <button
-            onClick={() => router.push(`/room/${roomCode}`)}
-            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
-          >
-            Back
-          </button>
+          <div className="self-end flex gap-2 page-actions-enter">
+            <div className="relative">
+              <button
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
+                data-action="settings"
+                aria-label="Open settings"
+              >
+                <Settings size={16} />
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 mt-2 w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
+                  <div className="font-semibold text-foreground">Settings</div>
+                  <button
+                    onClick={refreshFixtures}
+                    disabled={refreshingFixtures}
+                    className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                  >
+                    {refreshingFixtures ? "Refreshing..." : "Refresh Fixtures"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => router.push(`/room/${roomCode}`)}
+              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+              data-action="back"
+            >
+              Back
+            </button>
+          </div>
         </div>
 
         {/* GW nav */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center gap-3 w-full max-w-md mx-auto">
           <button
             disabled={isLoading || gw === MIN_GW}
             onClick={() => setGw((x) => Math.max(MIN_GW, x - 1))}
@@ -238,7 +322,7 @@ export default function FixturesPage() {
     flex items-center justify-center
     rounded-lg
     bg-surface
-    border border-subtle
+    border border-teal-500
     text-foreground
     hover:bg-surface-2
     disabled:opacity-40
@@ -247,22 +331,23 @@ export default function FixturesPage() {
             ←
           </button>
 
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               value={gw}
               disabled={isLoading}
               onChange={(e) => setGw(Number(e.target.value))}
               className="
+      w-full
       h-10
-      px-6
+      px-8
       rounded-lg
       border border-teal-500
       bg-surface
       text-foreground
-      text-sm font-medium
+      text-sm font-semibold
       text-center
       appearance-none
-      flex items-center justify-center
+      [text-align-last:center]
       focus:outline-none
       focus:ring-2
       focus:ring-teal-500
@@ -274,6 +359,9 @@ export default function FixturesPage() {
                 </option>
               ))}
             </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+              ▼
+            </span>
           </div>
 
           <button
@@ -284,7 +372,7 @@ export default function FixturesPage() {
     flex items-center justify-center
     rounded-lg
     bg-surface
-    border border-subtle
+    border border-teal-500
     text-foreground
     hover:bg-surface-2
     disabled:opacity-40
@@ -295,7 +383,7 @@ export default function FixturesPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {error}
           </div>
         )}
@@ -314,13 +402,17 @@ export default function FixturesPage() {
 
           {!isLoading &&
             fixtures.length > 0 &&
-            fixtures.map((f) => {
+            fixtures.map((f, idx) => {
               const actual = f.result ?? null;
 
               return (
                 <div
                   key={f.fixtureId}
-                  className="border border-subtle rounded-xl p-4 bg-surface-2"
+                  className="border border-teal-500 rounded-xl p-4 bg-surface-2 page-action-btn"
+                  style={{
+                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                    animationDuration: "520ms",
+                  }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -366,7 +458,7 @@ export default function FixturesPage() {
                           return (
                             <div
                               key={p.uid}
-                              className="flex items-center justify-between bg-surface border border-subtle rounded-lg px-3 py-2"
+                              className="flex items-center justify-between bg-surface border border-teal-500 rounded-lg px-3 py-2"
                             >
                               <div className="text-sm font-medium text-foreground truncate">
                                 {p.displayName}
@@ -374,7 +466,7 @@ export default function FixturesPage() {
 
                               <div
                                 className={[
-                                  "inline-block rounded-lg px-2 py-1 border border-subtle  whitespace-nowrap text-sm font-bold",
+                                  "inline-block rounded-lg px-2 py-1 border border-teal-500  whitespace-nowrap text-sm font-bold",
                                   isGolden
                                     ? "bg-yellow-300 text-black"
                                     : "bg-surface-2 text-foreground",
@@ -398,6 +490,17 @@ export default function FixturesPage() {
               );
             })}
         </div>
+
+        {(fixturesGeneratedAt || fixturesRefreshedAt) && (
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
+            {fixturesGeneratedAt && (
+              <div>Fixture snapshot time: {fmtDateTime(fixturesGeneratedAt)}</div>
+            )}
+            {fixturesRefreshedAt && (
+              <div>Fixtures page last refreshed: {fmtDateTime(fixturesRefreshedAt)}</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ export async function GET(req) {
       headers: { "X-Auth-Token": API_KEY },
       next: { revalidate: 60 },
     });
-  } catch (e) {
+  } catch {
     // Network/DNS/etc
     return NextResponse.json(
       { error: "Upstream fetch failed" },

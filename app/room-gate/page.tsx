@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   runTransaction,
   setDoc,
   serverTimestamp,
@@ -19,16 +21,21 @@ function valid(code: string) {
   return /^[A-Z0-9]{4,8}$/.test(code);
 }
 
+type MemberRoom = { roomCode: string; role: "leader" | "member" };
+
 export default function RoomGatePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState("");
+  const [currentRoomCode, setCurrentRoomCode] = useState("");
+  const [memberRooms, setMemberRooms] = useState<MemberRoom[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If user already has a room, go there
+  // Load profile + joined rooms for quick switching/joining.
   useEffect(() => {
     if (loading) return;
     if (!user) {
@@ -44,10 +51,52 @@ export default function RoomGatePage() {
         data?.displayName || user.email?.split("@")[0] || "Player",
       );
 
-      const existing = data?.currentRoomCode;
-      if (existing) router.replace(`/room/${existing}`);
+      const existing = String(data?.currentRoomCode || "").toUpperCase();
+      setCurrentRoomCode(existing);
+      if (existing) setRoomCode(existing);
+
+      setRoomsLoading(true);
+      const roomsSnap = await getDocs(collection(db, "rooms"));
+      const checks = await Promise.all(
+        roomsSnap.docs.map(async (roomDoc) => {
+          const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
+          const membershipSnap = await getDoc(membershipRef);
+          if (!membershipSnap.exists()) return null;
+          const role = String(membershipSnap.data()?.role || "member");
+          return {
+            roomCode: roomDoc.id,
+            role: role === "leader" ? "leader" : "member",
+          } satisfies MemberRoom;
+        }),
+      );
+
+      const joinedRooms = checks
+        .filter((r): r is MemberRoom => r !== null)
+        .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
+      setMemberRooms(joinedRooms);
+      setRoomsLoading(false);
     })();
   }, [loading, user, router]);
+
+  const openJoinedRoom = async (targetRoomCode: string) => {
+    if (!user) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await setDoc(
+        doc(db, "users", user.uid),
+        { displayName, currentRoomCode: targetRoomCode },
+        { merge: true },
+      );
+      router.replace(`/room/${targetRoomCode}`);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Could not open room. Please try again.";
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const joinRoom = async () => {
     if (!user) return;
@@ -85,6 +134,12 @@ export default function RoomGatePage() {
       );
 
       router.replace(`/room/${code}`);
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : "Could not join room. Please try again.";
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -131,8 +186,9 @@ export default function RoomGatePage() {
       });
 
       router.replace(`/room/${code}`);
-    } catch (e: any) {
-      if (e?.message === "ROOM_EXISTS") setError("Room code already used.");
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "ROOM_EXISTS")
+        setError("Room code already used.");
       else setError("Could not create room.");
     } finally {
       setBusy(false);
@@ -143,15 +199,40 @@ export default function RoomGatePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-app">
-      <div className="w-full max-w-lg bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="w-full max-w-lg bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <h1 className="text-2xl font-semibold text-foreground">
           Join or Create a Room
         </h1>
 
+        <div className="space-y-2">
+          <div className="text-sm text-muted">Your joined rooms</div>
+          {roomsLoading ? (
+            <div className="text-sm text-muted">Loading rooms…</div>
+          ) : memberRooms.length === 0 ? (
+            <div className="text-sm text-muted">
+              You are not in any rooms yet.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {memberRooms.map((r) => (
+                <button
+                  key={r.roomCode}
+                  disabled={busy}
+                  onClick={() => openJoinedRoom(r.roomCode)}
+                  className="rounded-lg px-3 py-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
+                >
+                  {r.roomCode}
+                  {r.roomCode === currentRoomCode ? " • Current" : ""}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div>
           <label className="text-sm text-muted">Display name</label>
           <input
-            className="w-full rounded-lg p-2 bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-lg p-2 bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
@@ -162,7 +243,7 @@ export default function RoomGatePage() {
             Room code (4–8 A–Z / 0–9)
           </label>
           <input
-            className="w-full rounded-lg p-2 uppercase bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-lg p-2 uppercase bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value)}
             placeholder="AB12"
@@ -183,7 +264,7 @@ export default function RoomGatePage() {
           <button
             disabled={busy}
             onClick={createRoom}
-            className="flex-1 rounded-lg p-2 bg-surface text-foreground border border-subtle hover:bg-surface-2 disabled:opacity-60"
+            className="flex-1 rounded-lg p-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
           >
             Create room
           </button>

@@ -10,6 +10,9 @@ export default function LogoutButton() {
   const router = useRouter();
 
   const doLogout = async () => {
+    const confirmed = window.confirm("Are you sure you want to log out?");
+    if (!confirmed) return;
+
     setBusy(true);
     try {
       await signOut(auth);
@@ -24,12 +27,14 @@ export default function LogoutButton() {
       onClick={doLogout}
       disabled={busy}
       className="
+        w-full
         text-sm
+        font-bold
         px-3 py-2
         rounded-lg
-        border border-subtle
+        border border-teal-500
         bg-surface
-        text-foreground
+        text-danger
         hover:bg-surface-2
         disabled:opacity-60
         transition

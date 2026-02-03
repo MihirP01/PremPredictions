@@ -4,13 +4,28 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 
+type PickBody = {
+  roomCode?: string;
+  gw?: number;
+  uid?: string;
+  score?: string;
+};
+
+type GameDoc = {
+  state?: string;
+  order?: string[];
+  fixtureIds?: number[];
+  currentTurn?: number;
+  totalTurns?: number;
+};
+
 function scoreOk(s: string) {
   return /^\d+-\d+$/.test(s);
 }
 
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, uid, score } = await req.json();
+    const { roomCode, gw, uid, score } = (await req.json()) as PickBody;
 
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
@@ -34,7 +49,7 @@ export async function POST(req: Request) {
       const gameSnap = await tx.get(gameRef);
       if (!gameSnap.exists) throw new Error("Game not started");
 
-      const game = gameSnap.data() as any;
+      const game = gameSnap.data() as GameDoc;
       if (game.state !== "DRAFT") throw new Error("Game not in DRAFT");
 
       const order: string[] = Array.isArray(game.order) ? game.order : [];
@@ -110,9 +125,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? "pick failed" },
+      { error: e instanceof Error ? e.message : "pick failed" },
       { status: 400 },
     );
   }

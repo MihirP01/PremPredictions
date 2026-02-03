@@ -35,6 +35,8 @@ type GoldenDoc = {
   locked: boolean;
 };
 
+type RoomPlayerDoc = { displayName?: string };
+
 function fmtScore(s?: string | null) {
   if (!s) return "—";
   return s.replace("-", "–");
@@ -96,7 +98,7 @@ export default function RevealPage() {
     const unsub = onSnapshot(
       gameRef,
       (snap) => {
-        const data = snap.exists() ? (snap.data() as any) : null;
+        const data = snap.exists() ? (snap.data() as GameDoc) : null;
         setGame(data);
 
         const st = String(data?.state ?? "")
@@ -152,7 +154,7 @@ export default function RevealPage() {
     return onSnapshot(
       qPicks,
       (snap) => {
-        const list: PickDoc[] = snap.docs.map((d) => d.data() as any);
+        const list: PickDoc[] = snap.docs.map((d) => d.data() as PickDoc);
         setPicks(list);
       },
       () => setError("Failed to listen for picks."),
@@ -170,7 +172,7 @@ export default function RevealPage() {
       qGolden,
       (snap) => {
         const map: Record<string, GoldenDoc> = {};
-        for (const d of snap.docs) map[d.id] = d.data() as any;
+        for (const d of snap.docs) map[d.id] = d.data() as GoldenDoc;
         setGoldensByUid(map);
       },
       () => setError("Failed to listen for goldens."),
@@ -185,7 +187,7 @@ export default function RevealPage() {
       (snap) => {
         const map: Record<string, string> = {};
         for (const d of snap.docs) {
-          const data = d.data() as any;
+          const data = d.data() as RoomPlayerDoc;
           map[d.id] = data?.displayName || "Player";
         }
         setDisplayNamesByUid(map);
@@ -240,17 +242,11 @@ export default function RevealPage() {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
 
-        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-3 border border-subtle">
+        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-3 border border-teal-500">
           <div className="text-xl font-semibold text-foreground">
             Reveal not ready
           </div>
           <div className="text-sm text-muted">Current state: {game.state}</div>
-          <button
-            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
-            onClick={() => router.push(`/room/${roomCode}/minigame`)}
-          >
-            Back
-          </button>
         </div>
       </div>
     );
@@ -259,7 +255,7 @@ export default function RevealPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-4xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="max-w-4xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
@@ -271,7 +267,7 @@ export default function RevealPage() {
           </div>
 
           <button
-            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
+            className="text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
             onClick={() => router.push(`/room/${roomCode}`)}
           >
             Exit
@@ -279,13 +275,13 @@ export default function RevealPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {error}
           </div>
         )}
 
         {!allLocked && (
-          <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
             <div className="font-semibold text-foreground">
               Waiting for all golden picks…
             </div>
@@ -296,7 +292,7 @@ export default function RevealPage() {
         )}
 
         {/* Picks table */}
-        <div className="overflow-auto border border-subtle rounded-xl bg-surface-2">
+        <div className="overflow-auto border border-teal-500 rounded-xl bg-surface-2">
           <table className="min-w-full text-sm">
             <thead className="bg-surface">
               <tr>
@@ -346,7 +342,7 @@ export default function RevealPage() {
                         <td key={uid} className="p-3 align-top">
                           <div
                             className={[
-                              "inline-flex items-center justify-center rounded-lg px-2 py-1 border border-subtle whitespace-nowrap min-w-[56px]",
+                              "inline-flex items-center justify-center rounded-lg px-2 py-1 border border-teal-500 whitespace-nowrap min-w-[56px]",
                               isGolden
                                 ? "bg-yellow-300 font-bold text-black"
                                 : "bg-surface-2 text-foreground",
@@ -359,7 +355,7 @@ export default function RevealPage() {
                     })}
 
                     <td className="p-3 align-top">
-                      <div className="inline-flex items-center justify-center rounded-lg px-2 py-1 bg-surface-2 border border-subtle text-foreground whitespace-nowrap min-w-[56px]">
+                      <div className="inline-flex items-center justify-center rounded-lg px-2 py-1 bg-surface-2 border border-teal-500 text-foreground whitespace-nowrap min-w-[56px]">
                         {actual}
                       </div>
                     </td>

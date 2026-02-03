@@ -23,6 +23,10 @@
 
   /* Solid fallback under Safari UI */
   --app-solid: #0f2027;
+
+  /* Consistent top offset across browser + standalone modes */
+  --app-top-gap-mobile: 10px;
+  --app-top-gap-desktop: 16px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -91,7 +95,27 @@ body {
 body > div {
   min-height: 100dvh;
   background: transparent;
-  padding-top: env(safe-area-inset-top);
+  padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+}
+
+/* Keep iOS browser and standalone consistent */
+@media (display-mode: browser) {
+  body > div {
+    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+  }
+}
+
+@media (display-mode: standalone) {
+  body > div {
+    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+  }
+}
+
+/* Keep notch-safe behavior on phones, add breathing room on desktop */
+@media (min-width: 768px) {
+  body > div {
+    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-desktop));
+  }
 }
 
 /* Full height coverage (dynamic viewport on iOS) */
@@ -111,7 +135,9 @@ body > div {
 
 /* ===== Semantic utility classes ===== */
 .bg-app {
-  background-image: var(--app-bg);
+  /* Keep page wrappers transparent so the body gradient is continuous
+     through the iOS safe area (no visible seam at the top). */
+  background: transparent;
 }
 
 .bg-surface {
@@ -158,4 +184,101 @@ body > div {
 
 :focus-visible {
   outline: none;
+}
+
+/* Header actions route-change animation (settings/back controls) */
+@keyframes pageActionsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@keyframes pageActionBtnIn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fixtureCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-actions-enter {
+  animation: pageActionsIn 260ms ease-out both;
+}
+
+.page-shell-enter {
+  animation: pageActionsIn 420ms ease-out both;
+}
+
+.page-shell-enter > * {
+  animation: pageActionBtnIn 420ms ease-out both;
+}
+
+.page-shell-enter > *:nth-child(1) {
+  animation-delay: 90ms;
+}
+.page-shell-enter > *:nth-child(2) {
+  animation-delay: 180ms;
+}
+.page-shell-enter > *:nth-child(3) {
+  animation-delay: 270ms;
+}
+.page-shell-enter > *:nth-child(4) {
+  animation-delay: 360ms;
+}
+.page-shell-enter > *:nth-child(5) {
+  animation-delay: 450ms;
+}
+.page-shell-enter > *:nth-child(6) {
+  animation-delay: 540ms;
+}
+
+.page-action-btn {
+  animation: pageActionBtnIn 300ms ease-out both;
+}
+
+.page-action-btn[data-action="settings"] {
+  animation-delay: 30ms;
+}
+
+.page-action-btn[data-action="back"] {
+  animation-delay: 90ms;
+}
+
+.settings-panel-enter {
+  transform-origin: top right;
+  animation: pageActionsIn 320ms ease-out both;
+}
+
+.fixture-card-enter {
+  animation: fixtureCardIn 320ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-actions-enter,
+  .page-shell-enter,
+  .page-shell-enter > *,
+  .page-action-btn,
+  .settings-panel-enter,
+  .fixture-card-enter {
+    animation: none;
+  }
 }

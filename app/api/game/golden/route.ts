@@ -3,9 +3,31 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 
+type GoldenBody = {
+  roomCode?: string;
+  gw?: number;
+  uid?: string;
+  fixtureId?: number;
+  score?: string;
+};
+
+type GameDoc = {
+  state?: string;
+  players?: string[];
+};
+
+type PickDoc = {
+  score?: string;
+};
+
+type GoldenDoc = {
+  locked?: boolean;
+};
+
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, uid, fixtureId, score } = await req.json();
+    const { roomCode, gw, uid, fixtureId, score } =
+      (await req.json()) as GoldenBody;
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
     const userUid = String(uid || "");
@@ -28,7 +50,7 @@ export async function POST(req: Request) {
       const gameSnap = await tx.get(gameRef);
       if (!gameSnap.exists) throw new Error("Game missing");
 
-      const game = gameSnap.data() as any;
+      const game = gameSnap.data() as GameDoc;
       if (game.state !== "GOLDEN") throw new Error("Not in GOLDEN phase");
 
       const players: string[] = Array.isArray(game.players) ? game.players : [];
@@ -37,7 +59,7 @@ export async function POST(req: Request) {
       const pickSnap = await tx.get(pickRef);
       if (!pickSnap.exists)
         throw new Error("You must choose golden from your own picks");
-      const pick = pickSnap.data() as any;
+      const pick = pickSnap.data() as PickDoc;
 
       const pickScore = String(pick.score ?? "").trim();
       if (pickScore !== sc)
@@ -45,7 +67,7 @@ export async function POST(req: Request) {
 
       const existingGoldenSnap = await tx.get(goldenRef);
       const existingGolden = existingGoldenSnap.exists
-        ? (existingGoldenSnap.data() as any)
+        ? (existingGoldenSnap.data() as GoldenDoc)
         : null;
       if (existingGolden?.locked) throw new Error("Golden already locked");
 
@@ -58,7 +80,7 @@ export async function POST(req: Request) {
         ? await tx.getAll(...goldenRefs)
         : [];
       const lockedBefore = goldenSnaps.reduce((acc, s) => {
-        const d = s.exists ? (s.data() as any) : null;
+        const d = s.exists ? (s.data() as GoldenDoc) : null;
         return acc + (d?.locked ? 1 : 0);
       }, 0);
 
@@ -84,9 +106,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? "golden failed" },
+      { error: e instanceof Error ? e.message : "golden failed" },
       { status: 400 },
     );
   }

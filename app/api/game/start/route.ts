@@ -3,6 +3,20 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 
+type StartBody = {
+  roomCode?: string;
+  gw?: number;
+  leaderUid?: string;
+};
+
+type RoomDoc = {
+  leaderUid?: string;
+};
+
+type FixtureApiItem = { fixtureId?: number };
+type FixturesApiResponse = { fixtures?: FixtureApiItem[] };
+type GameDoc = { state?: string };
+
 function onlyAlnum(s: string) {
   return /^[A-Z0-9]{4,8}$/.test(s);
 }
@@ -18,7 +32,7 @@ function shuffle<T>(arr: T[]) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as StartBody;
     const roomCode = String(body.roomCode || "").toUpperCase();
     const gw = Number(body.gw);
     const leaderUid = String(body.leaderUid || "");
@@ -35,7 +49,7 @@ export async function POST(req: Request) {
     if (!roomSnap.exists)
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
 
-    const room = roomSnap.data() as any;
+    const room = roomSnap.data() as RoomDoc;
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
 
@@ -51,6 +65,26 @@ export async function POST(req: Request) {
         { status: 400 },
       );
 
+    // Require every current room member to be present in lobby before starting.
+    const roomPlayersSnap = await adminDb
+      .collection(`rooms/${roomCode}/players`)
+      .get();
+    const roomPlayers = roomPlayersSnap.docs.map((d) => d.id);
+    const lobbySet = new Set(players);
+    const allMembersPresent =
+      roomPlayers.length > 0 &&
+      roomPlayers.every((uid) => lobbySet.has(uid)) &&
+      players.length === roomPlayers.length;
+
+    if (!allMembersPresent) {
+      return NextResponse.json(
+        {
+          error: `All room players must join lobby before starting (${players.length}/${roomPlayers.length})`,
+        },
+        { status: 400 },
+      );
+    }
+
     // get fixtures from your own internal API (server-side fetch)
     const host = req.headers.get("host");
     const proto = host?.includes("localhost") ? "http" : "https";
@@ -65,10 +99,10 @@ export async function POST(req: Request) {
         { status: 502 },
       );
 
-    const fxData = await fxRes.json();
-    const fixtureIds: number[] = (fxData.fixtures || [])
-      .map((f: any) => Number(f.fixtureId))
-      .filter((n: any) => Number.isFinite(n));
+    const fxData = (await fxRes.json()) as FixturesApiResponse;
+    const fixtureIds: number[] = (Array.isArray(fxData.fixtures) ? fxData.fixtures : [])
+      .map((f) => Number(f.fixtureId))
+      .filter((n) => Number.isFinite(n));
 
     if (fixtureIds.length === 0)
       return NextResponse.json(
@@ -87,7 +121,7 @@ export async function POST(req: Request) {
     await adminDb.runTransaction(async (tx) => {
       const existing = await tx.get(gameRef);
       if (existing.exists) {
-        const st = (existing.data() as any)?.state;
+        const st = (existing.data() as GameDoc | undefined)?.state;
         if (st && st !== "LOBBY") throw new Error("Game already started");
       }
 
@@ -109,9 +143,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? "start failed" },
+      { error: e instanceof Error ? e.message : "start failed" },
       { status: 500 },
     );
   }

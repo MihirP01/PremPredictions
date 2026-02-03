@@ -34,10 +34,6 @@ type GoldenDoc = {
   locked: boolean;
 };
 
-function pickId(uid: string, fixtureId: number) {
-  return `${uid}_${fixtureId}`;
-}
-
 export default function GoldenPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -104,7 +100,7 @@ export default function GoldenPage() {
     const unsub = onSnapshot(
       gameRef,
       (snap) => {
-        const data = snap.exists() ? (snap.data() as any) : null;
+        const data = snap.exists() ? (snap.data() as GameDoc) : null;
         setGame(data);
 
         const st = String(data?.state ?? "")
@@ -161,7 +157,7 @@ export default function GoldenPage() {
     return onSnapshot(
       picksQ,
       (snap) => {
-        const list: PickDoc[] = snap.docs.map((d) => d.data() as any);
+        const list: PickDoc[] = snap.docs.map((d) => d.data() as PickDoc);
         setAllPicks(list);
 
         if (user) {
@@ -195,7 +191,7 @@ export default function GoldenPage() {
       (snap) => {
         const map: Record<string, GoldenDoc> = {};
         for (const d of snap.docs) {
-          map[d.id] = d.data() as any;
+          map[d.id] = d.data() as GoldenDoc;
         }
         setGoldensByUid(map);
       },
@@ -259,8 +255,8 @@ export default function GoldenPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to lock golden.");
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to lock golden.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to lock golden.");
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +276,7 @@ export default function GoldenPage() {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
 
-        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 border border-subtle">
+        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
           <div className="text-lg font-semibold text-foreground">
             Not in Golden phase
           </div>
@@ -299,7 +295,7 @@ export default function GoldenPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
@@ -313,23 +309,17 @@ export default function GoldenPage() {
             </div>
           </div>
 
-          <button
-            className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
-            onClick={() => router.push(`/room/${roomCode}/minigame`)}
-          >
-            Back
-          </button>
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {error}
           </div>
         )}
 
         {/* If locked, show waiting room */}
         {myGoldenLocked ? (
-          <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
             <div className="font-semibold text-foreground">
               You’re locked in ✅
             </div>
@@ -341,7 +331,7 @@ export default function GoldenPage() {
               </span>
             </div>
 
-            <div className="mt-4 w-full h-2 bg-surface border border-subtle rounded">
+            <div className="mt-4 w-full h-2 bg-surface border border-teal-500 rounded">
               <div
                 className="h-2 bg-accent rounded"
                 style={{
@@ -358,7 +348,7 @@ export default function GoldenPage() {
           </div>
         ) : (
           <>
-            <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
               <div className="font-semibold mb-2 text-foreground">
                 Choose your Golden fixture
               </div>
@@ -378,7 +368,7 @@ export default function GoldenPage() {
               </div>
             </div>
 
-            <div className="border border-subtle rounded-xl p-4 space-y-3 bg-surface-2">
+            <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
               {orderedFixtureIds.map((fid) => {
                 const f = fixtureMap.get(fid);
                 const myScore = myPicksByFixture[fid];
@@ -397,10 +387,12 @@ export default function GoldenPage() {
                     disabled={!myScore}
                     className={[
                       "w-full text-left rounded-xl p-3 border transition-colors",
-                      isSelected ? "border-accent" : "border-subtle",
+                      isSelected
+                        ? "border-yellow-400 bg-yellow-500/10"
+                        : "border-teal-500",
                       !myScore
                         ? "opacity-60 cursor-not-allowed"
-                        : "hover:bg-surface hover:border-subtle",
+                        : "hover:bg-surface hover:border-teal-400",
                     ].join(" ")}
                   >
                     <div className="flex items-start justify-between gap-3">

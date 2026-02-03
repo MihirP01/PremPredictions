@@ -24,6 +24,8 @@ type Fixture = {
   result?: string | null;
 };
 
+type PickDoc = { score?: string };
+
 function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);
 }
@@ -92,7 +94,7 @@ export default function MiniGamePlayPage() {
     if (gw == null) return;
     const gameRef = doc(db, "rooms", roomCode, "games", `gw-${gw}`);
     return onSnapshot(gameRef, (snap) => {
-      setGame(snap.exists() ? (snap.data() as any) : null);
+      setGame(snap.exists() ? (snap.data() as GameDoc) : null);
     });
   }, [roomCode, gw]);
 
@@ -137,7 +139,7 @@ export default function MiniGamePlayPage() {
     );
 
     return onSnapshot(picksQ, (snap) => {
-      const scores = snap.docs.map((d) => String((d.data() as any).score));
+      const scores = snap.docs.map((d) => String((d.data() as PickDoc).score));
       setTakenScores(scores);
     });
   }, [roomCode, gw, current]);
@@ -200,8 +202,8 @@ export default function MiniGamePlayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Pick failed");
-    } catch (e: any) {
-      setErr(e?.message ?? "Pick failed");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Pick failed");
     } finally {
       setSubmitting(false);
     }
@@ -215,7 +217,7 @@ export default function MiniGamePlayPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between">
           <div>
             <div className="text-sm text-muted">
@@ -228,7 +230,7 @@ export default function MiniGamePlayPage() {
         </div>
 
         {/* progress bar */}
-        <div className="w-full h-2 bg-surface-2 border border-subtle rounded">
+        <div className="w-full h-2 bg-surface-2 border border-teal-500 rounded">
           <div
             className="h-2 bg-accent rounded"
             style={{ width: `${progress * 100}%` }}
@@ -240,7 +242,7 @@ export default function MiniGamePlayPage() {
         </div>
 
         {/* fixture */}
-        <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+        <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
           <div className="font-semibold mb-1 text-foreground">
             {fixture
               ? `${fixture.home.name} vs ${fixture.away.name}`
@@ -263,7 +265,7 @@ export default function MiniGamePlayPage() {
                 {takenScores.map((s) => (
                   <span
                     key={s}
-                    className="text-xs bg-surface border border-subtle rounded-full px-2 py-1 text-foreground"
+                    className="text-xs bg-surface border border-teal-500 rounded-full px-2 py-1 text-foreground"
                   >
                     {s.replace("-", "–")}
                   </span>
@@ -274,14 +276,14 @@ export default function MiniGamePlayPage() {
         </div>
 
         {err && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {err}
           </div>
         )}
 
         {/* your turn or waiting */}
         {amITurn ? (
-          <div className="border border-subtle rounded-xl p-4 space-y-3 bg-surface-2">
+          <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
             <div className="font-semibold text-foreground">Your turn</div>
 
             <div className="flex items-center justify-center gap-3">
@@ -291,7 +293,7 @@ export default function MiniGamePlayPage() {
                   onlyDigitsOrEmpty(e.target.value) &&
                   setHomeScore(e.target.value)
                 }
-                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
+                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="0"
                 inputMode="numeric"
               />
@@ -302,7 +304,7 @@ export default function MiniGamePlayPage() {
                   onlyDigitsOrEmpty(e.target.value) &&
                   setAwayScore(e.target.value)
                 }
-                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-subtle focus:outline-none focus:ring-2 focus:ring-accent"
+                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="0"
                 inputMode="numeric"
               />
@@ -317,7 +319,7 @@ export default function MiniGamePlayPage() {
             </button>
           </div>
         ) : (
-          <div className="border border-subtle rounded-xl p-4 bg-surface-2 text-foreground">
+          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
             Waiting for the current player to pick…
           </div>
         )}

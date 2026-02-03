@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
-import { auth, db } from "../../../../firebase";
+import { db } from "../../../../firebase";
 import {
   collection,
   deleteDoc,
@@ -15,9 +15,12 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { signOut } from "firebase/auth";
 
 type LobbyPlayer = { uid: string; displayName: string };
+type RoomPlayerDoc = { displayName?: string };
+type UserDoc = { displayName?: string };
+type LobbyDoc = { displayName?: string };
+type GameStateDoc = { state?: string };
 
 export default function MiniGameLobbyPage() {
   const params = useParams<{ roomCode: string }>();
@@ -34,10 +37,11 @@ export default function MiniGameLobbyPage() {
 
   const [myDisplayName, setMyDisplayName] = useState<string>("Player");
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
+  const [roomPlayers, setRoomPlayers] = useState<LobbyPlayer[]>([]);
+  const [roomPlayersCount, setRoomPlayersCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
   const [starting, setStarting] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const isLeader = !!user && leaderUid === user.uid;
 
@@ -105,7 +109,7 @@ export default function MiniGameLobbyPage() {
           doc(db, "rooms", roomCode, "players", user.uid),
         );
         if (roomPlayerSnap.exists()) {
-          const dn = (roomPlayerSnap.data() as any)?.displayName;
+          const dn = (roomPlayerSnap.data() as UserDoc)?.displayName;
           if (!cancelled && dn) {
             setMyDisplayName(dn);
             return;
@@ -116,7 +120,7 @@ export default function MiniGameLobbyPage() {
       try {
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (userSnap.exists()) {
-          const dn = (userSnap.data() as any)?.displayName;
+          const dn = (userSnap.data() as UserDoc)?.displayName;
           if (!cancelled && dn) {
             setMyDisplayName(dn);
             return;
@@ -190,7 +194,7 @@ export default function MiniGameLobbyPage() {
       q,
       (snap) => {
         const list: LobbyPlayer[] = snap.docs.map((d) => {
-          const data = d.data() as any;
+          const data = d.data() as LobbyDoc;
           return {
             uid: d.id,
             displayName: data?.displayName || "Player",
@@ -206,6 +210,32 @@ export default function MiniGameLobbyPage() {
 
     return () => unsub();
   }, [user, roomCode, gameweek]);
+
+  // 5b) Listen to total room players so start is allowed only when all are in lobby
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "rooms", roomCode, "players"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list: LobbyPlayer[] = snap.docs.map((d) => {
+          const data = d.data() as RoomPlayerDoc;
+          return {
+            uid: d.id,
+            displayName: data.displayName || "Player",
+          };
+        });
+        list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        setRoomPlayers(list);
+        setRoomPlayersCount(list.length);
+      },
+      () => {
+        setRoomPlayers([]);
+        setRoomPlayersCount(0);
+      },
+    );
+    return () => unsub();
+  }, [user, roomCode]);
 
   // 6) Auto-redirect everyone when the leader starts the game
   const routedRef = useRef(false);
@@ -226,7 +256,7 @@ export default function MiniGameLobbyPage() {
     const unsub = onSnapshot(
       gameRef,
       (snap) => {
-        const raw = (snap.data() as any)?.state;
+        const raw = (snap.data() as GameStateDoc | undefined)?.state;
         const st = String(raw ?? "")
           .trim()
           .toUpperCase();
@@ -275,20 +305,6 @@ export default function MiniGameLobbyPage() {
     router.push(`/room/${roomCode}`);
   }
 
-  async function onLogout() {
-    setLoggingOut(true);
-    setError(null);
-    try {
-      await safeLeaveLobby();
-      await signOut(auth);
-      router.replace("/login");
-    } catch {
-      setError("Failed to log out.");
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
   async function startMiniGame() {
     if (!user) return;
     if (gameweek == null) {
@@ -315,8 +331,8 @@ export default function MiniGameLobbyPage() {
 
       // Leader goes immediately; others will follow via the gameRef listener
       router.push(`/room/${roomCode}/minigame/play`);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to start mini-game.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to start mini-game.");
     } finally {
       setStarting(false);
     }
@@ -325,13 +341,17 @@ export default function MiniGameLobbyPage() {
   // Simple loading guard
   if (loading) return null;
 
+  const allPlayersInLobby = roomPlayersCount > 0 && players.length === roomPlayersCount;
+  const lobbyUidSet = new Set(players.map((p) => p.uid));
+  const missingPlayers = roomPlayers.filter((p) => !lobbyUidSet.has(p.uid));
+
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card p-6 space-y-4 border border-subtle">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              Predictor Lobby
+              Matchday Draft Lobby
             </h1>
             <div className="text-sm text-muted">
               {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
@@ -342,7 +362,7 @@ export default function MiniGameLobbyPage() {
           <div className="flex gap-2">
             <button
               onClick={onBack}
-              className="text-sm rounded-lg px-4 py-2 bg-surface border border-subtle text-foreground hover:bg-surface-2"
+              className="text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
             >
               Back
             </button>
@@ -351,37 +371,7 @@ export default function MiniGameLobbyPage() {
 
         {error && <div className="text-sm text-danger">{error}</div>}
 
-        <div className="border border-subtle rounded-xl p-4 bg-surface-2">
-          <div className="font-semibold mb-2 text-foreground">
-            Players in Mini-game Lobby
-          </div>
-          <div className="space-y-2">
-            {players.length === 0 ? (
-              <div className="text-sm text-muted">
-                No one is in the lobby yet.
-              </div>
-            ) : (
-              players.map((p) => (
-                <div
-                  key={p.uid}
-                  className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
-                >
-                  <div className="font-medium text-foreground">
-                    {p.displayName}
-                  </div>
-
-                  {p.uid === leaderUid && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-surface border border-subtle text-muted">
-                      Leader
-                    </span>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="border border-subtle rounded-xl p-4 space-y-2 bg-surface-2">
+        <div className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
           <div className="font-semibold text-foreground">
             Mini-game Controls
           </div>
@@ -389,28 +379,77 @@ export default function MiniGameLobbyPage() {
           {isLeader ? (
             <>
               <div className="text-sm text-muted">
-                When everyone is in this lobby, start the round-robin.
+                Start when every room player is marked ready in the lobby.
               </div>
 
               <button
                 className="rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
-                disabled={starting || gameweek == null || players.length < 2}
+                disabled={starting || gameweek == null || players.length < 2 || !allPlayersInLobby}
                 onClick={startMiniGame}
               >
                 {starting ? "Starting…" : "Start Mini-game"}
               </button>
 
-              {players.length < 2 && (
-                <div className="text-xs text-muted">
-                  Need at least 2 players in the lobby to start.
-                </div>
+              {players.length >= 2 && !allPlayersInLobby && (
+                <>
+                  <div className="text-xs text-muted">
+                    Waiting for all room players to join lobby ({players.length}/{roomPlayersCount}).
+                  </div>
+                  {missingPlayers.length > 0 && (
+                    <div className="text-xs text-muted">
+                      Missing: {missingPlayers.map((p) => p.displayName).join(", ")}
+                    </div>
+                  )}
+                </>
               )}
             </>
           ) : (
             <div className="text-sm text-muted">
-              Waiting for the leader to start…
+              Waiting for the leader to start once everyone is ready…
             </div>
           )}
+        </div>
+
+        <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+          <div className="font-semibold mb-2 text-foreground">
+            Room Player Status
+          </div>
+          <div className="space-y-2">
+            {roomPlayersCount === 0 ? (
+              <div className="text-sm text-muted">
+                No players found in this room yet.
+              </div>
+            ) : (
+              roomPlayers.map((p) => {
+                const inLobby = lobbyUidSet.has(p.uid);
+                return (
+                  <div
+                    key={p.uid}
+                    className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
+                  >
+                    <div className="font-medium text-foreground">{p.displayName}</div>
+                    <div className="flex items-center gap-2">
+                      {p.uid === leaderUid && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
+                          Leader
+                        </span>
+                      )}
+                      <span
+                        className={[
+                          "text-xs px-2 py-1 rounded-full border",
+                          inLobby
+                            ? "bg-emerald-400/15 border-emerald-400 text-emerald-300"
+                            : "bg-amber-400/15 border-amber-400 text-amber-300",
+                        ].join(" ")}
+                      >
+                        {inLobby ? "Ready" : "Waiting"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { db } from "../../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
 
 type GameDoc = {
@@ -35,7 +36,7 @@ type GoldenDoc = {
   locked: boolean;
 };
 
-type RoomPlayerDoc = { displayName?: string };
+type RoomPlayerDoc = { displayName?: string; nickName?: string };
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
@@ -52,6 +53,7 @@ export default function RevealPage() {
   const { user, loading } = useAuth();
 
   const [gw, setGw] = useState<number | null>(null);
+  const [seasonKey, setSeasonKey] = useState<string | null>(null);
   const [game, setGame] = useState<GameDoc | null>(null);
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
 
@@ -77,12 +79,17 @@ export default function RevealPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/current-gameweek", { cache: "no-store" });
-        const data = await res.json();
-        const n = Number(data?.currentGameweek ?? 1);
-        if (!cancelled) setGw(Number.isFinite(n) ? n : 1);
+        const data = await getCurrentGameweekCached();
+        const n = Number(data.currentGameweek ?? 1);
+        if (!cancelled) {
+          setGw(Number.isFinite(n) ? n : 1);
+          setSeasonKey(String(data.seasonKey || ""));
+        }
       } catch {
-        if (!cancelled) setGw(1);
+        if (!cancelled) {
+          setGw(1);
+          setSeasonKey("");
+        }
       }
     })();
     return () => {
@@ -92,9 +99,17 @@ export default function RevealPage() {
 
   // listen to game doc (for routing + player list + fixtureIds)
   useEffect(() => {
-    if (!user || gw == null) return;
+    if (!user || gw == null || !seasonKey) return;
 
-    const gameRef = doc(db, "rooms", roomCode, "games", `gw-${gw}`);
+    const gameRef = doc(
+      db,
+      "rooms",
+      roomCode,
+      "seasons",
+      seasonKey,
+      "games",
+      `gw-${gw}`,
+    );
     const unsub = onSnapshot(
       gameRef,
       (snap) => {
@@ -123,15 +138,15 @@ export default function RevealPage() {
     );
 
     return () => unsub();
-  }, [user, roomCode, gw, router]);
+  }, [user, roomCode, gw, router, seasonKey]);
 
   // load fixtures
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}`, {
+      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`, {
         cache: "no-store",
       });
       const d = await r.json().catch(() => ({}));
@@ -142,14 +157,23 @@ export default function RevealPage() {
     return () => {
       cancelled = true;
     };
-  }, [gw]);
+  }, [gw, seasonKey]);
 
   // listen picks
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
 
     const qPicks = query(
-      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+        "picks",
+      ),
     );
     return onSnapshot(
       qPicks,
@@ -159,14 +183,23 @@ export default function RevealPage() {
       },
       () => setError("Failed to listen for picks."),
     );
-  }, [roomCode, gw]);
+  }, [roomCode, gw, seasonKey]);
 
   // listen golden
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
 
     const qGolden = query(
-      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+        "golden",
+      ),
     );
     return onSnapshot(
       qGolden,
@@ -177,7 +210,7 @@ export default function RevealPage() {
       },
       () => setError("Failed to listen for goldens."),
     );
-  }, [roomCode, gw]);
+  }, [roomCode, gw, seasonKey]);
 
   // listen lobby display names (best-effort) so we can show names instead of UIDs
   useEffect(() => {
@@ -188,7 +221,8 @@ export default function RevealPage() {
         const map: Record<string, string> = {};
         for (const d of snap.docs) {
           const data = d.data() as RoomPlayerDoc;
-          map[d.id] = data?.displayName || "Player";
+          const nick = String(data?.nickName || "").trim();
+          map[d.id] = nick || data?.displayName || "Player";
         }
         setDisplayNamesByUid(map);
       },

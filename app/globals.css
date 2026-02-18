@@ -182,6 +182,23 @@ body > div {
   box-shadow: var(--shadow-card);
 }
 
+/* Room-level accent override */
+.room-theme .border-teal-500 {
+  border-color: var(--room-accent) !important;
+}
+
+.room-theme .text-teal-300 {
+  color: var(--room-accent) !important;
+}
+
+.room-theme .hover\:border-teal-400:hover {
+  border-color: var(--room-accent) !important;
+}
+
+.room-theme .focus\:ring-teal-500:focus {
+  --tw-ring-color: var(--room-accent) !important;
+}
+
 :focus-visible {
   outline: none;
 }

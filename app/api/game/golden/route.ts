@@ -2,6 +2,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
+import {
+  coerceMillis,
+  getBaseUrl,
+  loadGwFixturesWithLockWindow,
+} from "../lock-window";
+import { resolveSeasonKey } from "../../season";
 
 type GoldenBody = {
   roomCode?: string;
@@ -9,11 +15,14 @@ type GoldenBody = {
   uid?: string;
   fixtureId?: number;
   score?: string;
+  seasonKey?: string;
 };
 
 type GameDoc = {
   state?: string;
   players?: string[];
+  lockAt?: unknown;
+  firstKickoffAt?: unknown;
 };
 
 type PickDoc = {
@@ -26,24 +35,53 @@ type GoldenDoc = {
 
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, uid, fixtureId, score } =
+    const { roomCode, gw, uid, fixtureId, score, seasonKey } =
       (await req.json()) as GoldenBody;
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
     const userUid = String(uid || "");
     const fxId = Number(fixtureId);
     const sc = String(score || "").trim();
+    const sk = resolveSeasonKey(seasonKey);
 
     if (!rc || !Number.isFinite(gwn) || !userUid)
       return NextResponse.json({ error: "Bad input" }, { status: 400 });
 
-    const gameRef = adminDb.doc(`rooms/${rc}/games/gw-${gwn}`);
+    const seasonBase = `rooms/${rc}/seasons/${sk}`;
+    const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}`);
     const goldenRef = adminDb.doc(
-      `rooms/${rc}/games/gw-${gwn}/golden/${userUid}`,
+      `${seasonBase}/games/gw-${gwn}/golden/${userUid}`,
     );
     const pickRef = adminDb.doc(
-      `rooms/${rc}/games/gw-${gwn}/picks/${userUid}_${fxId}`,
+      `${seasonBase}/games/gw-${gwn}/picks/${userUid}_${fxId}`,
     );
+
+    const preGameSnap = await gameRef.get();
+    if (!preGameSnap.exists) {
+      return NextResponse.json({ error: "Game missing" }, { status: 400 });
+    }
+    const preGame = preGameSnap.data() as GameDoc;
+    let lockAtMs = coerceMillis(preGame.lockAt);
+    if (lockAtMs == null) {
+      const baseUrl = getBaseUrl(req);
+      const { firstKickoffAt, lockAt } = await loadGwFixturesWithLockWindow(
+        baseUrl,
+        gwn,
+        sk,
+      );
+      await gameRef.set({ firstKickoffAt, lockAt }, { merge: true });
+      lockAtMs = lockAt.getTime();
+    }
+
+    if (lockAtMs != null && Date.now() >= lockAtMs) {
+      return NextResponse.json(
+        {
+          error:
+            "Mini-game is locked (deadline is 1 hour before first kickoff).",
+        },
+        { status: 409 },
+      );
+    }
 
     await adminDb.runTransaction(async (tx) => {
       // -------- READS FIRST --------
@@ -52,6 +90,13 @@ export async function POST(req: Request) {
 
       const game = gameSnap.data() as GameDoc;
       if (game.state !== "GOLDEN") throw new Error("Not in GOLDEN phase");
+
+      const txLockAtMs = coerceMillis(game.lockAt) ?? lockAtMs;
+      if (txLockAtMs != null && Date.now() >= txLockAtMs) {
+        throw new Error(
+          "Mini-game is locked (deadline is 1 hour before first kickoff).",
+        );
+      }
 
       const players: string[] = Array.isArray(game.players) ? game.players : [];
       if (players.length === 0) throw new Error("No players in game");
@@ -73,7 +118,7 @@ export async function POST(req: Request) {
 
       // Read each player's golden doc (docId is their uid)
       const goldenRefs = players.map((puid) =>
-        adminDb.doc(`rooms/${rc}/games/gw-${gwn}/golden/${puid}`),
+        adminDb.doc(`${seasonBase}/games/gw-${gwn}/golden/${puid}`),
       );
 
       const goldenSnaps = goldenRefs.length

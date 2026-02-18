@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import {
   collection,
   doc,
@@ -15,6 +16,7 @@ import {
 } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
+type RoomPlayerDoc = { displayName?: string; nickName?: string };
 
 type ScoreDoc = {
   uid?: string;
@@ -28,6 +30,10 @@ type RoomDoc = {
 type ScoreWeekSummaryDoc = {
   computedAt?: unknown;
 };
+function seasonLabel(seasonKey: string) {
+  if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
+  return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
+}
 
 function parseGwId(id: string): number | null {
   const m = /^gw-(\d+)$/.exec(id);
@@ -91,6 +97,8 @@ export default function LeaderboardMatrixPage() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentGw, setCurrentGw] = useState<number>(1);
+  const [seasonKey, setSeasonKey] = useState<string>("");
+  const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [leaderToolBusy, setLeaderToolBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +109,7 @@ export default function LeaderboardMatrixPage() {
     useState<Date | null>(null);
   const [latestScoredGw, setLatestScoredGw] = useState<number | null>(null);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
+  const settingsWrapRef = useRef<HTMLDivElement | null>(null);
 
   // matrix: userUid -> gw -> points (read only from score docs)
   const [pointsByUserByGw, setPointsByUserByGw] = useState<
@@ -113,18 +122,23 @@ export default function LeaderboardMatrixPage() {
     if (!user) router.replace("/login");
   }, [loading, user, router]);
 
-  // load current gameweek
+  // load default season + gameweek
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch("/api/current-gameweek");
-        const data = await res.json();
-        const n = Number(data?.currentGameweek ?? 1);
-        if (!cancelled) setCurrentGw(Number.isFinite(n) ? n : 1);
+        const data = await getCurrentGameweekCached();
+        const n = Number(data.currentGameweek ?? 1);
+        if (!cancelled) {
+          setCurrentGw(Number.isFinite(n) ? n : 1);
+          setSeasonKey(String(data.seasonKey || ""));
+        }
       } catch {
-        if (!cancelled) setCurrentGw(1);
+        if (!cancelled) {
+          setCurrentGw(1);
+          setSeasonKey("");
+        }
       }
     })();
 
@@ -132,6 +146,47 @@ export default function LeaderboardMatrixPage() {
       cancelled = true;
     };
   }, []);
+
+  // keep season options from room data (historical seasons)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(
+          collection(db, "rooms", roomCode, "seasons"),
+        );
+        const keys = snap.docs
+          .map((d) => d.id)
+          .filter((id) => /^\d{4}$/.test(id))
+          .sort((a, b) => b.localeCompare(a));
+        if (seasonKey && !keys.includes(seasonKey)) keys.unshift(seasonKey);
+        if (!cancelled) setSeasonOptions(keys);
+      } catch {
+        if (!cancelled && seasonKey) setSeasonOptions([seasonKey]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, seasonKey]);
+
+  // whenever selected season changes, refresh season-specific current GW
+  useEffect(() => {
+    if (!seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getCurrentGameweekCached(seasonKey);
+        const n = Number(data.currentGameweek ?? 1);
+        if (!cancelled) setCurrentGw(Number.isFinite(n) ? n : 1);
+      } catch {
+        if (!cancelled) setCurrentGw(1);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [seasonKey]);
 
   useEffect(() => {
     setSelectedTableGw(currentGw);
@@ -144,8 +199,9 @@ export default function LeaderboardMatrixPage() {
       q,
       (snap) => {
         const list: Player[] = snap.docs.map((d) => {
-          const data = d.data() as { displayName?: string };
-          return { uid: d.id, displayName: data.displayName || "Player" };
+          const data = d.data() as RoomPlayerDoc;
+          const nick = String(data.nickName || "").trim();
+          return { uid: d.id, displayName: nick || data.displayName || "Player" };
         });
         setPlayers(list);
       },
@@ -156,6 +212,22 @@ export default function LeaderboardMatrixPage() {
     );
     return () => unsub();
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (settingsWrapRef.current?.contains(target)) return;
+      setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+    };
+  }, [settingsOpen]);
 
   // room leader (for leader-only tools)
   useEffect(() => {
@@ -175,7 +247,7 @@ export default function LeaderboardMatrixPage() {
   }, [roomCode]);
 
   const loadSavedScores = useCallback(async () => {
-    if (players.length === 0) return;
+    if (players.length === 0 || !seasonKey) return;
 
     setBusy(true);
     setError(null);
@@ -189,24 +261,26 @@ export default function LeaderboardMatrixPage() {
     try {
       // Only read already-computed score docs, never recompute in leaderboard.
       const scoreWeeksSnap = await getDocs(
-        collection(db, "rooms", roomCode, "scores"),
+        collection(db, "rooms", roomCode, "seasons", seasonKey, "scores"),
       );
       let currentGwComputedAt: Date | null = null;
       for (const scoreWeekDoc of scoreWeeksSnap.docs) {
         if (scoreWeekDoc.id !== `gw-${currentGw}`) continue;
         const summary = scoreWeekDoc.data() as ScoreWeekSummaryDoc;
-        currentGwComputedAt = asDate(summary.computedAt);
+        const computedAt = asDate(summary.computedAt);
+        if (computedAt && (!currentGwComputedAt || computedAt > currentGwComputedAt)) {
+          currentGwComputedAt = computedAt;
+        }
       }
 
       let computedGws = scoreWeeksSnap.docs
         .map((d) => parseGwId(d.id))
         .filter((n): n is number => n !== null && n >= 1 && n <= currentGw);
 
-      // Backward compatibility: if older score runs wrote only /users docs
-      // without gw summary docs, derive the candidate weeks from /games.
+      // If no score summaries, derive candidate weeks from seasonal games.
       if (computedGws.length === 0) {
         const gameWeeksSnap = await getDocs(
-          collection(db, "rooms", roomCode, "games"),
+          collection(db, "rooms", roomCode, "seasons", seasonKey, "games"),
         );
         computedGws = gameWeeksSnap.docs
           .map((d) => parseGwId(d.id))
@@ -217,7 +291,16 @@ export default function LeaderboardMatrixPage() {
 
       for (const gw of computedGws) {
         const usersSnap = await getDocs(
-          collection(db, "rooms", roomCode, "scores", `gw-${gw}`, "users"),
+          collection(
+            db,
+            "rooms",
+            roomCode,
+            "seasons",
+            seasonKey,
+            "scores",
+            `gw-${gw}`,
+            "users",
+          ),
         );
 
         for (const d of usersSnap.docs) {
@@ -241,7 +324,7 @@ export default function LeaderboardMatrixPage() {
     } finally {
       setBusy(false);
     }
-  }, [players, currentGw, roomCode]);
+  }, [players, currentGw, roomCode, seasonKey]);
 
   useEffect(() => {
     loadSavedScores().catch(() => {});
@@ -304,8 +387,28 @@ export default function LeaderboardMatrixPage() {
     return list;
   }, [players, pointsByUserByGw, selectedTableGw, totalByUser]);
 
+  const gwRankByUid = useMemo(() => {
+    const byGw: Record<number, Record<string, number>> = {};
+    for (const gw of weeks) {
+      const ranked = [...players].sort((a, b) => {
+        const byPoints =
+          (pointsByUserByGw?.[b.uid]?.[gw] ?? 0) -
+          (pointsByUserByGw?.[a.uid]?.[gw] ?? 0);
+        if (byPoints !== 0) return byPoints;
+        const byTotal = (totalByUser[b.uid] ?? 0) - (totalByUser[a.uid] ?? 0);
+        if (byTotal !== 0) return byTotal;
+        return a.displayName.localeCompare(b.displayName);
+      });
+      byGw[gw] = {};
+      ranked.forEach((p, idx) => {
+        byGw[gw][p.uid] = idx + 1;
+      });
+    }
+    return byGw;
+  }, [weeks, players, pointsByUserByGw, totalByUser]);
+
   async function recalcAndRefreshScores() {
-    if (!user || !isLeader) return;
+    if (!user || !isLeader || !seasonKey) return;
     if (leaderToolBusy) return;
 
     setLeaderToolBusy(true);
@@ -314,7 +417,12 @@ export default function LeaderboardMatrixPage() {
       const res = await fetch("/api/game/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode, gw: currentGw, leaderUid: user.uid }),
+        body: JSON.stringify({
+          roomCode,
+          gw: currentGw,
+          leaderUid: user.uid,
+          seasonKey,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to recalculate scores.");
@@ -330,21 +438,49 @@ export default function LeaderboardMatrixPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
       <div className="max-w-6xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <div className="relative z-30 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              Leaderboard
-            </h1>
-            <div className="text-sm text-muted">
-              {roomCode} • GW1 - GW{currentGw}
+        <div className="relative z-30 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Leaderboard</h1>
+              <div className="text-sm text-muted">
+                {roomCode} • {seasonLabel(seasonKey || "----")} • GW1 - GW{currentGw}
+              </div>
             </div>
-            <div className="text-xs text-muted mt-1">
-              Shows saved score docs only. Recalculate from room tools first.
+            <div className="ml-auto flex gap-2 page-actions-enter">
+              <button
+                onClick={() => router.push(`/room/${roomCode}`)}
+                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+                data-action="back"
+              >
+                Back
+              </button>
             </div>
           </div>
 
-          <div className="self-end flex gap-2 page-actions-enter">
-            <div className="relative">
+          <div className="flex items-center justify-between gap-2">
+            {!!seasonOptions.length && (
+              <div className="w-[132px] sm:w-[140px] relative">
+                <label className="sr-only" htmlFor="season-select">
+                  Select season
+                </label>
+                <select
+                  id="season-select"
+                  value={seasonKey}
+                  onChange={(e) => setSeasonKey(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {seasonOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {seasonLabel(s)}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                  ▼
+                </span>
+              </div>
+            )}
+            <div ref={settingsWrapRef} className="relative ml-auto page-actions-enter">
               <button
                 onClick={() => setSettingsOpen((v) => !v)}
                 className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
@@ -354,7 +490,7 @@ export default function LeaderboardMatrixPage() {
                 <Settings size={16} />
               </button>
               {settingsOpen && (
-                <div className="absolute right-0 mt-2 w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
+                <div className="absolute top-0 right-[calc(100%+12px)] w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
                   <div className="font-semibold text-foreground">Settings</div>
                   <button
                     onClick={() => loadSavedScores()}
@@ -385,13 +521,6 @@ export default function LeaderboardMatrixPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => router.push(`/room/${roomCode}`)}
-              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
-              data-action="back"
-            >
-              Back
-            </button>
           </div>
         </div>
 
@@ -403,11 +532,11 @@ export default function LeaderboardMatrixPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn"
+            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:col-span-3"
             style={{ animationDelay: "120ms", animationDuration: "520ms" }}
           >
-            <div className="text-sm font-semibold text-foreground">Overall Top 3</div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="text-sm font-semibold text-foreground text-center">Overall Top 3</div>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
               {sortedPlayers.slice(0, 3).map((p, i) => {
                 const rank = i + 1;
                 return (
@@ -415,18 +544,18 @@ export default function LeaderboardMatrixPage() {
                     key={`overall-${p.uid}`}
                     className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
                   >
-                    {rankLabel(rank)} • {p.displayName} ({totalByUser[p.uid] ?? 0})
+                    {rankLabel(rank)} {p.displayName} - {totalByUser[p.uid] ?? 0}
                   </div>
                 );
               })}
             </div>
           </div>
           <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn"
+            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:hidden"
             style={{ animationDelay: "230ms", animationDuration: "520ms" }}
           >
-            <div className="text-sm font-semibold text-foreground">Current GW{currentGw} Top 3</div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="text-sm font-semibold text-foreground text-center">Current GW{currentGw} Top 3</div>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
               {currentGwSortedPlayers.slice(0, 3).map((p, i) => {
                 const rank = i + 1;
                 const points = pointsByUserByGw?.[p.uid]?.[currentGw] ?? 0;
@@ -435,18 +564,18 @@ export default function LeaderboardMatrixPage() {
                     key={`gw-${p.uid}`}
                     className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
                   >
-                    {rankLabel(rank)} • {p.displayName} ({points})
+                    {rankLabel(rank)} {p.displayName} - {points}
                   </div>
                 );
               })}
             </div>
           </div>
           <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn"
+            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:hidden"
             style={{ animationDelay: "340ms", animationDuration: "520ms" }}
           >
-            <div className="text-sm font-semibold text-foreground">Previous GW{medalsGw} Top 3</div>
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="text-sm font-semibold text-foreground text-center">Previous GW{medalsGw} Top 3</div>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
               {previousGwSortedPlayers.slice(0, 3).map((p, i) => {
                 const rank = i + 1;
                 const points = pointsByUserByGw?.[p.uid]?.[medalsGw] ?? 0;
@@ -455,7 +584,7 @@ export default function LeaderboardMatrixPage() {
                     key={`prev-gw-${p.uid}`}
                     className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
                   >
-                    {rankLabel(rank)} • {p.displayName} ({points})
+                    {rankLabel(rank)} {p.displayName} - {points}
                   </div>
                 );
               })}
@@ -510,10 +639,20 @@ export default function LeaderboardMatrixPage() {
           <div className="mt-3 space-y-2">
             {mobileGwSortedPlayers.map((p, i) => {
               const pts = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
+              const rankToHighlight = pts > 0 ? i + 1 : 0;
               return (
                 <div
                   key={`mobile-gw-${selectedTableGw}-${p.uid}`}
-                  className="flex items-center justify-between rounded-lg border border-teal-500 bg-surface px-3 py-2"
+                  className={[
+                    "flex items-center justify-between rounded-lg border px-3 py-2",
+                    rankToHighlight === 1
+                      ? "border-yellow-400/80 bg-yellow-400/15"
+                      : rankToHighlight === 2
+                        ? "border-gray-300/80 bg-gray-300/15"
+                        : rankToHighlight === 3
+                        ? "border-amber-500/80 bg-amber-500/15"
+                        : "border-teal-500 bg-surface",
+                  ].join(" ")}
                 >
                   <div className="text-sm text-foreground">
                     {i < 3 ? `${rankLabel(i + 1)} ` : ""}
@@ -547,15 +686,46 @@ export default function LeaderboardMatrixPage() {
 
             <tbody>
               {weeks.map((gw) => (
-                <tr key={gw} className="border-b border-subtle last:border-0">
-                  <td className="w-[120px] p-3 font-semibold text-foreground sticky left-0 bg-surface-2 z-10">
+                <tr
+                  key={gw}
+                  className={[
+                    "border-b border-subtle last:border-0",
+                    gw === currentGw ? "bg-blue-500/10" : "",
+                  ].join(" ")}
+                >
+                  <td
+                    className={[
+                      "w-[120px] p-3 font-semibold sticky left-0 z-10",
+                      gw === currentGw
+                        ? "bg-blue-500/15 text-blue-300"
+                        : "bg-surface-2 text-foreground",
+                    ].join(" ")}
+                  >
                     GW{gw}
                   </td>
                   {sortedPlayers.map((p) => (
                     <td key={p.uid} className="p-3 text-center text-foreground">
-                      <span className="inline-flex min-w-[44px] justify-center whitespace-nowrap">
-                        {pointsByUserByGw?.[p.uid]?.[gw] ?? 0}
+                      {(() => {
+                        const cellPts = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
+                        const rank = gwRankByUid?.[gw]?.[p.uid] ?? 0;
+                        const rankToHighlight = cellPts > 0 ? rank : 0;
+                        return (
+                      <span
+                        className={[
+                          "inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
+                          rankToHighlight === 1
+                            ? "bg-yellow-400/20 border border-yellow-400/80"
+                            : rankToHighlight === 2
+                              ? "bg-gray-300/20 border border-gray-300/80"
+                              : rankToHighlight === 3
+                                ? "bg-amber-500/20 border border-amber-500/80"
+                                : "",
+                        ].join(" ")}
+                      >
+                        {cellPts}
                       </span>
+                        );
+                      })()}
                     </td>
                   ))}
                 </tr>

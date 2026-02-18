@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import {
   collection,
   getDocs,
@@ -17,8 +18,8 @@ type Fixture = {
   gameweek: number;
   kickoff: string; // ISO
   status: string;
-  home: { name: string };
-  away: { name: string };
+  home: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  away: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
   result?: string | null; // "2-1" if finished
 };
 
@@ -29,36 +30,112 @@ type PicksByFixture = Record<number, Record<string, string>>;
 
 // goldenByUid[uid] = { fixtureId, score }
 type GoldenByUid = Record<string, { fixtureId: number; score: string }>;
-type RoomPlayerDoc = { displayName?: string };
+type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type PickDoc = { fixtureId?: number; uid?: string; score?: string };
 type GoldenDoc = { fixtureId?: number; score?: string };
 type FixturesResponse = { fixtures?: Fixture[]; generatedAt?: string };
+type TableRow = {
+  position: number;
+  team: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  playedGames: number;
+  won: number;
+  draw: number;
+  lost: number;
+  goalsScored: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+};
+type TableMode = "HOME" | "TOTAL" | "AWAY";
+type TableView = "SHORT" | "FULL";
+type TableResponse = {
+  standingsTotal?: TableRow[];
+  standingsHome?: TableRow[];
+  standingsAway?: TableRow[];
+  seasonKey?: string;
+  error?: string;
+};
+
+const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
+  { key: "HOME", label: "Home" },
+  { key: "TOTAL", label: "Combined" },
+  { key: "AWAY", label: "Away" },
+];
+
+const TABLE_MODE_SLIDER_LEFT: Record<TableMode, string> = {
+  HOME: "left-1",
+  TOTAL: "left-[calc(33.333%+0.02rem)]",
+  AWAY: "left-[calc(66.666%+0.02rem)]",
+};
+function seasonLabel(seasonKey: string) {
+  if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
+  return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
+}
 
 const MIN_GW = 1;
 const MAX_GW = 38;
 
-function fmtKickoff(iso: string) {
+function fmtKickoffParts(iso: string) {
   const dt = new Date(iso);
-
-  const date = dt.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  const dayNum = dt.getDate();
+  const suffix =
+    dayNum % 10 === 1 && dayNum % 100 !== 11
+      ? "st"
+      : dayNum % 10 === 2 && dayNum % 100 !== 12
+        ? "nd"
+        : dayNum % 10 === 3 && dayNum % 100 !== 13
+          ? "rd"
+          : "th";
+  const monthYear = dt.toLocaleDateString("en-GB", {
+    month: "short",
+    year: "2-digit",
   });
-
   const time = dt.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
-
-  return `${date} • ${time}`;
+  return { dayNum, suffix, monthYear, time };
 }
 
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
   return String(s).replace("-", "–");
+}
+
+function parseOutcome(score?: string | null) {
+  if (!score) return null;
+  const m = String(score).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!m) return null;
+  const home = Number(m[1]);
+  const away = Number(m[2]);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+  if (home > away) return "H";
+  if (home < away) return "A";
+  return "D";
+}
+
+function TeamBadge({
+  name,
+  shortName,
+  badge,
+}: {
+  name: string;
+  shortName?: string;
+  badge?: string | null;
+}) {
+  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
+  return (
+    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+      {badge ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
+      ) : (
+        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
+      )}
+    </div>
+  );
 }
 
 function asDate(value: unknown): Date | null {
@@ -81,6 +158,39 @@ function fmtDateTime(d: Date) {
   });
 }
 
+function toInt(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function teamAbbr(team: { name?: string; tla?: string | null; shortName?: string }) {
+  const tla = String(team.tla || "").trim().toUpperCase();
+  if (/^[A-Z]{2,4}$/.test(tla)) return tla;
+
+  const short = String(team.shortName || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
+
+  const name = String(team.name || "").trim().toUpperCase();
+  if (!name) return "FC";
+
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0])
+      .join("");
+  }
+  return name.slice(0, 3);
+}
+
+function fixtureAbbr(name?: string, tla?: string | null, shortName?: string) {
+  const code = String(tla || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(code)) return code;
+  const short = String(shortName || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
+  return teamAbbr({ name, shortName });
+}
+
 export default function FixturesPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -96,6 +206,8 @@ export default function FixturesPage() {
   const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>({});
   const [error, setError] = useState<string | null>(null);
   const [gw, setGw] = useState<number>(1);
+  const [seasonKey, setSeasonKey] = useState<string>("");
+  const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [refreshingFixtures, setRefreshingFixtures] = useState(false);
   const [fixturesGeneratedAt, setFixturesGeneratedAt] = useState<Date | null>(
@@ -104,18 +216,38 @@ export default function FixturesPage() {
   const [fixturesRefreshedAt, setFixturesRefreshedAt] = useState<Date | null>(
     null,
   );
+  const [compactMode, setCompactMode] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [tableMode, setTableMode] = useState<TableMode>("TOTAL");
+  const [tableView, setTableView] = useState<TableView>("FULL");
+  const [tableRowsByMode, setTableRowsByMode] = useState<Record<TableMode, TableRow[]>>({
+    HOME: [],
+    TOTAL: [],
+    AWAY: [],
+  });
+  const [tableError, setTableError] = useState<string | null>(null);
+  const settingsWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch("/api/current-gameweek");
-        const data = await res.json();
-        const current = Number(data?.currentGameweek ?? 1);
-        if (!cancelled) setGw(Number.isFinite(current) ? current : 1);
+        const data = await getCurrentGameweekCached();
+        const current = Number(data.currentGameweek ?? 1);
+        if (!cancelled) {
+          setGw(Number.isFinite(current) ? current : 1);
+          setSeasonKey(String(data.seasonKey || ""));
+        }
       } catch {
-        if (!cancelled) setGw(1);
+        if (!cancelled) {
+          setGw(1);
+          setSeasonKey("");
+        }
+      } finally {
+        if (!cancelled) setBootstrapped(true);
       }
     })();
 
@@ -124,11 +256,79 @@ export default function FixturesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, "rooms", roomCode, "seasons"));
+        const keys = snap.docs
+          .map((d) => d.id)
+          .filter((id) => /^\d{4}$/.test(id))
+          .sort((a, b) => b.localeCompare(a));
+        if (seasonKey && !keys.includes(seasonKey)) keys.unshift(seasonKey);
+        if (!cancelled) setSeasonOptions(keys);
+      } catch {
+        if (!cancelled && seasonKey) setSeasonOptions([seasonKey]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, seasonKey]);
+
   // Auth guard
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/login");
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("fixturesCompactMode");
+    setCompactMode(raw === "1");
+  }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (settingsWrapRef.current?.contains(target)) return;
+      setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+    };
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!tableOpen) return;
+    const scrollY = window.scrollY;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyTop = document.body.style.top;
+    const prevBodyWidth = document.body.style.width;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.top = prevBodyTop;
+      document.body.style.width = prevBodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [tableOpen]);
 
   // Load room players (names)
   useEffect(() => {
@@ -138,7 +338,11 @@ export default function FixturesPage() {
       (snap) => {
         const list: Player[] = snap.docs.map((d) => {
           const data = d.data() as RoomPlayerDoc;
-          return { uid: d.id, displayName: data.displayName || "Player" };
+          const nick = String(data.nickName || "").trim();
+          return {
+            uid: d.id,
+            displayName: nick || data.displayName || "Player",
+          };
         });
         setPlayers(list);
       },
@@ -159,7 +363,8 @@ export default function FixturesPage() {
       setError(null);
 
       const nonce = force ? `&t=${Date.now()}` : "";
-      const res = await fetch(`/api/fixtures?gameweek=${gw}${nonce}`, {
+      const seasonParam = seasonKey ? `&seasonKey=${encodeURIComponent(seasonKey)}` : "";
+      const res = await fetch(`/api/fixtures?gameweek=${gw}${seasonParam}${nonce}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`fixtures ${res.status}`);
@@ -170,11 +375,12 @@ export default function FixturesPage() {
       setFixturesGeneratedAt(asDate(data.generatedAt));
       setFixturesRefreshedAt(new Date());
     },
-    [gw],
+    [gw, seasonKey],
   );
 
   // Load fixtures for selected GW
   useEffect(() => {
+    if (!bootstrapped) return;
     let cancelled = false;
     (async () => {
       try {
@@ -191,7 +397,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [gw, loadFixtures]);
+  }, [bootstrapped, gw, loadFixtures]);
 
   // Load minigame picks + golden for selected GW
   useEffect(() => {
@@ -202,8 +408,18 @@ export default function FixturesPage() {
       setPicksByFixture({});
       setGoldenByUid({});
 
+      if (!seasonKey) return;
       const picksSnap = await getDocs(
-        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+        collection(
+          db,
+          "rooms",
+          roomCode,
+          "seasons",
+          seasonKey,
+          "games",
+          `gw-${gw}`,
+          "picks",
+        ),
       );
 
       const byFx: PicksByFixture = {};
@@ -217,7 +433,16 @@ export default function FixturesPage() {
       }
 
       const goldenSnap = await getDocs(
-        collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
+        collection(
+          db,
+          "rooms",
+          roomCode,
+          "seasons",
+          seasonKey,
+          "games",
+          `gw-${gw}`,
+          "golden",
+        ),
       );
 
       const gByUid: GoldenByUid = {};
@@ -243,7 +468,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomCode, gw]);
+  }, [roomCode, gw, seasonKey]);
 
   const gameweeks = useMemo(
     () => Array.from({ length: MAX_GW }, (_, i) => i + 1),
@@ -264,23 +489,110 @@ export default function FixturesPage() {
     }
   }
 
+  function toggleCompactMode() {
+    setCompactMode((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("fixturesCompactMode", next ? "1" : "0");
+      }
+      return next;
+    });
+  }
+
+  async function onSeasonChange(nextSeason: string) {
+    setSeasonKey(nextSeason);
+    if (!nextSeason) {
+      setGw(1);
+      return;
+    }
+    try {
+      const data = await getCurrentGameweekCached(nextSeason);
+      const current = Number(data.currentGameweek ?? 1);
+      setGw(Number.isFinite(current) ? current : 1);
+    } catch {
+      setGw(1);
+    }
+  }
+
+  async function openTablePopup() {
+    setTableOpen(true);
+    setTableLoading(true);
+    setTableError(null);
+    setTableMode("TOTAL");
+    setTableView("FULL");
+    try {
+      const seasonParam = seasonKey ? `?seasonKey=${encodeURIComponent(seasonKey)}` : "";
+      const res = await fetch(`/api/table${seasonParam}`, { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as TableResponse;
+      if (!res.ok) throw new Error(data?.error || "Failed to load table.");
+      setTableRowsByMode({
+        TOTAL: Array.isArray(data.standingsTotal) ? data.standingsTotal : [],
+        HOME: Array.isArray(data.standingsHome) ? data.standingsHome : [],
+        AWAY: Array.isArray(data.standingsAway) ? data.standingsAway : [],
+      });
+    } catch (e) {
+      setTableError(e instanceof Error ? e.message : "Failed to load table.");
+      setTableRowsByMode({ HOME: [], TOTAL: [], AWAY: [] });
+    } finally {
+      setTableLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
       <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         {/* Header */}
-        <div className="relative z-30 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              PL Fixtures
-            </h1>
-            <div className="text-sm text-muted">
-              {roomCode} • GW {gw} Fixtures
+        <div className="relative z-30 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">PL Fixtures</h1>
+              <div className="text-sm text-muted">
+                {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} Fixtures
+              </div>
+            </div>
+            <div className="ml-auto flex gap-2 page-actions-enter">
+              <button
+                onClick={() => router.push(`/room/${roomCode}`)}
+                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+                data-action="back"
+              >
+                Back
+              </button>
             </div>
           </div>
 
-          <div className="self-end flex gap-2 page-actions-enter">
-            <div className="relative">
+          <div className="flex items-center justify-between gap-2">
+            {!!seasonOptions.length && (
+              <div className="w-[132px] sm:w-[140px] relative">
+                <label className="sr-only" htmlFor="fixtures-season-select">
+                  Select season
+                </label>
+                <select
+                  id="fixtures-season-select"
+                  value={seasonKey}
+                  onChange={(e) => onSeasonChange(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {seasonOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {seasonLabel(s)}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                  ▼
+                </span>
+              </div>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={openTablePopup}
+                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap"
+              >
+                Table
+              </button>
+            <div ref={settingsWrapRef} className="relative page-actions-enter">
               <button
                 onClick={() => setSettingsOpen((v) => !v)}
                 className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
@@ -290,7 +602,7 @@ export default function FixturesPage() {
                 <Settings size={16} />
               </button>
               {settingsOpen && (
-                <div className="absolute right-0 mt-2 w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
+                <div className="absolute top-0 right-[calc(100%+12px)] w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
                   <div className="font-semibold text-foreground">Settings</div>
                   <button
                     onClick={refreshFixtures}
@@ -302,13 +614,7 @@ export default function FixturesPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => router.push(`/room/${roomCode}`)}
-              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
-              data-action="back"
-            >
-              Back
-            </button>
+            </div>
           </div>
         </div>
 
@@ -382,6 +688,48 @@ export default function FixturesPage() {
           </button>
         </div>
 
+        <div className="rounded-xl p-3 bg-surface-2 border border-teal-500">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold text-foreground">Prediction Key</div>
+            <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
+              <span>Compact</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={compactMode}
+                onClick={toggleCompactMode}
+                className={[
+                  "relative h-6 w-11 rounded-full border transition-colors",
+                  compactMode
+                    ? "bg-teal-500/25 border-teal-400"
+                    : "bg-surface border-teal-500",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all",
+                    compactMode ? "left-6" : "left-0.5",
+                  ].join(" ")}
+                />
+              </button>
+            </label>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted">
+            <div className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
+              Correct Result
+            </div>
+            <div className="rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
+              Exact Score
+            </div>
+            <div className="rounded-md border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-2 py-1 text-center">
+              Golden + Result
+            </div>
+            <div className="rounded-md border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-2 py-1 text-center">
+              Golden + Exact
+            </div>
+          </div>
+        </div>
+
         {error && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {error}
@@ -389,13 +737,13 @@ export default function FixturesPage() {
         )}
 
         {/* Fixtures */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {isLoading && (
-            <div className="text-center text-muted">Loading fixtures…</div>
+            <div className="col-span-full text-center text-muted">Loading fixtures…</div>
           )}
 
           {!isLoading && fixtures.length === 0 && (
-            <div className="text-center text-muted">
+            <div className="col-span-full text-center text-muted">
               No fixtures available for this gameweek.
             </div>
           )}
@@ -404,30 +752,88 @@ export default function FixturesPage() {
             fixtures.length > 0 &&
             fixtures.map((f, idx) => {
               const actual = f.result ?? null;
+              const kickoffParts = fmtKickoffParts(f.kickoff);
+              const mobileOddPredictions = players.length % 2 !== 0;
+              const desktopOddPredictions = players.length % 3 !== 0;
 
               return (
                 <div
                   key={f.fixtureId}
-                  className="border border-teal-500 rounded-xl p-4 bg-surface-2 page-action-btn"
+                  className="border border-teal-500 rounded-xl p-3 sm:p-4 bg-surface-2 page-action-btn"
                   style={{
                     animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                     animationDuration: "520ms",
                   }}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-2">
                     <div>
-                      <div className="font-semibold text-sm text-foreground">
-                        {f.home.name} vs {f.away.name}
+                      <div className="text-xs text-muted mb-2">
+                        <div className="sm:hidden flex items-center justify-between gap-2">
+                          <span>
+                            {kickoffParts.dayNum}
+                            <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
+                            {kickoffParts.monthYear}
+                          </span>
+                          <span>{kickoffParts.time}</span>
+                        </div>
+                        <div className="hidden sm:flex items-center justify-between gap-2">
+                          <span>
+                            {kickoffParts.dayNum}
+                            <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
+                            {kickoffParts.monthYear}
+                          </span>
+                          <span>{kickoffParts.time}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted">
-                        {fmtKickoff(f.kickoff)}
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
+                        <div className="flex flex-col items-center gap-1">
+                          <TeamBadge
+                            name={f.home.name}
+                            shortName={f.home.shortName}
+                            badge={f.home.badge}
+                          />
+                          <span className="text-[10px] text-muted uppercase tracking-wide">
+                            {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-muted uppercase">vs</span>
+                        <div className="flex flex-col items-center gap-1">
+                          <TeamBadge
+                            name={f.away.name}
+                            shortName={f.away.shortName}
+                            badge={f.away.badge}
+                          />
+                          <span className="text-[10px] text-muted uppercase tracking-wide">
+                            {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted uppercase">
-                        {f.status}
+
+                      <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={f.home.name}
+                            shortName={f.home.shortName}
+                            badge={f.home.badge}
+                          />
+                          <span className="mt-1 text-sm font-semibold text-foreground truncate w-full">
+                            {f.home.shortName || f.home.name}
+                          </span>
+                        </div>
+                        <span className="text-xs font-semibold text-muted uppercase">H vs A</span>
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={f.away.name}
+                            shortName={f.away.shortName}
+                            badge={f.away.badge}
+                          />
+                          <span className="mt-1 text-sm font-semibold text-foreground truncate w-full">
+                            {f.away.shortName || f.away.name}
+                          </span>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="text-right">
+                    <div className="text-center">
                       <div className="text-sm text-muted">Result</div>
                       <div className="text-lm font-semibold text-foreground">
                         {actual ? actual.replace("-", " – ") : "TBD"}
@@ -435,9 +841,9 @@ export default function FixturesPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <div className="text-sm font-semibold mb-2 text-foreground">
-                      Room Predictions
+                  {!compactMode && <div className="mt-4">
+                    <div className="text-sm font-semibold mb-2 text-muted text-center">
+                      Predictions
                     </div>
 
                     {players.length === 0 ? (
@@ -445,7 +851,17 @@ export default function FixturesPage() {
                         No players found.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div
+                        className={[
+                          "gap-2",
+                          mobileOddPredictions
+                            ? "flex flex-wrap justify-center"
+                            : "grid grid-cols-2",
+                          desktopOddPredictions
+                            ? "sm:flex sm:flex-wrap sm:justify-center"
+                            : "sm:grid sm:grid-cols-3",
+                        ].join(" ")}
+                      >
                         {players.map((p) => {
                           const pred =
                             picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
@@ -454,22 +870,58 @@ export default function FixturesPage() {
                             !!golden &&
                             golden.fixtureId === f.fixtureId &&
                             golden.score === pred;
+                          const predNorm = String(pred || "").trim();
+                          const actualNorm = String(actual || "").trim();
+                          const isExact =
+                            !!predNorm && !!actualNorm && predNorm === actualNorm;
+                          const isOutcomeOnly =
+                            !isExact &&
+                            !!predNorm &&
+                            !!actualNorm &&
+                            parseOutcome(predNorm) != null &&
+                            parseOutcome(predNorm) === parseOutcome(actualNorm);
+
+                          const toneClass = isExact
+                            ? "bg-purple-500/20 border-purple-400/70"
+                            : isOutcomeOnly
+                              ? "bg-emerald-500/20 border-emerald-400/70"
+                              : "bg-surface border-teal-500";
+                          const goldenToneClass =
+                            isExact || isOutcomeOnly
+                              ? isExact
+                                ? "bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
+                                : "bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
+                              : "bg-yellow-300/10 border-yellow-300/60";
 
                           return (
                             <div
                               key={p.uid}
-                              className="flex items-center justify-between bg-surface border border-teal-500 rounded-lg px-3 py-2"
+                              className={[
+                                "rounded-lg px-2 py-2 text-center overflow-hidden border",
+                                mobileOddPredictions
+                                  ? "basis-[calc(50%-0.25rem)]"
+                                  : "",
+                                desktopOddPredictions
+                                  ? "sm:basis-[calc(33.333%-0.5rem)]"
+                                  : "sm:basis-auto",
+                                isGolden
+                                  ? goldenToneClass
+                                  : toneClass,
+                              ].join(" ")}
                             >
-                              <div className="text-sm font-medium text-foreground truncate">
+                              <div
+                                className={[
+                                  "text-[11px] font-semibold truncate",
+                                  "text-muted",
+                                ].join(" ")}
+                              >
                                 {p.displayName}
                               </div>
 
                               <div
                                 className={[
-                                  "inline-block rounded-lg px-2 py-1 border border-teal-500  whitespace-nowrap text-sm font-bold",
-                                  isGolden
-                                    ? "bg-yellow-300 text-black"
-                                    : "bg-surface-2 text-foreground",
+                                  "mt-1 flex w-full items-center justify-center gap-1 text-xs sm:text-base font-bold",
+                                  "text-foreground",
                                 ].join(" ")}
                               >
                                 {fmtScore(pred.replace("-", " - "))}
@@ -480,12 +932,7 @@ export default function FixturesPage() {
                       </div>
                     )}
 
-                    {Object.keys(picksByFixture).length === 0 && (
-                      <div className="text-xs text-muted mt-2">
-                        No minigame picks saved for this GW yet.
-                      </div>
-                    )}
-                  </div>
+                  </div>}
                 </div>
               );
             })}
@@ -502,6 +949,192 @@ export default function FixturesPage() {
           </div>
         )}
       </div>
+
+      {tableOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-teal-500 bg-surface shadow-card">
+            <div className="flex items-center justify-between border-b border-subtle p-4">
+              <div className="text-lg font-semibold text-foreground">
+                Premier League Table • {seasonLabel(seasonKey || "----")}
+              </div>
+              <button
+                onClick={() => setTableOpen(false)}
+                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2"
+                aria-label="Close table"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[calc(85vh-72px)]">
+              {tableLoading ? (
+                <div className="text-sm text-muted">Loading table…</div>
+              ) : tableError ? (
+                <div className="text-sm text-danger">{tableError}</div>
+              ) : (tableRowsByMode[tableMode] ?? []).length === 0 ? (
+                <div className="text-sm text-muted">No table data available.</div>
+              ) : (
+                <>
+                  <div className="mb-2">
+                    <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
+                      <span
+                        aria-hidden
+                        className={[
+                          "absolute top-1 bottom-1 w-[calc(33.333%-0.28rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                          TABLE_MODE_SLIDER_LEFT[tableMode],
+                        ].join(" ")}
+                      />
+                      {TABLE_MODE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setTableMode(opt.key)}
+                          className={[
+                            "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
+                            tableMode === opt.key
+                              ? "text-accent-foreground"
+                              : "text-foreground",
+                          ].join(" ")}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
+                      <span
+                        aria-hidden
+                        className={[
+                          "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                          tableView === "SHORT" ? "left-1" : "left-[calc(50%+0.125rem)]",
+                        ].join(" ")}
+                      />
+                      <button
+                        onClick={() => setTableView("SHORT")}
+                        className={[
+                          "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
+                          tableView === "SHORT"
+                            ? "text-accent-foreground"
+                            : "text-foreground",
+                        ].join(" ")}
+                      >
+                        Short
+                      </button>
+                      <button
+                        onClick={() => setTableView("FULL")}
+                        className={[
+                          "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
+                          tableView === "FULL"
+                            ? "text-accent-foreground"
+                            : "text-foreground",
+                        ].join(" ")}
+                      >
+                        Full
+                      </button>
+                    </div>
+                  </div>
+                  <table className="w-full table-fixed text-sm">
+                    {tableView === "FULL" ? (
+                      <colgroup>
+                        <col style={{ width: "8%" }} />
+                        <col style={{ width: "22%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                        <col style={{ width: "8.75%" }} />
+                      </colgroup>
+                    ) : (
+                      <colgroup>
+                        <col style={{ width: "8%" }} />
+                        <col style={{ width: "52%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "14%" }} />
+                      </colgroup>
+                    )}
+                    <thead className="text-muted">
+                      <tr className="border-b border-subtle">
+                        <th className="py-2 px-1 text-left">#</th>
+                        <th className="py-2 px-1 text-left">Club</th>
+                        <th className="py-2 px-0.5 sm:px-1 text-center">P</th>
+                        {tableView === "FULL" && (
+                          <>
+                            <th className="py-2 px-0.5 sm:px-1 text-center">W</th>
+                            <th className="py-2 px-0.5 sm:px-1 text-center">D</th>
+                            <th className="py-2 px-0.5 sm:px-1 text-center">L</th>
+                            <th className="py-2 px-0.5 sm:px-1 text-center">GF</th>
+                            <th className="py-2 px-0.5 sm:px-1 text-center">GA</th>
+                          </>
+                        )}
+                        <th className="py-2 px-1 text-center">GD</th>
+                        <th className="py-2 px-1 text-center">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody key={`${tableMode}-${tableView}`}>
+                      {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
+                        <tr
+                          key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
+                          className="border-b border-subtle last:border-0 page-action-btn"
+                          style={{
+                            animationDelay: `${Math.min(idx, 12) * 35}ms`,
+                            animationDuration: "380ms",
+                          }}
+                        >
+                          <td className="py-2 px-1 text-foreground">{r.position}</td>
+                          <td className="py-2 px-1">
+                            <div className="flex items-center gap-2">
+                              <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                                {r.team.badge ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={r.team.badge}
+                                    alt={r.team.name}
+                                    className="h-5 w-5 object-contain"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <span className="text-[9px] font-bold text-foreground">
+                                    {(r.team.shortName || r.team.name || "FC").slice(0, 3).toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={[
+                                  "text-foreground font-medium truncate",
+                                  tableView === "FULL" ? "inline text-[10px] sm:text-sm" : "inline",
+                                ].join(" ")}
+                              >
+                                {tableView === "FULL"
+                                  ? teamAbbr(r.team)
+                                  : (r.team.shortName || r.team.name)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.playedGames)}</td>
+                          {tableView === "FULL" && (
+                            <>
+                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.won)}</td>
+                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.draw)}</td>
+                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.lost)}</td>
+                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsScored)}</td>
+                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsAgainst)}</td>
+                            </>
+                          )}
+                          <td className="py-2 px-1 text-center text-foreground">{toInt(r.goalDifference)}</td>
+                          <td className="py-2 px-1 text-center font-semibold text-foreground">{toInt(r.points)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

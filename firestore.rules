@@ -74,6 +74,42 @@ service cloud.firestore {
         }
       }
 
+      // Season-scoped game + score data (current + historical seasons)
+      match /seasons/{seasonKey} {
+        allow read: if isMember(roomCode);
+        allow write: if false;
+
+        match /games/{gameId} {
+          allow read: if isMember(roomCode);
+          allow create, update, delete: if false;
+
+          match /lobby/{playerUid} {
+            allow read: if isMember(roomCode);
+            allow create, update, delete: if signedIn() && playerUid == uid();
+          }
+
+          match /picks/{docId} {
+            allow read: if isMember(roomCode);
+            allow write: if false;
+          }
+
+          match /golden/{playerUid} {
+            allow read: if isMember(roomCode);
+            allow write: if false;
+          }
+        }
+
+        match /scores/{gwId} {
+          allow read: if isMember(roomCode);
+          allow write: if false;
+
+          match /users/{playerUid} {
+            allow read: if isMember(roomCode);
+            allow write: if false;
+          }
+        }
+      }
+
       // Saved computed scores used by leaderboard page
       match /scores/{gwId} {
         allow read: if isMember(roomCode);

@@ -2,19 +2,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
+import { getBaseUrl, loadGwFixturesWithLockWindow } from "../lock-window";
+import { resolveSeasonKey } from "../../season";
 
 type StartBody = {
   roomCode?: string;
   gw?: number;
   leaderUid?: string;
+  seasonKey?: string;
 };
 
 type RoomDoc = {
   leaderUid?: string;
 };
 
-type FixtureApiItem = { fixtureId?: number };
-type FixturesApiResponse = { fixtures?: FixtureApiItem[] };
 type GameDoc = { state?: string };
 
 function onlyAlnum(s: string) {
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
     const roomCode = String(body.roomCode || "").toUpperCase();
     const gw = Number(body.gw);
     const leaderUid = String(body.leaderUid || "");
+    const seasonKey = resolveSeasonKey(body.seasonKey);
 
     if (!onlyAlnum(roomCode))
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
@@ -53,9 +55,11 @@ export async function POST(req: Request) {
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
 
+    const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
+
     // roster = current lobby users (ONLY those in minigame lobby)
     const lobbySnap = await adminDb
-      .collection(`rooms/${roomCode}/games/gw-${gw}/lobby`)
+      .collection(`${seasonBase}/games/gw-${gw}/lobby`)
       .get();
     const players = lobbySnap.docs.map((d) => d.id);
 
@@ -85,38 +89,43 @@ export async function POST(req: Request) {
       );
     }
 
-    // get fixtures from your own internal API (server-side fetch)
-    const host = req.headers.get("host");
-    const proto = host?.includes("localhost") ? "http" : "https";
-    const base = host ? `${proto}://${host}` : "http://localhost:3000";
+    const base = getBaseUrl(req);
+    let fixtureIds: number[] = [];
+    let firstKickoffAt: Date;
+    let lockAt: Date;
+    try {
+      const loaded = await loadGwFixturesWithLockWindow(base, gw, seasonKey);
+      fixtureIds = loaded.fixtureIds;
+      firstKickoffAt = loaded.firstKickoffAt;
+      lockAt = loaded.lockAt;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to load fixtures";
+      const status =
+        message.startsWith("No fixtures") ||
+        message.startsWith("No eligible fixtures") ||
+        message.startsWith("Fixtures missing kickoff")
+          ? 400
+          : 502;
+      return NextResponse.json({ error: message }, { status });
+    }
 
-    const fxRes = await fetch(`${base}/api/fixtures?gameweek=${gw}`, {
-      cache: "no-store",
-    });
-    if (!fxRes.ok)
+    if (Date.now() >= lockAt.getTime()) {
       return NextResponse.json(
-        { error: "Failed to load fixtures" },
-        { status: 502 },
+        {
+          error:
+            "Mini-game is locked (deadline is 1 hour before first kickoff).",
+        },
+        { status: 409 },
       );
+    }
 
-    const fxData = (await fxRes.json()) as FixturesApiResponse;
-    const fixtureIds: number[] = (Array.isArray(fxData.fixtures) ? fxData.fixtures : [])
-      .map((f) => Number(f.fixtureId))
-      .filter((n) => Number.isFinite(n));
-
-    if (fixtureIds.length === 0)
-      return NextResponse.json(
-        { error: "No fixtures for this GW" },
-        { status: 400 },
-      );
-
-    // Ensure exactly 10 if that’s your rule; otherwise allow any length
+    // Ensure exactly 10 if that’s your rule; otherwise allow any length.
     const fixtureIds10 = fixtureIds.slice(0, 10);
 
     // Choose first player randomly each week, then rotate through order
     const order = shuffle(players);
 
-    const gameRef = adminDb.doc(`rooms/${roomCode}/games/gw-${gw}`);
+    const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gw}`);
 
     await adminDb.runTransaction(async (tx) => {
       const existing = await tx.get(gameRef);
@@ -135,6 +144,9 @@ export async function POST(req: Request) {
           fixtureIds: fixtureIds10,
           currentTurn: 0,
           totalTurns: order.length * fixtureIds10.length,
+          firstKickoffAt,
+          lockAt,
+          seasonKey,
           createdAt: new Date(),
           startedAt: new Date(),
         },

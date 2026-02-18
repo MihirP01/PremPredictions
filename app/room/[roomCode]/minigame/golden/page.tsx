@@ -4,20 +4,23 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { db } from "../../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
+import { coerceMillis, formatCountdown, ONE_HOUR_MS } from "../lock-utils";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
   players: string[];
   fixtureIds: number[];
+  lockAt?: unknown;
 };
 
 type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string };
-  away: { name: string };
+  home: { name: string; shortName?: string; badge?: string | null };
+  away: { name: string; shortName?: string; badge?: string | null };
   result?: string | null;
 };
 
@@ -34,6 +37,28 @@ type GoldenDoc = {
   locked: boolean;
 };
 
+function TeamBadge({
+  name,
+  shortName,
+  badge,
+}: {
+  name: string;
+  shortName?: string;
+  badge?: string | null;
+}) {
+  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
+  return (
+    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+      {badge ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
+      ) : (
+        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
+      )}
+    </div>
+  );
+}
+
 export default function GoldenPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -44,6 +69,7 @@ export default function GoldenPage() {
   const { user, loading } = useAuth();
 
   const [gw, setGw] = useState<number | null>(null);
+  const [seasonKey, setSeasonKey] = useState<string | null>(null);
   const [game, setGame] = useState<GameDoc | null>(null);
 
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
@@ -62,6 +88,7 @@ export default function GoldenPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
   const routedRef = useRef(false);
 
@@ -77,12 +104,17 @@ export default function GoldenPage() {
 
     (async () => {
       try {
-        const res = await fetch("/api/current-gameweek", { cache: "no-store" });
-        const data = await res.json();
-        const n = Number(data?.currentGameweek ?? 1);
-        if (!cancelled) setGw(Number.isFinite(n) ? n : 1);
+        const data = await getCurrentGameweekCached();
+        const n = Number(data.currentGameweek ?? 1);
+        if (!cancelled) {
+          setGw(Number.isFinite(n) ? n : 1);
+          setSeasonKey(String(data.seasonKey || ""));
+        }
       } catch {
-        if (!cancelled) setGw(1);
+        if (!cancelled) {
+          setGw(1);
+          setSeasonKey("");
+        }
       }
     })();
 
@@ -91,11 +123,24 @@ export default function GoldenPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // listen to game doc (for state + players + fixtureIds + auto route)
   useEffect(() => {
-    if (!user || gw == null) return;
+    if (!user || gw == null || !seasonKey) return;
 
-    const gameRef = doc(db, "rooms", roomCode, "games", `gw-${gw}`);
+    const gameRef = doc(
+      db,
+      "rooms",
+      roomCode,
+      "seasons",
+      seasonKey,
+      "games",
+      `gw-${gw}`,
+    );
 
     const unsub = onSnapshot(
       gameRef,
@@ -125,15 +170,15 @@ export default function GoldenPage() {
     );
 
     return () => unsub();
-  }, [user, roomCode, gw, router]);
+  }, [user, roomCode, gw, router, seasonKey]);
 
   // load fixtures for GW
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}`, {
+      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`, {
         cache: "no-store",
       });
       const d = await r.json().catch(() => ({}));
@@ -144,14 +189,23 @@ export default function GoldenPage() {
     return () => {
       cancelled = true;
     };
-  }, [gw]);
+  }, [gw, seasonKey]);
 
   // listen to ALL picks for this GW
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
 
     const picksQ = query(
-      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+        "picks",
+      ),
     );
 
     return onSnapshot(
@@ -176,14 +230,23 @@ export default function GoldenPage() {
       () => setError("Failed to listen for picks."),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode, gw, user?.uid]);
+  }, [roomCode, gw, user?.uid, seasonKey]);
 
   // listen to golden locks
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
 
     const goldenQ = query(
-      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "golden"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+        "golden",
+      ),
     );
 
     return onSnapshot(
@@ -197,7 +260,7 @@ export default function GoldenPage() {
       },
       () => setError("Failed to listen for golden locks."),
     );
-  }, [roomCode, gw]);
+  }, [roomCode, gw, seasonKey]);
 
   const playersCount = game?.players?.length ?? 0;
   const lockedCount = useMemo(() => {
@@ -225,6 +288,10 @@ export default function GoldenPage() {
   async function lockGolden() {
     if (!user) return;
     if (gw == null) return;
+    if (isLocked) {
+      setError("Mini-game is locked (deadline passed).");
+      return;
+    }
 
     if (selectedFixtureId == null) {
       setError("Select a fixture to make golden.");
@@ -250,6 +317,7 @@ export default function GoldenPage() {
           uid: user.uid,
           fixtureId: selectedFixtureId,
           score,
+          seasonKey,
         }),
       });
 
@@ -291,6 +359,19 @@ export default function GoldenPage() {
   const orderedFixtureIds = game.fixtureIds?.length
     ? game.fixtureIds
     : fixtures.map((f) => f.fixtureId);
+  const gameLockAtMs = coerceMillis(game?.lockAt);
+  const fallbackLockAtMs = fixtures.length
+    ? fixtures
+        .map((f) => Date.parse(String(f.kickoff || "")))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)[0] - ONE_HOUR_MS
+    : null;
+  const lockAtMs =
+    gameLockAtMs ??
+    (Number.isFinite(fallbackLockAtMs ?? NaN) ? fallbackLockAtMs : null);
+  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const lockCountdown =
+    lockAtMs != null ? formatCountdown(lockAtMs - nowMs) : null;
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
@@ -306,6 +387,13 @@ export default function GoldenPage() {
             </div>
             <div className="text-xs text-muted">
               Locked: {lockedCount}/{playersCount}
+            </div>
+            <div className="text-xs text-muted mt-1">
+              {lockAtMs == null
+                ? "Lock window loading…"
+                : isLocked
+                  ? "Mini-game is locked (deadline passed)."
+                  : `Locks in ${lockCountdown} (1h before first kickoff)`}
             </div>
           </div>
 
@@ -397,11 +485,33 @@ export default function GoldenPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-foreground">
-                          {f
-                            ? `${f.home.name} vs ${f.away.name}`
-                            : `Fixture ${fid}`}
-                        </div>
+                        {f ? (
+                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                            <div className="flex flex-col items-center text-center min-w-0">
+                              <TeamBadge
+                                name={f.home.name}
+                                shortName={f.home.shortName}
+                                badge={f.home.badge}
+                              />
+                              <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
+                                {f.home.shortName || f.home.name}
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted uppercase">H vs A</div>
+                            <div className="flex flex-col items-center text-center min-w-0">
+                              <TeamBadge
+                                name={f.away.name}
+                                shortName={f.away.shortName}
+                                badge={f.away.badge}
+                              />
+                              <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
+                                {f.away.shortName || f.away.name}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-foreground">Fixture {fid}</div>
+                        )}
                         <div className="text-xs text-muted">
                           {f ? new Date(f.kickoff).toLocaleString() : ""}
                         </div>
@@ -440,6 +550,7 @@ export default function GoldenPage() {
               onClick={lockGolden}
               disabled={
                 submitting ||
+                isLocked ||
                 selectedFixtureId == null ||
                 !myPicksByFixture[selectedFixtureId]
               }

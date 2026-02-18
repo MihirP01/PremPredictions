@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import {
   collection,
   deleteDoc,
@@ -15,12 +16,14 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import { getCountdownParts, ONE_HOUR_MS } from "./lock-utils";
 
 type LobbyPlayer = { uid: string; displayName: string };
-type RoomPlayerDoc = { displayName?: string };
-type UserDoc = { displayName?: string };
+type RoomPlayerDoc = { displayName?: string; nickName?: string };
+type UserDoc = { displayName?: string; nickName?: string };
 type LobbyDoc = { displayName?: string };
 type GameStateDoc = { state?: string };
+type Fixture = { kickoff?: string };
 
 export default function MiniGameLobbyPage() {
   const params = useParams<{ roomCode: string }>();
@@ -34,6 +37,7 @@ export default function MiniGameLobbyPage() {
 
   const [leaderUid, setLeaderUid] = useState<string | null>(null);
   const [gameweek, setGameweek] = useState<number | null>(null);
+  const [seasonKey, setSeasonKey] = useState<string | null>(null);
 
   const [myDisplayName, setMyDisplayName] = useState<string>("Player");
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
@@ -42,6 +46,8 @@ export default function MiniGameLobbyPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [starting, setStarting] = useState(false);
+  const [lockAtMs, setLockAtMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
   const isLeader = !!user && leaderUid === user.uid;
 
@@ -77,13 +83,17 @@ export default function MiniGameLobbyPage() {
     let cancelled = false;
 
     (async () => {
-      const res = await fetch("/api/current-gameweek");
-      if (!res.ok) throw new Error("bad");
-      const data = await res.json();
-      const gw = Number(data?.currentGameweek ?? 1);
-      if (!cancelled) setGameweek(Number.isFinite(gw) ? gw : 1);
+      const data = await getCurrentGameweekCached();
+      const gw = Number(data.currentGameweek ?? 1);
+      if (!cancelled) {
+        setGameweek(Number.isFinite(gw) ? gw : 1);
+        setSeasonKey(String(data.seasonKey || ""));
+      }
     })().catch(() => {
-      if (!cancelled) setGameweek(1);
+      if (!cancelled) {
+        setGameweek(1);
+        setSeasonKey("");
+      }
     });
 
     return () => {
@@ -109,7 +119,8 @@ export default function MiniGameLobbyPage() {
           doc(db, "rooms", roomCode, "players", user.uid),
         );
         if (roomPlayerSnap.exists()) {
-          const dn = (roomPlayerSnap.data() as UserDoc)?.displayName;
+          const roomData = roomPlayerSnap.data() as UserDoc;
+          const dn = String(roomData?.nickName || "").trim() || roomData?.displayName;
           if (!cancelled && dn) {
             setMyDisplayName(dn);
             return;
@@ -136,15 +147,57 @@ export default function MiniGameLobbyPage() {
     };
   }, [user, roomCode]);
 
+  useEffect(() => {
+    if (gameweek == null || !seasonKey) return;
+    let cancelled = false;
+
+    (async () => {
+      const res = await fetch(
+        `/api/fixtures?gameweek=${gameweek}&seasonKey=${seasonKey}`,
+        {
+          cache: "no-store",
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      const fixtures: Fixture[] = Array.isArray(data?.fixtures)
+        ? data.fixtures
+        : [];
+
+      const firstKickoff = fixtures
+        .map((f) => Date.parse(String(f.kickoff || "")))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)[0];
+
+      if (!cancelled) {
+        setLockAtMs(
+          Number.isFinite(firstKickoff) ? firstKickoff - ONE_HOUR_MS : null,
+        );
+      }
+    })().catch(() => {
+      if (!cancelled) setLockAtMs(null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameweek, seasonKey]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 4) Presence: join lobby on enter, heartbeat, leave on exit
   useEffect(() => {
-    if (!user || gameweek == null) return;
+    if (!user || gameweek == null || !seasonKey) return;
 
     const gwId = `gw-${gameweek}`;
     const lobbyRef = doc(
       db,
       "rooms",
       roomCode,
+      "seasons",
+      seasonKey,
       "games",
       gwId,
       "lobby",
@@ -181,14 +234,16 @@ export default function MiniGameLobbyPage() {
       clearInterval(t);
       deleteDoc(lobbyRef).catch(() => {});
     };
-  }, [user, roomCode, gameweek, myDisplayName]);
+  }, [user, roomCode, gameweek, myDisplayName, seasonKey]);
 
   // 5) Listen to lobby players (ONLY minigame lobby, not room members)
   useEffect(() => {
-    if (!user || gameweek == null) return;
+    if (!user || gameweek == null || !seasonKey) return;
 
     const gwId = `gw-${gameweek}`;
-    const q = query(collection(db, "rooms", roomCode, "games", gwId, "lobby"));
+    const q = query(
+      collection(db, "rooms", roomCode, "seasons", seasonKey, "games", gwId, "lobby"),
+    );
 
     const unsub = onSnapshot(
       q,
@@ -209,7 +264,7 @@ export default function MiniGameLobbyPage() {
     );
 
     return () => unsub();
-  }, [user, roomCode, gameweek]);
+  }, [user, roomCode, gameweek, seasonKey]);
 
   // 5b) Listen to total room players so start is allowed only when all are in lobby
   useEffect(() => {
@@ -220,9 +275,10 @@ export default function MiniGameLobbyPage() {
       (snap) => {
         const list: LobbyPlayer[] = snap.docs.map((d) => {
           const data = d.data() as RoomPlayerDoc;
+          const nick = String(data.nickName || "").trim();
           return {
             uid: d.id,
-            displayName: data.displayName || "Player",
+            displayName: nick || data.displayName || "Player",
           };
         });
         list.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -243,12 +299,14 @@ export default function MiniGameLobbyPage() {
   useEffect(() => {
     if (!user) return;
     if (!roomCode) return;
-    if (gameweek == null) return;
+    if (gameweek == null || !seasonKey) return;
 
     const gameRef = doc(
       db,
       "rooms",
       roomCode.toUpperCase(),
+      "seasons",
+      seasonKey,
       "games",
       `gw-${gameweek}`,
     );
@@ -290,7 +348,7 @@ export default function MiniGameLobbyPage() {
     );
 
     return () => unsub();
-  }, [user, roomCode, gameweek, router]);
+  }, [user, roomCode, gameweek, router, seasonKey]);
 
   async function safeLeaveLobby() {
     const ref = lobbyRefRef.current;
@@ -307,8 +365,8 @@ export default function MiniGameLobbyPage() {
 
   async function startMiniGame() {
     if (!user) return;
-    if (gameweek == null) {
-      setError("Gameweek not loaded yet.");
+    if (gameweek == null || !seasonKey) {
+      setError("Season/gameweek not loaded yet.");
       return;
     }
 
@@ -323,6 +381,7 @@ export default function MiniGameLobbyPage() {
           roomCode,
           gw: gameweek,
           leaderUid: user.uid,
+          seasonKey,
         }),
       });
 
@@ -344,6 +403,38 @@ export default function MiniGameLobbyPage() {
   const allPlayersInLobby = roomPlayersCount > 0 && players.length === roomPlayersCount;
   const lobbyUidSet = new Set(players.map((p) => p.uid));
   const missingPlayers = roomPlayers.filter((p) => !lobbyUidSet.has(p.uid));
+  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const countdownParts = getCountdownParts(
+    lockAtMs != null ? lockAtMs - nowMs : 0,
+  );
+  const msLeft = lockAtMs != null ? Math.max(lockAtMs - nowMs, 0) : 0;
+  const totalSec = Math.floor(msLeft / 1000);
+  const dayValue = Math.floor(totalSec / 86400);
+  const hourValue = Math.floor((totalSec % 86400) / 3600);
+  const minuteValue = Math.floor((totalSec % 3600) / 60);
+  const secondValue = totalSec % 60;
+  const countdownRings = [
+    {
+      label: "Days",
+      value: countdownParts.days,
+      progress: dayValue > 0 ? Math.min((dayValue / 7) * 100, 100) : 0,
+    },
+    {
+      label: "Hours",
+      value: countdownParts.hours,
+      progress: (hourValue / 24) * 100,
+    },
+    {
+      label: "Minutes",
+      value: countdownParts.minutes,
+      progress: (minuteValue / 60) * 100,
+    },
+    {
+      label: "Seconds",
+      value: countdownParts.seconds,
+      progress: (secondValue / 60) * 100,
+    },
+  ];
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
@@ -356,7 +447,6 @@ export default function MiniGameLobbyPage() {
             <div className="text-sm text-muted">
               {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
             </div>
-            <div className="text-sm text-muted">You are: {myDisplayName}</div>
           </div>
 
           <div className="flex gap-2">
@@ -375,16 +465,64 @@ export default function MiniGameLobbyPage() {
           <div className="font-semibold text-foreground">
             Mini-game Controls
           </div>
+          <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-3">
+            <div className="text-sm font-semibold text-foreground">Weekend Lock Countdown</div>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {countdownRings.map((unit) => (
+                <div key={unit.label} className="flex flex-col items-center gap-2">
+                  <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
+                    <svg
+                      className="absolute inset-0 w-full h-full -rotate-90"
+                      viewBox="0 0 80 80"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="40"
+                        cy="40"
+                        r="34"
+                        fill="none"
+                        stroke="rgba(45, 212, 191, 0.2)"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="40"
+                        cy="40"
+                        r="34"
+                        fill="none"
+                        stroke="#2dd4bf"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray={213.63}
+                        strokeDashoffset={
+                          213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
+                        }
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-lg sm:text-xl font-semibold text-foreground leading-none">
+                        {unit.value}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-[11px] uppercase tracking-wide text-accent font-semibold">
+                    {unit.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {isLeader ? (
             <>
-              <div className="text-sm text-muted">
-                Start when every room player is marked ready in the lobby.
-              </div>
-
               <button
                 className="rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
-                disabled={starting || gameweek == null || players.length < 2 || !allPlayersInLobby}
+                disabled={
+                  starting ||
+                  gameweek == null ||
+                  players.length < 2 ||
+                  !allPlayersInLobby ||
+                  isLocked
+                }
                 onClick={startMiniGame}
               >
                 {starting ? "Starting…" : "Start Mini-game"}

@@ -21,6 +21,26 @@ async function deleteCollectionDocs(path: string) {
   await batch.commit();
 }
 
+async function deleteSeasonData(roomCode: string, seasonKey: string) {
+  const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
+  const gamesSnap = await adminDb.collection(`${seasonBase}/games`).get();
+  for (const gwDoc of gamesSnap.docs) {
+    const base = `${seasonBase}/games/${gwDoc.id}`;
+    await deleteCollectionDocs(`${base}/lobby`);
+    await deleteCollectionDocs(`${base}/picks`);
+    await deleteCollectionDocs(`${base}/golden`);
+    await gwDoc.ref.delete();
+  }
+
+  const scoresSnap = await adminDb.collection(`${seasonBase}/scores`).get();
+  for (const gwDoc of scoresSnap.docs) {
+    await deleteCollectionDocs(`${seasonBase}/scores/${gwDoc.id}/users`);
+    await gwDoc.ref.delete();
+  }
+
+  await adminDb.doc(`${seasonBase}`).delete().catch(() => {});
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as DeleteRoomBody;
@@ -49,7 +69,14 @@ export async function POST(req: Request) {
     const playersSnap = await adminDb.collection(`rooms/${roomCode}/players`).get();
     const playerUids = playersSnap.docs.map((d) => d.id);
 
-    // Delete minigame data per GW doc.
+    // Delete seasonized game/score data.
+    const seasonsSnap = await adminDb.collection(`rooms/${roomCode}/seasons`).get();
+    for (const seasonDoc of seasonsSnap.docs) {
+      await deleteSeasonData(roomCode, seasonDoc.id);
+      await seasonDoc.ref.delete();
+    }
+
+    // Backward compatibility: delete legacy non-seasonized paths.
     const gamesSnap = await adminDb.collection(`rooms/${roomCode}/games`).get();
     for (const gwDoc of gamesSnap.docs) {
       const base = `rooms/${roomCode}/games/${gwDoc.id}`;
@@ -58,8 +85,6 @@ export async function POST(req: Request) {
       await deleteCollectionDocs(`${base}/golden`);
       await gwDoc.ref.delete();
     }
-
-    // Delete scores per GW doc.
     const scoresSnap = await adminDb.collection(`rooms/${roomCode}/scores`).get();
     for (const gwDoc of scoresSnap.docs) {
       await deleteCollectionDocs(`rooms/${roomCode}/scores/${gwDoc.id}/users`);

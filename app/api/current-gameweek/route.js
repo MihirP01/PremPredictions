@@ -2,6 +2,37 @@ import { NextResponse } from "next/server";
 
 const LEAGUE = "PL";
 const EXPECTED_MATCHES_PER_GW = 10;
+const SEASON_START_MONTH_UTC = 7; // Aug
+
+function inferSeasonKey(now = new Date()) {
+  const year = now.getUTCFullYear();
+  const startYear = now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
+  const yyStart = String(startYear % 100).padStart(2, "0");
+  const yyEnd = String((startYear + 1) % 100).padStart(2, "0");
+  return `${yyStart}${yyEnd}`;
+}
+
+function normalizeSeasonKey(input) {
+  const raw = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (!raw) return null;
+  if (/^\d{4}$/.test(raw)) return raw;
+  const short = /^(\d{2})[/-](\d{2})$/.exec(raw);
+  if (short) return `${short[1]}${short[2]}`;
+  const long = /^(\d{4})[/-]?(\d{2,4})$/.exec(raw);
+  if (long) {
+    const startYY = String(Number(long[1]) % 100).padStart(2, "0");
+    const endYY = String(Number(long[2]) % 100).padStart(2, "0");
+    return `${startYY}${endYY}`;
+  }
+  return null;
+}
+
+function seasonStartYearFromKey(seasonKey) {
+  return 2000 + Number(String(seasonKey).slice(0, 2));
+}
 
 // YYYY-MM-DD in UTC
 function fmt(d) {
@@ -15,7 +46,7 @@ function clampGW(gw) {
   return Math.min(38, Math.max(1, gw));
 }
 
-export async function GET() {
+export async function GET(req) {
   const API_KEY = process.env.FOOTBALLDATA_KEY;
   if (!API_KEY) {
     return NextResponse.json(
@@ -23,6 +54,11 @@ export async function GET() {
       { status: 500 },
     );
   }
+
+  const { searchParams } = new URL(req.url);
+  const requestedSeason = searchParams.get("seasonKey");
+  const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
+  const season = seasonStartYearFromKey(seasonKey);
 
   // Pull a window of matches around now + ahead to capture next GW(s).
   // Bigger forward window helps during breaks / sparse periods.
@@ -34,7 +70,7 @@ export async function GET() {
 
   const url =
     `https://api.football-data.org/v4/competitions/${LEAGUE}/matches` +
-    `?dateFrom=${fmt(from)}&dateTo=${fmt(to)}`;
+    `?season=${season}&dateFrom=${fmt(from)}&dateTo=${fmt(to)}`;
 
   const res = await fetch(url, {
     headers: { "X-Auth-Token": API_KEY },
@@ -115,6 +151,7 @@ export async function GET() {
   return NextResponse.json(
     {
       currentGameweek: nextOpen,
+      seasonKey,
       debug: {
         window: { dateFrom: fmt(from), dateTo: fmt(to) },
         matchdaysSeen: matchdays.length,

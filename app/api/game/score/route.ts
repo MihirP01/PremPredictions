@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { resolveSeasonKey } from "../../season";
 
 type GameDoc = {
   players?: string[];
@@ -62,9 +63,11 @@ async function scoreSingleGw(
   baseUrl: string,
   roomCode: string,
   gw: number,
+  seasonKey: string,
 ): Promise<GwRunResult> {
-  const gameRef = adminDb.doc(`rooms/${roomCode}/games/gw-${gw}`);
-  const gameSnap = await gameRef.get();
+  const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
+  const gameBase = `${seasonBase}/games/gw-${gw}`;
+  const gameSnap = await adminDb.doc(gameBase).get();
   if (!gameSnap.exists) {
     return { gw, status: "skipped", scoredUsers: 0, message: "Game not found" };
   }
@@ -84,9 +87,12 @@ async function scoreSingleGw(
     };
   }
 
-  const fxRes = await fetch(`${baseUrl}/api/fixtures?gameweek=${gw}`, {
-    cache: "no-store",
-  });
+  const fxRes = await fetch(
+    `${baseUrl}/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`,
+    {
+      cache: "no-store",
+    },
+  );
   if (!fxRes.ok) {
     throw new Error(`Failed to load fixtures for GW${gw}`);
   }
@@ -114,7 +120,7 @@ async function scoreSingleGw(
   }
 
   const picksSnap = await adminDb
-    .collection(`rooms/${roomCode}/games/gw-${gw}/picks`)
+    .collection(`${gameBase}/picks`)
     .get();
   const picks = picksSnap.docs.map((d) => d.data() as PickDoc);
 
@@ -128,7 +134,7 @@ async function scoreSingleGw(
   }
 
   const goldenSnap = await adminDb
-    .collection(`rooms/${roomCode}/games/gw-${gw}/golden`)
+    .collection(`${gameBase}/golden`)
     .get();
   const goldenByUid = new Map<string, { fixtureId: number; locked: boolean }>();
   for (const d of goldenSnap.docs) {
@@ -178,7 +184,9 @@ async function scoreSingleGw(
       };
     }
 
-    const scoreRef = adminDb.doc(`rooms/${roomCode}/scores/gw-${gw}/users/${uid}`);
+    const scoreRef = adminDb.doc(
+      `${seasonBase}/scores/gw-${gw}/users/${uid}`,
+    );
     batch.set(
       scoreRef,
       {
@@ -193,7 +201,7 @@ async function scoreSingleGw(
     scoredUsers++;
   }
 
-  const weekSummaryRef = adminDb.doc(`rooms/${roomCode}/scores/gw-${gw}`);
+  const weekSummaryRef = adminDb.doc(`${seasonBase}/scores/gw-${gw}`);
   batch.set(
     weekSummaryRef,
     {
@@ -213,13 +221,15 @@ async function scoreSingleGw(
 // POST { roomCode, gw }
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw } = (await req.json()) as {
+    const { roomCode, gw, seasonKey } = (await req.json()) as {
       roomCode?: string;
       gw?: number;
+      seasonKey?: string;
     };
 
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
+    const sk = resolveSeasonKey(seasonKey);
     if (!rc)
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     if (!Number.isFinite(gwn) || gwn < 1 || gwn > 38)
@@ -234,7 +244,7 @@ export async function POST(req: Request) {
 
     for (const targetGw of targetGws) {
       try {
-        const result = await scoreSingleGw(baseUrl, rc, targetGw);
+        const result = await scoreSingleGw(baseUrl, rc, targetGw, sk);
         results.push(result);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "score failed";
@@ -257,6 +267,7 @@ export async function POST(req: Request) {
       scored,
       scoredGameweeks,
       targetGws,
+      seasonKey: sk,
       results,
     });
   } catch (e: unknown) {

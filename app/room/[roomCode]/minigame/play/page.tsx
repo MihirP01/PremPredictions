@@ -4,7 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { db } from "../../../../../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { coerceMillis, formatCountdown, ONE_HOUR_MS } from "../lock-utils";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -13,14 +15,15 @@ type GameDoc = {
   currentTurn: number;
   totalTurns: number;
   players: string[];
+  lockAt?: unknown;
 };
 
 type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string };
-  away: { name: string };
+  home: { name: string; shortName?: string; badge?: string | null };
+  away: { name: string; shortName?: string; badge?: string | null };
   result?: string | null;
 };
 
@@ -28,6 +31,28 @@ type PickDoc = { score?: string };
 
 function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);
+}
+
+function TeamBadge({
+  name,
+  shortName,
+  badge,
+}: {
+  name: string;
+  shortName?: string;
+  badge?: string | null;
+}) {
+  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
+  return (
+    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+      {badge ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
+      ) : (
+        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
+      )}
+    </div>
+  );
 }
 
 export default function MiniGamePlayPage() {
@@ -40,6 +65,7 @@ export default function MiniGamePlayPage() {
   const { user, loading } = useAuth();
 
   const [gw, setGw] = useState<number | null>(null);
+  const [seasonKey, setSeasonKey] = useState<string | null>(null);
   const [game, setGame] = useState<GameDoc | null>(null);
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
 
@@ -48,6 +74,7 @@ export default function MiniGamePlayPage() {
   const [awayScore, setAwayScore] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
   // auth guard
   useEffect(() => {
@@ -60,12 +87,17 @@ export default function MiniGamePlayPage() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/current-gameweek");
-        const d = await r.json();
-        const n = Number(d?.currentGameweek ?? 1);
-        if (!cancelled) setGw(Number.isFinite(n) ? n : 1);
+        const data = await getCurrentGameweekCached();
+        const n = Number(data.currentGameweek ?? 1);
+        if (!cancelled) {
+          setGw(Number.isFinite(n) ? n : 1);
+          setSeasonKey(String(data.seasonKey || ""));
+        }
       } catch {
-        if (!cancelled) setGw(1);
+        if (!cancelled) {
+          setGw(1);
+          setSeasonKey("");
+        }
       }
     })();
     return () => {
@@ -73,13 +105,18 @@ export default function MiniGamePlayPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // load fixtures for GW
   useEffect(() => {
-    if (gw == null) return;
+    if (gw == null || !seasonKey) return;
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}`);
+      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`);
       const d = await r.json();
       if (!cancelled) setFixtures(Array.isArray(d?.fixtures) ? d.fixtures : []);
     })().catch(() => !cancelled && setFixtures([]));
@@ -87,16 +124,24 @@ export default function MiniGamePlayPage() {
     return () => {
       cancelled = true;
     };
-  }, [gw]);
+  }, [gw, seasonKey]);
 
   // listen to game doc
   useEffect(() => {
-    if (gw == null) return;
-    const gameRef = doc(db, "rooms", roomCode, "games", `gw-${gw}`);
+    if (gw == null || !seasonKey) return;
+    const gameRef = doc(
+      db,
+      "rooms",
+      roomCode,
+      "seasons",
+      seasonKey,
+      "games",
+      `gw-${gw}`,
+    );
     return onSnapshot(gameRef, (snap) => {
       setGame(snap.exists() ? (snap.data() as GameDoc) : null);
     });
-  }, [roomCode, gw]);
+  }, [roomCode, gw, seasonKey]);
 
   const current = useMemo(() => {
     if (!game) return null;
@@ -131,10 +176,19 @@ export default function MiniGamePlayPage() {
 
   // listen to taken scores for current fixture
   useEffect(() => {
-    if (gw == null || !current) return;
+    if (gw == null || !current || !seasonKey) return;
 
     const picksQ = query(
-      collection(db, "rooms", roomCode, "games", `gw-${gw}`, "picks"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+        "picks",
+      ),
       where("fixtureId", "==", current.fixtureId),
     );
 
@@ -142,7 +196,7 @@ export default function MiniGamePlayPage() {
       const scores = snap.docs.map((d) => String((d.data() as PickDoc).score));
       setTakenScores(scores);
     });
-  }, [roomCode, gw, current]);
+  }, [roomCode, gw, current, seasonKey]);
 
   useEffect(() => {
     // reset inputs when fixture changes
@@ -179,9 +233,25 @@ export default function MiniGamePlayPage() {
   }
 
   const fixture = fixtures.find((f) => f.fixtureId === current?.fixtureId);
+  const gameLockAtMs = coerceMillis(game?.lockAt);
+  const fallbackLockAtMs = fixtures.length
+    ? fixtures
+        .map((f) => Date.parse(String(f.kickoff || "")))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)[0] - ONE_HOUR_MS
+    : null;
+  const lockAtMs =
+    gameLockAtMs ??
+    (Number.isFinite(fallbackLockAtMs ?? NaN) ? fallbackLockAtMs : null);
+  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const lockCountdown = lockAtMs != null ? formatCountdown(lockAtMs - nowMs) : null;
 
   const submitPick = async () => {
     if (!current || !user) return;
+    if (isLocked) {
+      setErr("Mini-game is locked (deadline passed).");
+      return;
+    }
     if (homeScore === "" || awayScore === "") {
       setErr("Enter both scores.");
       return;
@@ -198,7 +268,7 @@ export default function MiniGamePlayPage() {
       const res = await fetch("/api/game/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode, gw, uid: user.uid, score }),
+        body: JSON.stringify({ roomCode, gw, uid: user.uid, score, seasonKey }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Pick failed");
@@ -240,14 +310,44 @@ export default function MiniGamePlayPage() {
         <div className="text-xs text-muted">
           Turn {game.currentTurn + 1} of {game.totalTurns}
         </div>
+        <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
+          {lockAtMs == null
+            ? "Lock window loading…"
+            : isLocked
+              ? "Mini-game is locked (deadline passed)."
+              : `Locks in ${lockCountdown} (1h before first kickoff)`}
+        </div>
 
         {/* fixture */}
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-          <div className="font-semibold mb-1 text-foreground">
-            {fixture
-              ? `${fixture.home.name} vs ${fixture.away.name}`
-              : `Fixture ${current?.fixtureId}`}
+          <div className="font-semibold mb-2 text-foreground">
+            {fixture ? `Fixture ${fixture.fixtureId}` : `Fixture ${current?.fixtureId}`}
           </div>
+          {fixture && (
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">
+              <div className="flex flex-col items-center text-center min-w-0">
+                <TeamBadge
+                  name={fixture.home.name}
+                  shortName={fixture.home.shortName}
+                  badge={fixture.home.badge}
+                />
+                <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
+                  {fixture.home.shortName || fixture.home.name}
+                </div>
+              </div>
+              <div className="text-xs text-muted uppercase">H vs A</div>
+              <div className="flex flex-col items-center text-center min-w-0">
+                <TeamBadge
+                  name={fixture.away.name}
+                  shortName={fixture.away.shortName}
+                  badge={fixture.away.badge}
+                />
+                <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
+                  {fixture.away.shortName || fixture.away.name}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="text-xs text-muted">
             {fixture ? new Date(fixture.kickoff).toLocaleString() : ""}
@@ -311,7 +411,7 @@ export default function MiniGamePlayPage() {
             </div>
 
             <button
-              disabled={submitting}
+              disabled={submitting || isLocked}
               onClick={submitPick}
               className="w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60"
             >

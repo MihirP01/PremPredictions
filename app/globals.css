@@ -15,6 +15,7 @@
   --border: rgba(11, 18, 32, 0.12);
 
   --accent: #0ea5a4;
+  --accent-rgb: 14, 165, 164;
   --accent-foreground: #061018;
 
   --danger: #dc2626;
@@ -47,6 +48,7 @@
     --border: rgba(238, 242, 255, 0.14);
 
     --accent: #2dd4bf;
+    --accent-rgb: 45, 212, 191;
     --accent-foreground: #04110f;
 
     --danger: #f87171;
@@ -182,8 +184,29 @@ body > div {
   box-shadow: var(--shadow-card);
 }
 
-/* Room-level accent override */
+/* Room-level accent strategy:
+   - default teal utility borders become neutral/subtle (non-clickable surfaces)
+   - interactive controls keep accent-colored borders */
 .room-theme .border-teal-500 {
+  border-color: var(--border) !important;
+}
+
+.room-theme .border-teal-400 {
+  border-color: var(--border) !important;
+}
+
+.room-theme button.border-teal-500,
+.room-theme select.border-teal-500,
+.room-theme a.border-teal-500,
+.room-theme input.border-teal-500,
+.room-theme textarea.border-teal-500,
+.room-theme button.border-teal-400,
+.room-theme select.border-teal-400,
+.room-theme a.border-teal-400,
+.room-theme input.border-teal-400,
+.room-theme textarea.border-teal-400,
+.room-theme [role="button"].border-teal-500,
+.room-theme [role="button"].border-teal-400 {
   border-color: var(--room-accent) !important;
 }
 
@@ -197,6 +220,78 @@ body > div {
 
 .room-theme .focus\:ring-teal-500:focus {
   --tw-ring-color: var(--room-accent) !important;
+}
+
+.room-theme .btn-3d-accent {
+  transition: all 150ms;
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+}
+
+.room-theme .btn-3d-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+}
+
+.room-theme .btn-3d-accent:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+}
+
+.room-theme .select-3d-accent {
+  transition: all 150ms;
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.25);
+}
+
+.room-theme .select-3d-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.35);
+}
+
+/* App-wide (room pages) automatic 3D treatment for controls */
+.room-theme button,
+.room-theme select,
+.room-theme [role="button"] {
+  transition: all 150ms;
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+}
+
+.room-theme .page-action-btn {
+  transition: all 150ms;
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+}
+
+.room-theme button:hover:not(:disabled),
+.room-theme select:hover:not(:disabled),
+.room-theme [role="button"]:hover:not([aria-disabled="true"]) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+}
+
+.room-theme .page-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+}
+
+.room-theme button:active:not(:disabled),
+.room-theme [role="button"]:active:not([aria-disabled="true"]) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+}
+
+.room-theme .page-action-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+}
+
+/* Keep toggle switches neutral (no accent 3D shadow) */
+.room-theme [role="switch"] {
+  box-shadow: none !important;
+}
+
+.room-theme [role="switch"]:hover,
+.room-theme [role="switch"]:active {
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 :focus-visible {
@@ -218,11 +313,9 @@ body > div {
 @keyframes pageActionBtnIn {
   from {
     opacity: 0;
-    transform: translateX(8px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 

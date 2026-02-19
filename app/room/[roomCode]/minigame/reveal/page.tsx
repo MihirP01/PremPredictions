@@ -18,8 +18,8 @@ type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string };
-  away: { name: string };
+  home: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  away: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
   result?: string | null;
 };
 
@@ -37,10 +37,77 @@ type GoldenDoc = {
 };
 
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
+const BTN_3D = "btn-3d-accent";
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
   return s.replace("-", "–");
+}
+
+function teamAbbr(team: { name: string; tla?: string | null; shortName?: string }) {
+  const tla = String(team.tla || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(tla)) return tla;
+  const short = String(team.shortName || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
+  const words = String(team.name || "")
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0])
+      .join("");
+  }
+  return String(team.name || "FC").slice(0, 3).toUpperCase();
+}
+
+function TeamBadge({
+  name,
+  shortName,
+  badge,
+  tla,
+}: {
+  name: string;
+  shortName?: string;
+  badge?: string | null;
+  tla?: string | null;
+}) {
+  const fallback = teamAbbr({ name, shortName, tla });
+  return (
+    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+      {badge ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
+      ) : (
+        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
+      )}
+    </div>
+  );
+}
+
+function fmtKickoffParts(iso: string) {
+  const dt = new Date(iso);
+  const dayNum = dt.getDate();
+  const suffix =
+    dayNum % 10 === 1 && dayNum % 100 !== 11
+      ? "st"
+      : dayNum % 10 === 2 && dayNum % 100 !== 12
+        ? "nd"
+        : dayNum % 10 === 3 && dayNum % 100 !== 13
+          ? "rd"
+          : "th";
+  const monthYear = dt.toLocaleDateString("en-GB", {
+    month: "short",
+    year: "2-digit",
+  });
+  const time = dt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return { dayNum, suffix, monthYear, time };
 }
 
 export default function RevealPage() {
@@ -276,7 +343,7 @@ export default function RevealPage() {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
 
-        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-3 border border-teal-500">
+        <div className="w-full max-w-[900px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-3 border border-teal-500">
           <div className="text-xl font-semibold text-foreground">
             Reveal not ready
           </div>
@@ -289,7 +356,7 @@ export default function RevealPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-4xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
@@ -301,7 +368,7 @@ export default function RevealPage() {
           </div>
 
           <button
-            className="text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+            className={`text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 page-action-btn ${BTN_3D}`}
             onClick={() => router.push(`/room/${roomCode}`)}
           >
             Exit
@@ -325,79 +392,109 @@ export default function RevealPage() {
           </div>
         )}
 
-        {/* Picks table */}
-        <div className="overflow-auto border border-teal-500 rounded-xl bg-surface-2">
-          <table className="min-w-full text-sm">
-            <thead className="bg-surface">
-              <tr>
-                <th className="w-[260px] text-left p-3 border-b border-subtle text-foreground">
-                  Fixture
-                </th>
+        <div className="grid grid-cols-2 gap-3">
+          {fixtureIds.map((fid) => {
+            const f = fixtureMap.get(fid);
+            const actual = f?.result ? fmtScore(f.result) : "TBD";
+            const kickoffParts = f ? fmtKickoffParts(f.kickoff) : null;
 
-                {players.map((uid) => (
-                  <th
-                    key={uid}
-                    className="w-[110px] text-left p-3 border-b border-subtle whitespace-nowrap font-semibold"
-                  >
-                    <span className="block truncate">
-                      {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                    </span>
-                  </th>
-                ))}
+            return (
+              <div
+                key={fid}
+                className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2"
+              >
+                <div className="space-y-2">
+                  <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
+                    {kickoffParts ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          {kickoffParts.dayNum}
+                          <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                            {kickoffParts.suffix}
+                          </span>{" "}
+                          {kickoffParts.monthYear}
+                        </span>
+                        <span className="tabular-nums">{kickoffParts.time}</span>
+                      </div>
+                    ) : (
+                      <span>Fixture {fid}</span>
+                    )}
+                  </div>
 
-                <th className="w-[110px] text-left p-3 border-b border-subtle whitespace-nowrap text-foreground">
-                  Actual
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {fixtureIds.map((fid) => {
-                const f = fixtureMap.get(fid);
-                const title = f
-                  ? `${f.home.name} vs ${f.away.name}`
-                  : `Fixture ${fid}`;
-                const actual = f?.result ? fmtScore(f.result) : "TBD";
+                  {f && (
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                      <div className="flex flex-col items-center text-center min-w-0">
+                        <TeamBadge
+                          name={f.home.name}
+                          shortName={f.home.shortName}
+                          badge={f.home.badge}
+                          tla={f.home.tla}
+                        />
+                        <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
+                          <span className="sm:hidden">{teamAbbr(f.home)}</span>
+                          <span className="hidden sm:inline">{f.home.shortName || f.home.name}</span>
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted uppercase">vs</div>
+                      <div className="flex flex-col items-center text-center min-w-0">
+                        <TeamBadge
+                          name={f.away.name}
+                          shortName={f.away.shortName}
+                          badge={f.away.badge}
+                          tla={f.away.tla}
+                        />
+                        <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
+                          <span className="sm:hidden">{teamAbbr(f.away)}</span>
+                          <span className="hidden sm:inline">{f.away.shortName || f.away.name}</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                return (
-                  <tr
-                    key={fid}
-                    className="border-b border-subtle last:border-0"
-                  >
-                    <td className="p-3 align-top">
-                      <div className="font-medium text-foreground">{title}</div>
-                    </td>
+                  <div className="text-center">
+                    <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Actual</div>
+                    <div className="text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground">
+                      {actual}
+                    </div>
+                  </div>
 
+                  <div className="text-xs text-muted text-center">Predictions</div>
+                  <div className="flex flex-wrap items-start justify-center gap-2">
                     {players.map((uid) => {
                       const sc = picksByUserFixture.get(`${uid}|${fid}`) || "";
                       const g = goldensByUid[uid];
                       const isGolden = g?.locked && g?.fixtureId === fid;
-
                       return (
-                        <td key={uid} className="p-3 align-top">
+                        <div
+                          key={`${fid}-${uid}`}
+                          className="basis-[calc(50%-0.25rem)] sm:basis-[calc(33.333%-0.34rem)] min-w-0 text-center"
+                        >
                           <div
                             className={[
-                              "inline-flex items-center justify-center rounded-lg px-2 py-1 border border-teal-500 whitespace-nowrap min-w-[56px]",
+                              "text-[11px] truncate",
+                              isGolden ? "text-yellow-300 font-semibold" : "text-muted",
+                            ].join(" ")}
+                          >
+                            {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                          </div>
+                          <span
+                            className={[
+                              "mt-1 inline-flex items-center justify-center rounded-full border border-subtle px-2.5 py-1 text-sm font-semibold text-foreground tabular-nums min-w-[58px]",
                               isGolden
-                                ? "bg-yellow-300 font-bold text-black"
-                                : "bg-surface-2 text-foreground",
+                                ? "bg-gradient-to-r from-yellow-500/25 to-amber-300/15 border-yellow-300/70"
+                                : "bg-surface/70",
                             ].join(" ")}
                           >
                             {fmtScore(sc)}
-                          </div>
-                        </td>
+                          </span>
+                        </div>
                       );
                     })}
-
-                    <td className="p-3 align-top">
-                      <div className="inline-flex items-center justify-center rounded-lg px-2 py-1 bg-surface-2 border border-teal-500 text-foreground whitespace-nowrap min-w-[56px]">
-                        {actual}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -22,6 +22,7 @@ const ALLOWED_THEME_ACCENTS = new Set([
   "emerald",
   "orange",
   "rose",
+  "red",
   "slate",
 ]);
 

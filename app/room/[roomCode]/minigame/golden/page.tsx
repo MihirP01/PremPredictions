@@ -6,7 +6,7 @@ import { useAuth } from "../../../../../components/AuthProvider";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
-import { coerceMillis, formatCountdown, ONE_HOUR_MS } from "../lock-utils";
+import { coerceMillis, ONE_HOUR_MS } from "../lock-utils";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -19,8 +19,8 @@ type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string; shortName?: string; badge?: string | null };
-  away: { name: string; shortName?: string; badge?: string | null };
+  home: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  away: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
   result?: string | null;
 };
 
@@ -36,17 +36,20 @@ type GoldenDoc = {
   score: string;
   locked: boolean;
 };
+const BTN_3D = "btn-3d-accent";
 
 function TeamBadge({
   name,
+  tla,
   shortName,
   badge,
 }: {
   name: string;
+  tla?: string | null;
   shortName?: string;
   badge?: string | null;
 }) {
-  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
+  const fallback = teamAbbr(name, tla, shortName);
   return (
     <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
       {badge ? (
@@ -57,6 +60,43 @@ function TeamBadge({
       )}
     </div>
   );
+}
+
+function teamAbbr(name: string, tla?: string | null, shortName?: string) {
+  const tlaCode = String(tla || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(tlaCode)) return tlaCode;
+
+  const short = String(shortName || "").trim().toUpperCase();
+  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
+
+  const clean = String(name || "").trim().toUpperCase();
+  if (!clean) return "FC";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0])
+      .join("");
+  }
+  return clean.slice(0, 3);
+}
+
+function formatFixtureDateParts(iso: string) {
+  const dt = new Date(iso);
+  const day = dt.getDate();
+  const suffix =
+    day % 10 === 1 && day % 100 !== 11
+      ? "st"
+      : day % 10 === 2 && day % 100 !== 12
+        ? "nd"
+        : day % 10 === 3 && day % 100 !== 13
+          ? "rd"
+          : "th";
+  const monthYear = dt.toLocaleDateString("en-GB", {
+    month: "short",
+    year: "2-digit",
+  });
+  return { day, suffix, monthYear };
 }
 
 export default function GoldenPage() {
@@ -89,6 +129,7 @@ export default function GoldenPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
+  const [compactOtherPicks, setCompactOtherPicks] = useState(false);
 
   const routedRef = useRef(false);
 
@@ -126,6 +167,12 @@ export default function GoldenPage() {
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("goldenCompactOtherPicks");
+    setCompactOtherPicks(raw === "1");
   }, []);
 
   // listen to game doc (for state + players + fixtureIds + auto route)
@@ -330,6 +377,16 @@ export default function GoldenPage() {
     }
   }
 
+  function toggleCompactOtherPicks() {
+    setCompactOtherPicks((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("goldenCompactOtherPicks", next ? "1" : "0");
+      }
+      return next;
+    });
+  }
+
   if (loading || !user) return null;
   if (gw == null || fixtures == null || !game) {
     return (
@@ -344,7 +401,7 @@ export default function GoldenPage() {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
 
-        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
+        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-subtle">
           <div className="text-lg font-semibold text-foreground">
             Not in Golden phase
           </div>
@@ -370,13 +427,11 @@ export default function GoldenPage() {
     gameLockAtMs ??
     (Number.isFinite(fallbackLockAtMs ?? NaN) ? fallbackLockAtMs : null);
   const isLocked = lockAtMs != null && nowMs >= lockAtMs;
-  const lockCountdown =
-    lockAtMs != null ? formatCountdown(lockAtMs - nowMs) : null;
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
@@ -388,26 +443,19 @@ export default function GoldenPage() {
             <div className="text-xs text-muted">
               Locked: {lockedCount}/{playersCount}
             </div>
-            <div className="text-xs text-muted mt-1">
-              {lockAtMs == null
-                ? "Lock window loading…"
-                : isLocked
-                  ? "Mini-game is locked (deadline passed)."
-                  : `Locks in ${lockCountdown} (1h before first kickoff)`}
-            </div>
           </div>
 
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
             {error}
           </div>
         )}
 
         {/* If locked, show waiting room */}
         {myGoldenLocked ? (
-          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+          <div className="border border-subtle rounded-xl p-4 bg-surface-2">
             <div className="font-semibold text-foreground">
               You’re locked in ✅
             </div>
@@ -419,7 +467,7 @@ export default function GoldenPage() {
               </span>
             </div>
 
-            <div className="mt-4 w-full h-2 bg-surface border border-teal-500 rounded">
+            <div className="mt-4 w-full h-2 bg-surface border border-subtle rounded">
               <div
                 className="h-2 bg-accent rounded"
                 style={{
@@ -436,7 +484,7 @@ export default function GoldenPage() {
           </div>
         ) : (
           <>
-            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+            <div className="border border-subtle rounded-xl p-4 bg-surface-2">
               <div className="font-semibold mb-2 text-foreground">
                 Choose your Golden fixture
               </div>
@@ -456,95 +504,172 @@ export default function GoldenPage() {
               </div>
             </div>
 
-            <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
-              {orderedFixtureIds.map((fid) => {
-                const f = fixtureMap.get(fid);
-                const myScore = myPicksByFixture[fid];
+	            <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+	              <div className="mb-3 flex items-center justify-end">
+	                <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
+	                  <span>Compact Other Picks</span>
+	                  <button
+	                    type="button"
+	                    role="switch"
+	                    aria-checked={compactOtherPicks}
+	                    onClick={toggleCompactOtherPicks}
+	                    className={[
+	                      `relative h-6 w-11 rounded-full border transition-colors ${BTN_3D}`,
+	                      compactOtherPicks
+	                        ? "bg-yellow-500/20 border-yellow-400/80"
+	                        : "bg-surface border-subtle",
+	                    ].join(" ")}
+	                  >
+	                    <span
+	                      className={[
+	                        "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all",
+	                        compactOtherPicks ? "left-6" : "left-0.5",
+	                      ].join(" ")}
+	                    />
+	                  </button>
+	                </label>
+	              </div>
+	              <div className="grid grid-cols-2 gap-3">
+	              {orderedFixtureIds.map((fid) => {
+	                const f = fixtureMap.get(fid);
+	                const myScore = myPicksByFixture[fid];
+	                const kickoff = f ? new Date(f.kickoff) : null;
+	                const kickoffDate = kickoff ? formatFixtureDateParts(f.kickoff) : null;
+	                const kickoffTime = kickoff
+	                  ? kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+	                  : "";
 
-                const others = (picksByFixture.get(fid) ?? [])
-                  .filter((p) => p.uid !== user.uid)
-                  .map((p) => p.score);
+	                const others = (picksByFixture.get(fid) ?? [])
+	                  .filter((p) => p.uid !== user.uid)
+	                  .map((p) => p.score);
 
                 const isSelected = selectedFixtureId === fid;
 
                 return (
-                  <button
-                    key={fid}
-                    type="button"
-                    onClick={() => setSelectedFixtureId(fid)}
-                    disabled={!myScore}
-                    className={[
-                      "w-full text-left rounded-xl p-3 border transition-colors",
-                      isSelected
-                        ? "border-yellow-400 bg-yellow-500/10"
-                        : "border-teal-500",
-                      !myScore
-                        ? "opacity-60 cursor-not-allowed"
-                        : "hover:bg-surface hover:border-teal-400",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        {f ? (
-                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                            <div className="flex flex-col items-center text-center min-w-0">
+	                  <button
+	                    key={fid}
+	                    type="button"
+	                    onClick={() => setSelectedFixtureId(fid)}
+	                    disabled={!myScore}
+	                    className={[
+	                      "w-full h-full text-left rounded-xl p-3 border transition-all duration-200",
+	                      isSelected
+	                        ? "border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)] -translate-y-[1px]"
+	                        : "border-subtle",
+	                      !myScore
+	                        ? "opacity-60 cursor-not-allowed"
+	                        : "hover:bg-surface hover:border-subtle hover:-translate-y-[1px]",
+	                    ].join(" ")}
+	                  >
+	                    <div className="space-y-2">
+	                      <div className="flex flex-col items-center text-xs text-muted">
+	                        <div>
+	                          {kickoffDate ? (
+	                            <>
+	                              {kickoffDate.day}
+	                              <span
+	                                className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold"
+	                                aria-hidden="true"
+	                              >
+	                                {kickoffDate.suffix}
+	                              </span>{" "}
+	                              {kickoffDate.monthYear}
+	                            </>
+	                          ) : null}
+	                        </div>
+	                        <div className="font-semibold tabular-nums mt-0.5">{kickoffTime}</div>
+	                      </div>
+	                      <div>
+	                        {f ? (
+	                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+	                            <div className="flex flex-col items-center text-center min-w-0">
                               <TeamBadge
                                 name={f.home.name}
+                                tla={f.home.tla}
                                 shortName={f.home.shortName}
                                 badge={f.home.badge}
                               />
-                              <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                                {f.home.shortName || f.home.name}
+                              <div className="mt-1 w-full text-center font-semibold text-foreground">
+                                <span className="sm:hidden text-[11px]">
+                                  {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                                </span>
+                                <span className="hidden sm:inline text-xs truncate w-full">
+                                  {f.home.name}
+                                </span>
                               </div>
-                            </div>
-                            <div className="text-xs text-muted uppercase">H vs A</div>
-                            <div className="flex flex-col items-center text-center min-w-0">
+	                            </div>
+	                            <div className="text-xs text-muted uppercase">vs</div>
+	                            <div className="flex flex-col items-center text-center min-w-0">
                               <TeamBadge
                                 name={f.away.name}
+                                tla={f.away.tla}
                                 shortName={f.away.shortName}
                                 badge={f.away.badge}
                               />
-                              <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                                {f.away.shortName || f.away.name}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="font-semibold text-foreground">Fixture {fid}</div>
-                        )}
-                        <div className="text-xs text-muted">
-                          {f ? new Date(f.kickoff).toLocaleString() : ""}
-                        </div>
-                      </div>
+                              <div className="mt-1 w-full text-center font-semibold text-foreground">
+                                <span className="sm:hidden text-[11px]">
+                                  {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                                </span>
+                                <span className="hidden sm:inline text-xs truncate w-full">
+                                  {f.away.name}
+                                </span>
+	                              </div>
+	                            </div>
+	                          </div>
+	                        ) : (
+	                          <div className="font-semibold text-foreground">Fixture {fid}</div>
+	                        )}
+	                      </div>
+	                      <div
+	                        className={[
+	                          "mt-2 rounded-lg border px-3 py-2 text-center transition-all duration-200",
+	                          isSelected
+	                            ? "border-yellow-300/90 bg-gradient-to-r from-yellow-500/20 via-amber-300/8 to-yellow-500/20 shadow-[0_8px_18px_rgba(250,204,21,0.22)]"
+	                            : "border-subtle bg-surface",
+	                        ].join(" ")}
+	                      >
+	                        <div className="text-xs text-muted">Your pick</div>
+	                        <div className="text-lg font-semibold text-foreground tabular-nums">
+	                          {myScore ? myScore.replace("-", " - ") : "—"}
+	                        </div>
+	                      </div>
+	                    </div>
 
-                      <div className="text-right">
-                        <div className="text-sm text-muted">Your pick</div>
-                        <div className="text-lg font-semibold text-foreground">
-                          {myScore ? myScore.replace("-", "–") : "—"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-2 text-xs text-muted">
-                      Other picks:{" "}
-                      {others.length === 0 ? (
-                        <span>none</span>
-                      ) : (
-                        <span>
-                          {others.slice(0, 10).join(", ").replaceAll("-", "–")}
-                        </span>
-                      )}
-                    </div>
+	                    <div className="mt-3">
+	                      {!compactOtherPicks && (
+	                        <div className="text-xs text-muted text-center">Other picks</div>
+	                      )}
+	                      {others.length === 0 ? (
+	                        <div className={`text-xs text-muted text-center ${compactOtherPicks ? "" : "mt-1"}`}>
+	                          None
+	                        </div>
+	                      ) : compactOtherPicks ? (
+	                        <div className="text-xs text-muted text-center">
+	                        </div>
+	                      ) : (
+	                        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+	                          {others.slice(0, 10).map((score, idx) => (
+	                            <span
+	                              key={`${fid}-other-${idx}-${score}`}
+	                              className="rounded-full border border-subtle px-2.5 py-1 text-xs text-foreground tabular-nums"
+	                            >
+	                              {String(score).replace("-", " - ")}
+	                            </span>
+	                          ))}
+	                        </div>
+	                      )}
+	                    </div>
 
                     {!myScore && (
                       <div className="mt-2 text-xs text-danger">
                         You didn’t pick this fixture (can’t be golden).
                       </div>
                     )}
-                  </button>
-                );
-              })}
-            </div>
+	                  </button>
+	                );
+	              })}
+	              </div>
+	            </div>
 
             <button
               onClick={lockGolden}
@@ -554,7 +679,7 @@ export default function GoldenPage() {
                 selectedFixtureId == null ||
                 !myPicksByFixture[selectedFixtureId]
               }
-              className="w-full rounded-xl py-4 bg-accent text-accent-foreground disabled:opacity-60"
+              className={`w-full rounded-xl py-4 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
             >
               {submitting ? "Locking…" : "Lock Golden Pick"}
             </button>

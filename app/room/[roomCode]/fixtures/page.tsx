@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Settings } from "lucide-react";
+import { ChevronDown, Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
@@ -67,6 +67,8 @@ const TABLE_MODE_SLIDER_LEFT: Record<TableMode, string> = {
   TOTAL: "left-[calc(33.333%+0.02rem)]",
   AWAY: "left-[calc(66.666%+0.02rem)]",
 };
+const BTN_3D = "btn-3d-accent";
+const SELECT_3D = "select-3d-accent";
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
@@ -217,6 +219,7 @@ export default function FixturesPage() {
     null,
   );
   const [compactMode, setCompactMode] = useState(false);
+  const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
   const [bootstrapped, setBootstrapped] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
@@ -287,6 +290,13 @@ export default function FixturesPage() {
     const raw = window.localStorage.getItem("fixturesCompactMode");
     setCompactMode(raw === "1");
   }, []);
+
+  useEffect(() => {
+    if (!fixtures?.length) return;
+    const next: Record<number, boolean> = {};
+    for (const fx of fixtures) next[fx.fixtureId] = !compactMode;
+    setExpandedFixtures(next);
+  }, [compactMode, fixtures]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -499,6 +509,13 @@ export default function FixturesPage() {
     });
   }
 
+  function toggleFixtureExpanded(fixtureId: number) {
+    setExpandedFixtures((prev) => ({
+      ...prev,
+      [fixtureId]: !prev[fixtureId],
+    }));
+  }
+
   async function onSeasonChange(nextSeason: string) {
     setSeasonKey(nextSeason);
     if (!nextSeason) {
@@ -515,6 +532,7 @@ export default function FixturesPage() {
   }
 
   async function openTablePopup() {
+    if (tableOpen || tableLoading) return;
     setTableOpen(true);
     setTableLoading(true);
     setTableError(null);
@@ -541,20 +559,20 @@ export default function FixturesPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         {/* Header */}
         <div className="relative z-30 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">PL Fixtures</h1>
-              <div className="text-sm text-muted">
+              <h1 className="text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">PL Fixtures</h1>
+              <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
                 {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} Fixtures
               </div>
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">
               <button
                 onClick={() => router.push(`/room/${roomCode}`)}
-                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+                className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
                 data-action="back"
               >
                 Back
@@ -572,7 +590,7 @@ export default function FixturesPage() {
                   id="fixtures-season-select"
                   value={seasonKey}
                   onChange={(e) => onSeasonChange(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 ${SELECT_3D}`}
                 >
                   {seasonOptions.map((s) => (
                     <option key={s} value={s}>
@@ -588,14 +606,15 @@ export default function FixturesPage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={openTablePopup}
-                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap"
+                disabled={tableOpen || tableLoading}
+                className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap disabled:opacity-60 ${BTN_3D}`}
               >
-                Table
+                {tableLoading ? "Loading…" : "Table"}
               </button>
             <div ref={settingsWrapRef} className="relative page-actions-enter">
               <button
                 onClick={() => setSettingsOpen((v) => !v)}
-                className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
+                className={`h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
                 data-action="settings"
                 aria-label="Open settings"
               >
@@ -607,7 +626,7 @@ export default function FixturesPage() {
                   <button
                     onClick={refreshFixtures}
                     disabled={refreshingFixtures}
-                    className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                    className={`w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60 ${BTN_3D}`}
                   >
                     {refreshingFixtures ? "Refreshing..." : "Refresh Fixtures"}
                   </button>
@@ -623,18 +642,19 @@ export default function FixturesPage() {
           <button
             disabled={isLoading || gw === MIN_GW}
             onClick={() => setGw((x) => Math.max(MIN_GW, x - 1))}
-            className="
-    h-10 w-10
-    flex items-center justify-center
+            className={`
+    h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
+    flex items-center justify-center p-0 leading-none
     rounded-lg
     bg-surface
     border border-teal-500
     text-foreground
     hover:bg-surface-2
     disabled:opacity-40
-  "
+    ${BTN_3D}
+  `}
           >
-            ←
+            <span className="block shrink-0 text-sm leading-none">◀</span>
           </button>
 
           <div className="relative min-w-0 flex-1">
@@ -642,22 +662,23 @@ export default function FixturesPage() {
               value={gw}
               disabled={isLoading}
               onChange={(e) => setGw(Number(e.target.value))}
-              className="
+              className={`
       w-full
-      h-10
+      h-[clamp(2.45rem,3.2vw,2.85rem)]
       px-8
       rounded-lg
       border border-teal-500
       bg-surface
       text-foreground
-      text-sm font-semibold
+      text-[clamp(0.85rem,1.1vw,1rem)] font-semibold
       text-center
       appearance-none
       [text-align-last:center]
       focus:outline-none
       focus:ring-2
       focus:ring-teal-500
-    "
+      ${SELECT_3D}
+    `}
             >
               {gameweeks.map((n) => (
                 <option key={n} value={n}>
@@ -673,18 +694,19 @@ export default function FixturesPage() {
           <button
             disabled={isLoading || gw === MAX_GW}
             onClick={() => setGw((x) => Math.min(MAX_GW, x + 1))}
-            className="
-    h-10 w-10
-    flex items-center justify-center
+            className={`
+    h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
+    flex items-center justify-center p-0 leading-none
     rounded-lg
     bg-surface
     border border-teal-500
     text-foreground
     hover:bg-surface-2
     disabled:opacity-40
-  "
+    ${BTN_3D}
+  `}
           >
-            →
+            <span className="block shrink-0 text-sm leading-none">▶</span>
           </button>
         </div>
 
@@ -701,7 +723,7 @@ export default function FixturesPage() {
                 className={[
                   "relative h-6 w-11 rounded-full border transition-colors",
                   compactMode
-                    ? "bg-teal-500/25 border-teal-400"
+                    ? "bg-accent/20 border-teal-400"
                     : "bg-surface border-teal-500",
                 ].join(" ")}
               >
@@ -737,7 +759,7 @@ export default function FixturesPage() {
         )}
 
         {/* Fixtures */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 items-start">
           {isLoading && (
             <div className="col-span-full text-center text-muted">Loading fixtures…</div>
           )}
@@ -750,24 +772,42 @@ export default function FixturesPage() {
 
           {!isLoading &&
             fixtures.length > 0 &&
-            fixtures.map((f, idx) => {
+            (() => {
+              const leftColumn: Array<{ fixture: Fixture; idx: number }> = [];
+              const rightColumn: Array<{ fixture: Fixture; idx: number }> = [];
+              fixtures.forEach((fixture, idx) => {
+                if (idx % 2 === 0) leftColumn.push({ fixture, idx });
+                else rightColumn.push({ fixture, idx });
+              });
+
+              const renderFixtureCard = (f: Fixture, idx: number) => {
               const actual = f.result ?? null;
               const kickoffParts = fmtKickoffParts(f.kickoff);
+              const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
               const mobileOddPredictions = players.length % 2 !== 0;
               const desktopOddPredictions = players.length % 3 !== 0;
 
               return (
                 <div
                   key={f.fixtureId}
-                  className="border border-teal-500 rounded-xl p-3 sm:p-4 bg-surface-2 page-action-btn"
+                  className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2 page-action-btn cursor-pointer"
                   style={{
                     animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                     animationDuration: "520ms",
                   }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleFixtureExpanded(f.fixtureId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleFixtureExpanded(f.fixtureId);
+                    }
+                  }}
                 >
                   <div className="space-y-2">
                     <div>
-                      <div className="text-xs text-muted mb-2">
+                      <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-2">
                         <div className="sm:hidden flex items-center justify-between gap-2">
                           <span>
                             {kickoffParts.dayNum}
@@ -816,7 +856,7 @@ export default function FixturesPage() {
                             shortName={f.home.shortName}
                             badge={f.home.badge}
                           />
-                          <span className="mt-1 text-sm font-semibold text-foreground truncate w-full">
+                          <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
                             {f.home.shortName || f.home.name}
                           </span>
                         </div>
@@ -827,22 +867,35 @@ export default function FixturesPage() {
                             shortName={f.away.shortName}
                             badge={f.away.badge}
                           />
-                          <span className="mt-1 text-sm font-semibold text-foreground truncate w-full">
+                          <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
                             {f.away.shortName || f.away.name}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-sm text-muted">Result</div>
-                      <div className="text-lm font-semibold text-foreground">
+                      <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Result</div>
+                      <div className="text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground">
                         {actual ? actual.replace("-", " – ") : "TBD"}
                       </div>
                     </div>
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted">
+                      <span>{isExpanded ? "Hide" : "Show"} Predictions</span>
+                      <ChevronDown
+                        size={14}
+                        className={`transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                      />
+                    </div>
                   </div>
 
-                  {!compactMode && <div className="mt-4">
-                    <div className="text-sm font-semibold mb-2 text-muted text-center">
+                  <div
+                    className={[
+                      "grid overflow-hidden transition-all duration-400 ease-out",
+                      isExpanded ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0 mt-0",
+                    ].join(" ")}
+                  >
+                    <div className="min-h-0">
+                    <div className="text-[clamp(0.85rem,1.1vw,1rem)] font-semibold mb-2 text-muted text-center">
                       Predictions
                     </div>
 
@@ -911,7 +964,7 @@ export default function FixturesPage() {
                             >
                               <div
                                 className={[
-                                  "text-[11px] font-semibold truncate",
+                                  "text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
                                   "text-muted",
                                 ].join(" ")}
                               >
@@ -920,7 +973,7 @@ export default function FixturesPage() {
 
                               <div
                                 className={[
-                                  "mt-1 flex w-full items-center justify-center gap-1 text-xs sm:text-base font-bold",
+                                  "mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold",
                                   "text-foreground",
                                 ].join(" ")}
                               >
@@ -932,10 +985,23 @@ export default function FixturesPage() {
                       </div>
                     )}
 
-                  </div>}
+                    </div>
+                  </div>
                 </div>
               );
-            })}
+              };
+
+              return (
+                <>
+                  <div className="space-y-3 sm:space-y-4">
+                    {leftColumn.map(({ fixture, idx }) => renderFixtureCard(fixture, idx))}
+                  </div>
+                  <div className="space-y-3 sm:space-y-4">
+                    {rightColumn.map(({ fixture, idx }) => renderFixtureCard(fixture, idx))}
+                  </div>
+                </>
+              );
+            })()}
         </div>
 
         {(fixturesGeneratedAt || fixturesRefreshedAt) && (
@@ -959,7 +1025,7 @@ export default function FixturesPage() {
               </div>
               <button
                 onClick={() => setTableOpen(false)}
-                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2"
+                className={`h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 ${BTN_3D}`}
                 aria-label="Close table"
               >
                 ×

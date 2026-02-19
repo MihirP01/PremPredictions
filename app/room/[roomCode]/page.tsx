@@ -3,7 +3,7 @@
 import LogoutButton from "../../../components/LogoutButton"; // adjust relative path
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Settings } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Settings, Trophy } from "lucide-react";
 import { useAuth } from "../../../components/AuthProvider";
 import { db } from "../../../firebase";
 import {
@@ -46,6 +46,7 @@ const THEME_ACCENT_OPTIONS = [
   { value: "emerald", label: "Emerald" },
   { value: "orange", label: "Orange" },
   { value: "rose", label: "Rose" },
+  { value: "red", label: "Red" },
   { value: "slate", label: "Slate" },
 ] as const;
 
@@ -79,6 +80,8 @@ export default function RoomPage() {
   const [sameResultLock, setSameResultLock] = useState(true);
   const [themeAccent, setThemeAccent] = useState<string>("teal");
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
+  const [nicknameExpanded, setNicknameExpanded] = useState(false);
+  const [leaderToolsExpanded, setLeaderToolsExpanded] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [createCode, setCreateCode] = useState("");
   const [nickNameDraft, setNickNameDraft] = useState("");
@@ -151,6 +154,12 @@ export default function RoomPage() {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("touchstart", onPointerDown);
     };
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (settingsOpen) return;
+    setNicknameExpanded(false);
+    setLeaderToolsExpanded(false);
   }, [settingsOpen]);
 
   const isLeader = !!user && leaderUid === user.uid;
@@ -438,6 +447,22 @@ export default function RoomPage() {
     }
   }
 
+  function toggleNicknameSection() {
+    setNicknameExpanded((prev) => {
+      const next = !prev;
+      if (next) setLeaderToolsExpanded(false);
+      return next;
+    });
+  }
+
+  function toggleLeaderToolsSection() {
+    setLeaderToolsExpanded((prev) => {
+      const next = !prev;
+      if (next) setNicknameExpanded(false);
+      return next;
+    });
+  }
+
   const sortedPlayers = [...players].sort((a, b) => {
     if (a.role === "leader") return -1;
     if (b.role === "leader") return 1;
@@ -454,142 +479,186 @@ export default function RoomPage() {
           <div ref={settingsWrapRef} className="relative page-actions-enter">
             <button
               onClick={() => setSettingsOpen((v) => !v)}
-              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
+              className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
               data-action="settings"
               aria-label="Open settings"
             >
               <Settings size={16} />
             </button>
               {settingsOpen && (
-                <div className="absolute top-0 right-[calc(100%+12px)] w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
+                <div className="absolute top-full right-0 mt-2 sm:top-0 sm:right-[calc(100%+12px)] sm:mt-0 w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
                   <div className="font-semibold text-foreground">Settings</div>
-                <button
-                  onClick={async () => {
-                    setSettingsOpen(false);
-                    setRoomSwitcherOpen(true);
-                    await loadMemberRooms();
-                  }}
-                  className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-                >
-                  Switch Rooms
-                </button>
                 <div className="rounded-lg border border-teal-500 p-2 space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                    Change Nickname
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
+                      Change Nickname
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleNicknameSection}
+                      className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
+                    >
+                      {nicknameExpanded ? "Collapse" : "Expand"}
+                      {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
                   </div>
-                  <div>
-                    <input
-                      value={nickNameDraft}
-                      onChange={(e) => setNickNameDraft(e.target.value)}
-                      maxLength={20}
-                      placeholder="Nickname"
-                      className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
-                    />
-                  </div>
-                  <button
-                    onClick={saveNickName}
-                    disabled={nickNameBusy}
-                    className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                  >
-                    {nickNameBusy ? "Saving..." : "Save"}
-                  </button>
-                  <div className="text-xs text-muted">
-                    Nickname shows across the room. Leave blank to use your name.
-                  </div>
-                </div>
-                <div className="pt-1 border-t border-subtle">
-                  <LogoutButton />
+                  {nicknameExpanded && (
+                    <>
+                      <div>
+                        <input
+                          value={nickNameDraft}
+                          onChange={(e) => setNickNameDraft(e.target.value)}
+                          maxLength={20}
+                          placeholder="Nickname"
+                          className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+                        />
+                      </div>
+                      <button
+                        onClick={saveNickName}
+                        disabled={nickNameBusy}
+                        className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                      >
+                        {nickNameBusy ? "Saving..." : "Save"}
+                      </button>
+                      <div className="text-xs text-muted">
+                        Nickname shows across the room. Leave blank to use your name.
+                      </div>
+                    </>
+                  )}
                 </div>
                 {isLeader ? (
                   <div className="rounded-lg border border-teal-500 p-3 space-y-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                      Leader Tools
-                    </div>
-                    <div className="rounded-lg border border-teal-500 p-2 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                        Room Rules
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted">Theme Accent</div>
-                        <div className="relative">
-                          <select
-                            value={themeAccent}
-                            onChange={(e) => updateThemeAccent(e.target.value)}
-                            disabled={roomSettingsBusy}
-                            className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
-                          >
-                            {THEME_ACCENT_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                            ▼
-                          </span>
-                        </div>
+                        Leader Tools
                       </div>
                       <button
-                        onClick={toggleSameResultLock}
-                        disabled={roomSettingsBusy}
-                        className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                        type="button"
+                        onClick={toggleLeaderToolsSection}
+                        className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
                       >
-                        {roomSettingsBusy
-                          ? "Saving..."
-                          : sameResultLock
-                            ? "Same Result Lock: ON"
-                            : "Same Result Lock: OFF"}
+                        {leaderToolsExpanded ? "Collapse" : "Expand"}
+                        {leaderToolsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
-                      <div className="text-xs text-muted">
-                        ON: users cannot pick duplicate scores for the same fixture.
-                      </div>
                     </div>
-                    <button
-                      onClick={deleteRoomAsLeader}
-                      disabled={deleteBusy}
-                      className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-                    >
-                      {deleteBusy ? "Deleting room…" : "Delete Room"}
-                    </button>
+                    {leaderToolsExpanded && (
+                      <>
+                        <div className="rounded-lg border border-teal-500 p-2 space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
+                            Room Rules
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs text-muted">Theme Accent</div>
+                            <div className="relative">
+                              <select
+                                value={themeAccent}
+                                onChange={(e) => updateThemeAccent(e.target.value)}
+                                disabled={roomSettingsBusy}
+                                className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
+                              >
+                                {THEME_ACCENT_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                                ▼
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={toggleSameResultLock}
+                            disabled={roomSettingsBusy}
+                            className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                          >
+                            {roomSettingsBusy
+                              ? "Saving..."
+                              : sameResultLock
+                                ? "Same Result Lock: ON"
+                                : "Same Result Lock: OFF"}
+                          </button>
+                          <div className="text-xs text-muted">
+                            ON: users cannot pick duplicate scores for the same fixture.
+                          </div>
+                        </div>
+                        <button
+                          onClick={deleteRoomAsLeader}
+                          disabled={deleteBusy}
+                          className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+                        >
+                          {deleteBusy ? "Deleting room…" : "Delete Room"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="text-sm text-muted">
                     No room settings available for your role.
                   </div>
                 )}
+                <div className="pt-1 border-t border-subtle space-y-2">
+                  <button
+                    onClick={async () => {
+                      setSettingsOpen(false);
+                      setRoomSwitcherOpen(true);
+                      await loadMemberRooms();
+                    }}
+                    className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                  >
+                    Switch Rooms
+                  </button>
+                  <LogoutButton />
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => router.push(`/room/${roomCode}/fixtures`)}
-            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
-          >
-            Fixtures
-          </button>
-
-          <button
-            onClick={() => router.push(`/room/${roomCode}/minigame`)}
-            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
-          >
-            Predictions
-          </button>
-
-          <button
-            onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
-            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
-          >
-            Leaderboard
-          </button>
-
-          <button
-            onClick={() => router.push(`/room/${roomCode}/stats`)}
-            className="text-sm bg-accent text-accent-foreground rounded-lg px-4 py-2 font-bold"
-          >
-            Stats
-          </button>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {
+              label: "Fixtures",
+              hint: "Games & picks",
+              href: `/room/${roomCode}/fixtures`,
+              icon: CalendarDays,
+            },
+            {
+              label: "Predictions",
+              hint: "Mini-game",
+              href: `/room/${roomCode}/minigame`,
+              icon: Gamepad2,
+            },
+            {
+              label: "Leaderboard",
+              hint: "Room ranking",
+              href: `/room/${roomCode}/leaderboard`,
+              icon: Trophy,
+            },
+            {
+              label: "Stats",
+              hint: "Player form",
+              href: `/room/${roomCode}/stats`,
+              icon: BarChart3,
+            },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                onClick={() => router.push(item.href)}
+                className="group rounded-xl border border-teal-500 bg-surface p-3 text-left hover:bg-surface-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-foreground">{item.label}</span>
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-teal-500 bg-accent/15">
+                    <Icon size={14} className="text-foreground" />
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted">{item.hint}</div>
+              </button>
+            );
+          })}
         </div>
 
         {error && <div className="text-sm text-danger">{error}</div>}

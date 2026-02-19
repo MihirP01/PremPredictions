@@ -28,6 +28,7 @@ type Fixture = {
 };
 
 type PickDoc = { score?: string };
+type RoomPlayerDoc = { displayName?: string; nickName?: string };
 const BTN_3D = "btn-3d-accent";
 
 function onlyDigitsOrEmpty(v: string) {
@@ -97,6 +98,9 @@ export default function MiniGamePlayPage() {
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
 
   const [takenScores, setTakenScores] = useState<string[]>([]);
+  const [displayNamesByUid, setDisplayNamesByUid] = useState<Record<string, string>>(
+    {},
+  );
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -225,6 +229,24 @@ export default function MiniGamePlayPage() {
     });
   }, [roomCode, gw, current, seasonKey]);
 
+  // player display names (nickname first)
+  useEffect(() => {
+    const qPlayers = query(collection(db, "rooms", roomCode, "players"));
+    return onSnapshot(
+      qPlayers,
+      (snap) => {
+        const map: Record<string, string> = {};
+        for (const d of snap.docs) {
+          const data = d.data() as RoomPlayerDoc;
+          const nick = String(data?.nickName || "").trim();
+          map[d.id] = nick || data?.displayName || d.id.slice(0, 6);
+        }
+        setDisplayNamesByUid(map);
+      },
+      () => {},
+    );
+  }, [roomCode]);
+
   useEffect(() => {
     // reset inputs when fixture changes
     setHomeScore("");
@@ -283,10 +305,6 @@ export default function MiniGamePlayPage() {
       return;
     }
     const score = `${homeScore}-${awayScore}`;
-    if (takenScores.includes(score)) {
-      setErr("That score is already taken for this fixture.");
-      return;
-    }
 
     setSubmitting(true);
     setErr(null);
@@ -310,6 +328,9 @@ export default function MiniGamePlayPage() {
   const turnsRemaining = Math.max(totalTurns - turnNumber, 0);
   const turnProgress = Math.min(turnNumber / totalTurns, 1);
   const turnRingLength = 213.63;
+  const currentTurnName = current?.uidTurn
+    ? displayNamesByUid[current.uidTurn] || current.uidTurn.slice(0, 6)
+    : "current player";
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
@@ -491,7 +512,7 @@ export default function MiniGamePlayPage() {
           </div>
         ) : (
           <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-            Waiting for the current player to pick…
+            Waiting for {currentTurnName} to pick…
           </div>
         )}
       </div>

@@ -109,6 +109,10 @@ export default function LeaderboardMatrixPage() {
     useState<Date | null>(null);
   const [latestScoredGw, setLatestScoredGw] = useState<number | null>(null);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
+  const [topView, setTopView] = useState<"overall" | "current" | "previous">(
+    "overall",
+  );
+  const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
 
   // matrix: userUid -> gw -> points (read only from score docs)
@@ -375,6 +379,20 @@ export default function LeaderboardMatrixPage() {
   }, [players, pointsByUserByGw, currentGw]);
 
   const isLeader = !!user && leaderUid === user.uid;
+  const rankedByTopView = useMemo(() => {
+    if (topView === "current") return currentGwSortedPlayers;
+    if (topView === "previous") return previousGwSortedPlayers;
+    return sortedPlayers;
+  }, [topView, sortedPlayers, currentGwSortedPlayers, previousGwSortedPlayers]);
+
+  const scoreForTopView = useCallback(
+    (uid: string) => {
+      if (topView === "current") return pointsByUserByGw?.[uid]?.[currentGw] ?? 0;
+      if (topView === "previous") return pointsByUserByGw?.[uid]?.[medalsGw] ?? 0;
+      return totalByUser[uid] ?? 0;
+    },
+    [topView, pointsByUserByGw, currentGw, medalsGw, totalByUser],
+  );
   const mobileGwSortedPlayers = useMemo(() => {
     const list = [...players];
     list.sort((a, b) => {
@@ -530,79 +548,95 @@ export default function LeaderboardMatrixPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:col-span-3"
-            style={{ animationDelay: "120ms", animationDuration: "520ms" }}
-          >
-            <div className="text-sm font-semibold text-foreground text-center">Overall Top 3</div>
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {sortedPlayers.slice(0, 3).map((p, i) => {
-                const rank = i + 1;
-                return (
-                  <div
-                    key={`overall-${p.uid}`}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
-                  >
-                    {rankLabel(rank)} {p.displayName} - {totalByUser[p.uid] ?? 0}
-                  </div>
-                );
-              })}
-            </div>
+        <div
+          className="rounded-xl p-3 bg-surface-2 border border-teal-500 space-y-3"
+          style={{ animationDelay: "120ms", animationDuration: "520ms" }}
+        >
+          <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface p-1 overflow-hidden">
+            <span
+              aria-hidden
+              className={[
+                "absolute top-1 bottom-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                topView === "overall"
+                  ? "translate-x-0"
+                  : topView === "current"
+                    ? "translate-x-full"
+                    : "translate-x-[200%]",
+              ].join(" ")}
+            />
+            <button
+              onClick={() => setTopView("overall")}
+              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "overall" ? "text-accent-foreground" : "text-foreground"}`}
+            >
+              Overall
+            </button>
+            <button
+              onClick={() => setTopView("current")}
+              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "current" ? "text-accent-foreground" : "text-foreground"}`}
+            >
+              GW{currentGw}
+            </button>
+            <button
+              onClick={() => setTopView("previous")}
+              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "previous" ? "text-accent-foreground" : "text-foreground"}`}
+            >
+              GW{medalsGw}
+            </button>
           </div>
-          <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:hidden"
-            style={{ animationDelay: "230ms", animationDuration: "520ms" }}
-          >
-            <div className="text-sm font-semibold text-foreground text-center">Current GW{currentGw} Top 3</div>
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {currentGwSortedPlayers.slice(0, 3).map((p, i) => {
-                const rank = i + 1;
-                const points = pointsByUserByGw?.[p.uid]?.[currentGw] ?? 0;
-                return (
-                  <div
-                    key={`gw-${p.uid}`}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
-                  >
-                    {rankLabel(rank)} {p.displayName} - {points}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            {rankedByTopView.slice(0, 3).map((p, i) => {
+              const rank = i + 1;
+              return (
+                <div
+                  key={`${topView}-top-${p.uid}`}
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
+                >
+                  {rankLabel(rank)} {p.displayName} - {scoreForTopView(p.uid)}
+                </div>
+              );
+            })}
           </div>
-          <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn md:hidden"
-            style={{ animationDelay: "340ms", animationDuration: "520ms" }}
-          >
-            <div className="text-sm font-semibold text-foreground text-center">Previous GW{medalsGw} Top 3</div>
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {previousGwSortedPlayers.slice(0, 3).map((p, i) => {
-                const rank = i + 1;
-                const points = pointsByUserByGw?.[p.uid]?.[medalsGw] ?? 0;
-                return (
+          <div className="rounded-lg border border-subtle bg-surface p-2">
+            <button
+              onClick={() => setFullPositionsExpanded((v) => !v)}
+              className="w-full rounded-lg border border-teal-500 bg-surface px-3 py-2 text-sm font-semibold text-foreground hover:bg-surface-2"
+            >
+              {fullPositionsExpanded ? "Hide Full Room Positions" : "Show Full Room Positions"}
+            </button>
+            <div
+              className={[
+                "grid overflow-hidden transition-all duration-300 ease-out",
+                fullPositionsExpanded ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0 mt-0",
+              ].join(" ")}
+            >
+              <div className="min-h-0 space-y-1">
+                {rankedByTopView.map((p, i) => (
                   <div
-                    key={`prev-gw-${p.uid}`}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
+                    key={`${topView}-rank-${p.uid}`}
+                    className="flex items-center justify-between rounded-md border border-subtle px-2 py-1 text-sm"
                   >
-                    {rankLabel(rank)} {p.displayName} - {points}
+                    <span className="text-foreground">
+                      {i + 1}. {p.displayName}
+                    </span>
+                    <span className="font-semibold text-foreground">{scoreForTopView(p.uid)}</span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
         <div
-          className="md:hidden rounded-xl p-3 bg-surface-2 border border-teal-500 page-action-btn"
+          className="md:hidden rounded-xl p-3 bg-surface-2 border border-teal-500"
           style={{ animationDelay: "460ms", animationDuration: "520ms" }}
         >
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => setSelectedTableGw((g) => Math.max(1, g - 1))}
               disabled={selectedTableGw <= 1}
-              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40"
+              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
             >
-              ←
+              <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
             </button>
             <div className="relative min-w-0 flex-1">
               <label className="sr-only" htmlFor="mobile-gw-select">
@@ -631,9 +665,9 @@ export default function LeaderboardMatrixPage() {
                 setSelectedTableGw((g) => Math.min(currentGw, g + 1))
               }
               disabled={selectedTableGw >= currentGw}
-              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40"
+              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
             >
-              →
+              <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
             </button>
           </div>
           <div className="mt-3 space-y-2">
@@ -666,7 +700,7 @@ export default function LeaderboardMatrixPage() {
         </div>
 
         <div
-          className="hidden md:block overflow-x-auto border border-teal-500 rounded-xl bg-surface-2 page-action-btn"
+          className="hidden md:block overflow-x-auto border border-teal-500 rounded-xl bg-surface-2"
           style={{ animationDelay: "460ms", animationDuration: "520ms" }}
         >
           <table className="w-full table-fixed text-sm">
@@ -737,7 +771,7 @@ export default function LeaderboardMatrixPage() {
 
         {(gwScoreComputedAt || leaderboardRefreshedAt) && (
           <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted page-action-btn"
+            className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted"
             style={{ animationDelay: "560ms", animationDuration: "520ms" }}
           >
             {gwScoreComputedAt && (

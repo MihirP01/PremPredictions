@@ -294,6 +294,15 @@ body > div {
   box-shadow: none !important;
 }
 
+@media (max-width: 639px) {
+  .room-theme .gw-nav-controls button,
+  .room-theme .gw-nav-controls select {
+    transition: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
 :focus-visible {
   outline: none;
 }

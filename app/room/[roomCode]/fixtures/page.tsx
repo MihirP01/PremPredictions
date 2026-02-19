@@ -218,6 +218,7 @@ export default function FixturesPage() {
   const [fixturesRefreshedAt, setFixturesRefreshedAt] = useState<Date | null>(
     null,
   );
+  const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -370,20 +371,25 @@ export default function FixturesPage() {
       const showSpinner = opts?.showSpinner ?? true;
 
       if (showSpinner) setFixtures(null);
+      setFixturesLoading(true);
       setError(null);
 
       const nonce = force ? `&t=${Date.now()}` : "";
       const seasonParam = seasonKey ? `&seasonKey=${encodeURIComponent(seasonKey)}` : "";
-      const res = await fetch(`/api/fixtures?gameweek=${gw}${seasonParam}${nonce}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`fixtures ${res.status}`);
+      try {
+        const res = await fetch(`/api/fixtures?gameweek=${gw}${seasonParam}${nonce}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`fixtures ${res.status}`);
 
-      const data = (await res.json()) as FixturesResponse;
-      const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
-      setFixtures(fx);
-      setFixturesGeneratedAt(asDate(data.generatedAt));
-      setFixturesRefreshedAt(new Date());
+        const data = (await res.json()) as FixturesResponse;
+        const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
+        setFixtures(fx);
+        setFixturesGeneratedAt(asDate(data.generatedAt));
+        setFixturesRefreshedAt(new Date());
+      } finally {
+        setFixturesLoading(false);
+      }
     },
     [gw, seasonKey],
   );
@@ -392,20 +398,26 @@ export default function FixturesPage() {
   useEffect(() => {
     if (!bootstrapped) return;
     let cancelled = false;
-    (async () => {
-      try {
-        await loadFixtures({ showSpinner: true });
-      } catch (e) {
-        if (!cancelled) {
-          const message = e instanceof Error ? e.message : "";
-          setFixtures([]);
-          setError(`Failed to load fixtures for GW ${gw}. ${message}`.trim());
+    setFixtures(null);
+    setFixturesLoading(true);
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      (async () => {
+        try {
+          await loadFixtures({ showSpinner: false });
+        } catch (e) {
+          if (!cancelled) {
+            const message = e instanceof Error ? e.message : "";
+            setFixtures([]);
+            setError(`Failed to load fixtures for GW ${gw}. ${message}`.trim());
+          }
         }
-      }
-    })();
+      })();
+    }, 1000);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
   }, [bootstrapped, gw, loadFixtures]);
 
@@ -484,7 +496,8 @@ export default function FixturesPage() {
     () => Array.from({ length: MAX_GW }, (_, i) => i + 1),
     [],
   );
-  const isLoading = fixtures === null;
+  const isLoading = fixtures === null || fixturesLoading;
+  const navLoading = !bootstrapped;
 
   async function refreshFixtures() {
     if (refreshingFixtures) return;
@@ -564,7 +577,7 @@ export default function FixturesPage() {
         <div className="relative z-30 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h1 className="text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">PL Fixtures</h1>
+              <h1 className="text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">Fixtures</h1>
               <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
                 {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} Fixtures
               </div>
@@ -638,9 +651,9 @@ export default function FixturesPage() {
         </div>
 
         {/* GW nav */}
-        <div className="flex items-center gap-3 w-full max-w-md mx-auto">
+        <div className="gw-nav-controls flex items-center gap-3 w-full max-w-md mx-auto">
           <button
-            disabled={isLoading || gw === MIN_GW}
+            disabled={navLoading || gw === MIN_GW}
             onClick={() => setGw((x) => Math.max(MIN_GW, x - 1))}
             className={`
     h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
@@ -654,13 +667,13 @@ export default function FixturesPage() {
     ${BTN_3D}
   `}
           >
-            <span className="block shrink-0 text-sm leading-none">◀</span>
+            <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
           </button>
 
           <div className="relative min-w-0 flex-1">
             <select
               value={gw}
-              disabled={isLoading}
+              disabled={navLoading}
               onChange={(e) => setGw(Number(e.target.value))}
               className={`
       w-full
@@ -692,7 +705,7 @@ export default function FixturesPage() {
           </div>
 
           <button
-            disabled={isLoading || gw === MAX_GW}
+            disabled={navLoading || gw === MAX_GW}
             onClick={() => setGw((x) => Math.min(MAX_GW, x + 1))}
             className={`
     h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
@@ -706,7 +719,7 @@ export default function FixturesPage() {
     ${BTN_3D}
   `}
           >
-            <span className="block shrink-0 text-sm leading-none">▶</span>
+            <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
           </button>
         </div>
 

@@ -80,6 +80,7 @@ export default function RoomPage() {
   const [sameResultLock, setSameResultLock] = useState(true);
   const [themeAccent, setThemeAccent] = useState<string>("teal");
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
+  const [roomRulesOpen, setRoomRulesOpen] = useState(false);
   const [nicknameExpanded, setNicknameExpanded] = useState(false);
   const [leaderToolsExpanded, setLeaderToolsExpanded] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -143,6 +144,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (!settingsOpen) return;
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      if (roomRulesOpen) return;
       const target = event.target as Node | null;
       if (!target) return;
       if (settingsWrapRef.current?.contains(target)) return;
@@ -154,13 +156,40 @@ export default function RoomPage() {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("touchstart", onPointerDown);
     };
-  }, [settingsOpen]);
+  }, [settingsOpen, roomRulesOpen]);
 
   useEffect(() => {
     if (settingsOpen) return;
     setNicknameExpanded(false);
     setLeaderToolsExpanded(false);
+    setRoomRulesOpen(false);
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!roomRulesOpen) return;
+    const scrollY = window.scrollY;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyTop = document.body.style.top;
+    const prevBodyWidth = document.body.style.width;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.top = prevBodyTop;
+      document.body.style.width = prevBodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [roomRulesOpen]);
 
   const isLeader = !!user && leaderUid === user.uid;
   const me = players.find((p) => p.uid === user?.uid) ?? null;
@@ -544,43 +573,12 @@ export default function RoomPage() {
                     {leaderToolsExpanded && (
                       <>
                         <div className="rounded-lg border border-teal-500 p-2 space-y-2">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                            Room Rules
-                          </div>
-                          <div className="space-y-1">
-                            <div className="text-xs text-muted">Theme Accent</div>
-                            <div className="relative">
-                              <select
-                                value={themeAccent}
-                                onChange={(e) => updateThemeAccent(e.target.value)}
-                                disabled={roomSettingsBusy}
-                                className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
-                              >
-                                {THEME_ACCENT_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                                ▼
-                              </span>
-                            </div>
-                          </div>
                           <button
-                            onClick={toggleSameResultLock}
-                            disabled={roomSettingsBusy}
+                            onClick={() => setRoomRulesOpen(true)}
                             className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
                           >
-                            {roomSettingsBusy
-                              ? "Saving..."
-                              : sameResultLock
-                                ? "Same Result Lock: ON"
-                                : "Same Result Lock: OFF"}
+                            Room Settings
                           </button>
-                          <div className="text-xs text-muted">
-                            ON: users cannot pick duplicate scores for the same fixture.
-                          </div>
                         </div>
                         <button
                           onClick={deleteRoomAsLeader}
@@ -777,6 +775,60 @@ export default function RoomPage() {
               >
                 Leave Current Room
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {roomRulesOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold text-foreground">Room Settings</div>
+              <button
+                onClick={() => setRoomRulesOpen(false)}
+                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
+                aria-label="Close room settings"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted">Theme Accent</div>
+              <div className="relative">
+                <select
+                  value={themeAccent}
+                  onChange={(e) => updateThemeAccent(e.target.value)}
+                  disabled={roomSettingsBusy}
+                  className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
+                >
+                  {THEME_ACCENT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                  ▼
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={toggleSameResultLock}
+              disabled={roomSettingsBusy}
+              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+            >
+              {roomSettingsBusy
+                ? "Saving..."
+                : sameResultLock
+                  ? "Same Result Lock: ON"
+                  : "Same Result Lock: OFF"}
+            </button>
+            <div className="text-xs text-muted">
+              ON: users cannot pick duplicate scores for the same fixture.
             </div>
           </div>
         </div>

@@ -534,7 +534,7 @@ export default function GoldenPage() {
 	                const f = fixtureMap.get(fid);
 	                const myScore = myPicksByFixture[fid];
 	                const kickoff = f ? new Date(f.kickoff) : null;
-	                const kickoffDate = kickoff ? formatFixtureDateParts(f.kickoff) : null;
+	                const kickoffDate = f ? formatFixtureDateParts(f.kickoff) : null;
 	                const kickoffTime = kickoff
 	                  ? kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 	                  : "";

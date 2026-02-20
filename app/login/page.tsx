@@ -68,7 +68,7 @@ export default function LoginPage() {
               value={displayName}
               disabled={busy}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Mihir"
+              placeholder="Player Name"
               autoComplete="nickname"
             />
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import LogoutButton from "../../components/LogoutButton";
 import {
   collection,
@@ -25,7 +25,6 @@ type MemberRoom = { roomCode: string; role: "leader" | "member" };
 export default function RoomGatePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [displayName, setDisplayName] = useState("");
   const [currentRoomCode, setCurrentRoomCode] = useState("");
@@ -34,7 +33,13 @@ export default function RoomGatePage() {
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const kicked = searchParams.get("kicked") === "1";
+  const [kicked, setKicked] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const kickedFlag = new URLSearchParams(window.location.search).get("kicked") === "1";
+    setKicked(kickedFlag);
+  }, []);
 
   // Load profile + joined rooms for quick switching/joining.
   useEffect(() => {

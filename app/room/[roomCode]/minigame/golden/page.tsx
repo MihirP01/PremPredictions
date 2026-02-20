@@ -555,7 +555,7 @@ export default function GoldenPage() {
 	                          <span className="font-display font-semibold">
 	                            {kickoffDate ? (
 	                              <>
-	                                {kickoffDate.day}
+	                                {kickoffDate.dayNum}
 	                                <span
 	                                  className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold"
 	                                  aria-hidden="true"

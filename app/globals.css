@@ -410,6 +410,11 @@ option {
 
 .page-shell-enter {
   animation: pageActionsIn 420ms ease-out both;
+  padding-bottom: 5rem;
+  background-image: url("/icons/icon-192.png");
+  background-size: 3rem 3rem;
+  background-repeat: no-repeat;
+  background-position: center calc(100% - 1rem);
 }
 
 .page-shell-enter > * {
@@ -465,4 +470,15 @@ option {
   .fixture-card-enter {
     animation: none;
   }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }

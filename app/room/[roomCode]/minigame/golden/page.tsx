@@ -598,22 +598,22 @@ export default function GoldenPage() {
                     <div className="h-5 sm:h-6 flex items-center justify-center">
                       {showDayHeader ? (
                         <div className="w-full flex items-center gap-2">
-                          <span className="h-px flex-1 bg-teal-500/35" />
+                          <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
                           <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
                             {dayLabel}
                           </span>
                           <span
                             className={[
-                              "h-px flex-1 bg-teal-500/35 relative",
+                              "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
                               showDayFooter
-                                ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                                ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
                                 : "",
                             ].join(" ")}
                           />
                         </div>
                       ) : showDayFooter ? (
                         <div className="w-full flex items-center justify-end">
-                          <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                          <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
                         </div>
                       ) : (
                         <span aria-hidden className="invisible w-full">_</span>
@@ -653,45 +653,91 @@ export default function GoldenPage() {
 	                      </div>
 	                      <div>
 	                        {f ? (
-	                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-	                            <div className="flex flex-col items-center text-center min-w-0">
-                              <TeamBadge
-                                name={f.home.name}
-                                tla={f.home.tla}
-                                shortName={f.home.shortName}
-                                badge={f.home.badge}
-                              />
-                              <div className="font-display mt-1 w-full text-center font-semibold text-foreground">
-                                <span className="block text-[11px]">
-                                  {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                                </span>
-                                <PendulumName
-                                  text={f.home.name}
-                                  windowPx={null}
-                                  className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                                />
+                            <>
+                              <div className="sm:hidden space-y-1">
+                                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                  <div className="flex justify-center">
+                                    <TeamBadge
+                                      name={f.home.name}
+                                      tla={f.home.tla}
+                                      shortName={f.home.shortName}
+                                      badge={f.home.badge}
+                                    />
+                                  </div>
+                                  <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                                    vs
+                                  </span>
+                                  <div className="flex justify-center">
+                                    <TeamBadge
+                                      name={f.away.name}
+                                      tla={f.away.tla}
+                                      shortName={f.away.shortName}
+                                      badge={f.away.badge}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 justify-items-center">
+                                  <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                                    <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
+                                      {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                                    </span>
+                                    <PendulumName
+                                      text={f.home.name}
+                                      windowPx={68}
+                                      className="font-display w-full text-[9px] text-muted leading-tight"
+                                    />
+                                  </div>
+                                  <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                                    <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
+                                      {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                                    </span>
+                                    <PendulumName
+                                      text={f.away.name}
+                                      windowPx={68}
+                                      className="font-display w-full text-[9px] text-muted leading-tight"
+                                    />
+                                  </div>
+                                </div>
                               </div>
-	                            </div>
-	                            <div className="font-display text-xs text-muted uppercase">vs</div>
-	                            <div className="flex flex-col items-center text-center min-w-0">
-                              <TeamBadge
-                                name={f.away.name}
-                                tla={f.away.tla}
-                                shortName={f.away.shortName}
-                                badge={f.away.badge}
-                              />
-                              <div className="font-display mt-1 w-full text-center font-semibold text-foreground">
-                                <span className="block text-[11px]">
-                                  {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
+
+                              <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                                <div className="flex flex-col items-center text-center min-w-0">
+                                  <TeamBadge
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    badge={f.home.badge}
+                                  />
+                                  <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                                    {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                                  </span>
+                                  <PendulumName
+                                    text={f.home.name}
+                                    windowPx={null}
+                                    className="font-display text-[10px] text-muted w-full"
+                                  />
+                                </div>
+                                <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                                  vs
                                 </span>
-                                <PendulumName
-                                  text={f.away.name}
-                                  windowPx={null}
-                                  className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                                />
-	                              </div>
-	                            </div>
-	                          </div>
+                                <div className="flex flex-col items-center text-center min-w-0">
+                                  <TeamBadge
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    badge={f.away.badge}
+                                  />
+                                  <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                                    {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                                  </span>
+                                  <PendulumName
+                                    text={f.away.name}
+                                    windowPx={null}
+                                    className="font-display text-[10px] text-muted w-full"
+                                  />
+                                </div>
+                              </div>
+                            </>
 	                        ) : (
 	                          <div className="font-semibold text-foreground">Fixture {fid}</div>
 	                        )}

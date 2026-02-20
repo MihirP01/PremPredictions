@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { triggerTapHaptic } from "@/lib/haptics";
 import {
   collection,
   deleteDoc,
@@ -381,6 +382,7 @@ export default function MiniGameLobbyPage() {
   }
 
   async function onBack() {
+    triggerTapHaptic();
     await safeLeaveLobby();
     router.push(`/room/${roomCode}`);
   }
@@ -522,10 +524,11 @@ export default function MiniGameLobbyPage() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="ml-auto flex gap-2 page-actions-enter">
             <button
               onClick={onBack}
-              className="text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+              data-action="back"
             >
               Back
             </button>

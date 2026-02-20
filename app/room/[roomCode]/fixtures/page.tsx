@@ -7,6 +7,7 @@ import { useAuth } from "../../../../components/AuthProvider";
 import PendulumName from "../../../../components/PendulumName";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { triggerTapHaptic } from "@/lib/haptics";
 import {
   collection,
   getDocs,
@@ -597,7 +598,10 @@ export default function FixturesPage() {
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">
               <button
-                onClick={() => router.push(`/room/${roomCode}`)}
+                onClick={() => {
+                  triggerTapHaptic();
+                  router.push(`/room/${roomCode}`);
+                }}
                 className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
                 data-action="back"
               >
@@ -857,22 +861,22 @@ export default function FixturesPage() {
                   <div className="h-5 sm:h-6 flex items-center justify-center">
                     {showDayHeader ? (
                       <div className="w-full flex items-center gap-2">
-                        <span className="h-px flex-1 bg-teal-500/35" />
+                        <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
                         <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
                           {dayLabel}
                         </span>
                         <span
                           className={[
-                            "h-px flex-1 bg-teal-500/35 relative",
+                            "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
                             showDayFooter
-                              ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                              ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
                               : "",
                           ].join(" ")}
                         />
                       </div>
                     ) : showDayFooter ? (
                       <div className="w-full flex items-center justify-end">
-                        <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                        <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
                       </div>
                     ) : (
                       <span aria-hidden className="invisible w-full">_</span>
@@ -934,25 +938,25 @@ export default function FixturesPage() {
                             />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="font-display text-[10px] text-foreground uppercase tracking-wide">
+                        <div className="grid grid-cols-2 gap-2 justify-items-center">
+                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
                               {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
                             </span>
                             <PendulumName
                               text={f.home.name}
                               windowPx={68}
-                              className="font-display text-[9px] text-muted mx-auto leading-tight"
+                              className="font-display w-full text-[9px] text-muted leading-tight"
                             />
                           </div>
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="font-display text-[10px] text-foreground uppercase tracking-wide">
+                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
                               {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
                             </span>
                             <PendulumName
                               text={f.away.name}
                               windowPx={68}
-                              className="font-display text-[9px] text-muted mx-auto leading-tight"
+                              className="font-display w-full text-[9px] text-muted leading-tight"
                             />
                           </div>
                         </div>
@@ -1157,172 +1161,185 @@ export default function FixturesPage() {
                 ×
               </button>
             </div>
-            <div className="p-4 overflow-auto max-h-[calc(85vh-72px)]">
+            <div className="max-h-[calc(85vh-128px)] flex flex-col">
               {tableLoading ? (
-                <div className="text-sm text-muted">Loading table…</div>
+                <div className="p-4 text-sm text-muted">Loading table…</div>
               ) : tableError ? (
-                <div className="text-sm text-danger">{tableError}</div>
+                <div className="p-4 text-sm text-danger">{tableError}</div>
               ) : (tableRowsByMode[tableMode] ?? []).length === 0 ? (
-                <div className="text-sm text-muted">No table data available.</div>
+                <div className="p-4 text-sm text-muted">No table data available.</div>
               ) : (
                 <>
-                  <div className="mb-2">
-                    <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
-                      <span
-                        aria-hidden
-                        className={[
-                          "absolute top-1 bottom-1 w-[calc(33.333%-0.28rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                          TABLE_MODE_SLIDER_LEFT[tableMode],
-                        ].join(" ")}
-                      />
-                      {TABLE_MODE_OPTIONS.map((opt) => (
+                  <div className="px-4 pb-1 bg-surface-2 border-b border-subtle shadow-[0_6px_14px_rgba(0,0,0,0.12)]">
+                    <div className="mb-2">
+                      <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
+                        <span
+                          aria-hidden
+                          className={[
+                            "absolute top-1 bottom-1 w-[calc(33.333%-0.28rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                            TABLE_MODE_SLIDER_LEFT[tableMode],
+                          ].join(" ")}
+                        />
+                        {TABLE_MODE_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.key}
+                            onClick={() => setTableMode(opt.key)}
+                            className={[
+                              "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
+                              tableMode === opt.key
+                                ? "text-accent-foreground"
+                                : "text-foreground",
+                            ].join(" ")}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mb-1">
+                      <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
+                        <span
+                          aria-hidden
+                          className={[
+                            "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                            tableView === "SHORT" ? "left-1" : "left-[calc(50%+0.125rem)]",
+                          ].join(" ")}
+                        />
                         <button
-                          key={opt.key}
-                          onClick={() => setTableMode(opt.key)}
+                          onClick={() => setTableView("SHORT")}
                           className={[
                             "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                            tableMode === opt.key
+                            tableView === "SHORT"
                               ? "text-accent-foreground"
                               : "text-foreground",
                           ].join(" ")}
                         >
-                          {opt.label}
+                          Short
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
-                      <span
-                        aria-hidden
-                        className={[
-                          "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                          tableView === "SHORT" ? "left-1" : "left-[calc(50%+0.125rem)]",
-                        ].join(" ")}
-                      />
-                      <button
-                        onClick={() => setTableView("SHORT")}
-                        className={[
-                          "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                          tableView === "SHORT"
-                            ? "text-accent-foreground"
-                            : "text-foreground",
-                        ].join(" ")}
-                      >
-                        Short
-                      </button>
-                      <button
-                        onClick={() => setTableView("FULL")}
-                        className={[
-                          "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                          tableView === "FULL"
-                            ? "text-accent-foreground"
-                            : "text-foreground",
-                        ].join(" ")}
-                      >
-                        Full
-                      </button>
-                    </div>
-                  </div>
-                  <table className="w-full table-fixed text-sm">
-                    {tableView === "FULL" ? (
-                      <colgroup>
-                        <col style={{ width: "8%" }} />
-                        <col style={{ width: "22%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                        <col style={{ width: "8.75%" }} />
-                      </colgroup>
-                    ) : (
-                      <colgroup>
-                        <col style={{ width: "8%" }} />
-                        <col style={{ width: "52%" }} />
-                        <col style={{ width: "13%" }} />
-                        <col style={{ width: "13%" }} />
-                        <col style={{ width: "14%" }} />
-                      </colgroup>
-                    )}
-                    <thead className="text-muted">
-                      <tr className="border-b border-subtle">
-                        <th className="py-2 px-1 text-left">#</th>
-                        <th className="py-2 px-1 text-left">Club</th>
-                        <th className="py-2 px-0.5 sm:px-1 text-center">P</th>
-                        {tableView === "FULL" && (
-                          <>
-                            <th className="py-2 px-0.5 sm:px-1 text-center">W</th>
-                            <th className="py-2 px-0.5 sm:px-1 text-center">D</th>
-                            <th className="py-2 px-0.5 sm:px-1 text-center">L</th>
-                            <th className="py-2 px-0.5 sm:px-1 text-center">GF</th>
-                            <th className="py-2 px-0.5 sm:px-1 text-center">GA</th>
-                          </>
-                        )}
-                        <th className="py-2 px-1 text-center">GD</th>
-                        <th className="py-2 px-1 text-center">Pts</th>
-                      </tr>
-                    </thead>
-                    <tbody key={`${tableMode}-${tableView}`}>
-                      {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
-                        <tr
-                          key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
-                          className="border-b border-subtle last:border-0 page-action-btn"
-                          style={{
-                            animationDelay: `${Math.min(idx, 12) * 35}ms`,
-                            animationDuration: "380ms",
-                          }}
+                        <button
+                          onClick={() => setTableView("FULL")}
+                          className={[
+                            "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
+                            tableView === "FULL"
+                              ? "text-accent-foreground"
+                              : "text-foreground",
+                          ].join(" ")}
                         >
-                          <td className="py-2 px-1 text-foreground">{r.position}</td>
-                          <td className="py-2 px-1">
-                            <div className="flex items-center gap-2">
-                              <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-                                {r.team.badge ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={r.team.badge}
-                                    alt={r.team.name}
-                                    className="h-5 w-5 object-contain"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <span className="text-[9px] font-bold text-foreground">
-                                    {(r.team.shortName || r.team.name || "FC").slice(0, 3).toUpperCase()}
-                                  </span>
-                                )}
-                              </div>
-                              <span
-                                className={[
-                                  "text-foreground font-medium truncate",
-                                  tableView === "FULL" ? "inline text-[10px] sm:text-sm" : "inline",
-                                ].join(" ")}
-                              >
-                                {tableView === "FULL"
-                                  ? teamAbbr(r.team)
-                                  : (r.team.shortName || r.team.name)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.playedGames)}</td>
+                          Full
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="overflow-auto no-scrollbar min-h-0 px-2">
+                    <table className="w-full table-fixed text-sm">
+                      {tableView === "FULL" ? (
+                        <colgroup>
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "22%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                          <col style={{ width: "8.75%" }} />
+                        </colgroup>
+                      ) : (
+                        <colgroup>
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "52%" }} />
+                          <col style={{ width: "13%" }} />
+                          <col style={{ width: "13%" }} />
+                          <col style={{ width: "14%" }} />
+                        </colgroup>
+                      )}
+                      <thead className="text-muted">
+                        <tr className="border-b border-subtle">
+                          <th className="py-2 px-1 text-left">#</th>
+                          <th className="py-2 px-1 text-left">Club</th>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">P</th>
                           {tableView === "FULL" && (
                             <>
-                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.won)}</td>
-                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.draw)}</td>
-                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.lost)}</td>
-                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsScored)}</td>
-                              <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsAgainst)}</td>
+                              <th className="py-2 px-0.5 sm:px-1 text-center">W</th>
+                              <th className="py-2 px-0.5 sm:px-1 text-center">D</th>
+                              <th className="py-2 px-0.5 sm:px-1 text-center">L</th>
+                              <th className="py-2 px-0.5 sm:px-1 text-center">GF</th>
+                              <th className="py-2 px-0.5 sm:px-1 text-center">GA</th>
                             </>
                           )}
-                          <td className="py-2 px-1 text-center text-foreground">{toInt(r.goalDifference)}</td>
-                          <td className="py-2 px-1 text-center font-semibold text-foreground">{toInt(r.points)}</td>
+                          <th className="py-2 px-1 text-center">GD</th>
+                          <th className="py-2 px-1 text-center">Pts</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody key={`${tableMode}-${tableView}`}>
+                        {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
+                          <tr
+                            key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
+                            className="border-b border-subtle last:border-0"
+                            style={{
+                              animationDelay: `${Math.min(idx, 12) * 35}ms`,
+                              animationDuration: "380ms",
+                            }}
+                          >
+                            <td className="py-2 px-1 text-foreground">{r.position}</td>
+                            <td className="py-2 px-1">
+                              <div className="flex items-center gap-2">
+                                <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                                  {r.team.badge ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={r.team.badge}
+                                      alt={r.team.name}
+                                      className="h-5 w-5 object-contain"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span className="font-display text-[9px] font-bold text-foreground">
+                                      {(r.team.shortName || r.team.name || "FC").slice(0, 3).toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                <span
+                                  className={[
+                                    "font-display text-foreground font-medium truncate",
+                                    tableView === "FULL" ? "inline text-[10px] sm:text-sm" : "inline",
+                                  ].join(" ")}
+                                >
+                                  {tableView === "FULL"
+                                    ? teamAbbr(r.team)
+                                    : (r.team.shortName || r.team.name)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.playedGames)}</td>
+                            {tableView === "FULL" && (
+                              <>
+                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.won)}</td>
+                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.draw)}</td>
+                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.lost)}</td>
+                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsScored)}</td>
+                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsAgainst)}</td>
+                              </>
+                            )}
+                            <td className="py-2 px-1 text-center text-foreground">{toInt(r.goalDifference)}</td>
+                            <td className="py-2 px-1 text-center font-semibold text-foreground">{toInt(r.points)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
+            </div>
+            <div className="border-t border-subtle py-1 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icons/icon-192.png"
+                alt="PL Predictions"
+                className="h-10 w-10 object-contain opacity-95"
+                loading="lazy"
+              />
             </div>
           </div>
         </div>

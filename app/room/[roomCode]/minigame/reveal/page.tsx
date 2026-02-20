@@ -368,8 +368,19 @@ export default function RevealPage() {
   if (gw == null || fixtures == null || !game) {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
-
-        <div className="text-sm text-muted">Loading reveal…</div>
+        <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Final Overview</h1>
+              <div className="font-display text-sm text-muted">
+                {roomCode} • GW {gw ?? "—"}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl p-4 bg-surface-2 border border-teal-500">
+            <div className="text-sm text-muted">Loading reveal…</div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -403,12 +414,15 @@ export default function RevealPage() {
             </div>
           </div>
 
-          <button
-            className={`text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 page-action-btn ${BTN_3D}`}
-            onClick={() => router.push(`/room/${roomCode}`)}
-          >
-            Exit
-          </button>
+          <div className="ml-auto flex gap-2 page-actions-enter">
+            <button
+              className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
+              data-action="back"
+              onClick={() => router.push(`/room/${roomCode}`)}
+            >
+              Exit
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -443,22 +457,22 @@ export default function RevealPage() {
                 <div className="h-5 sm:h-6 flex items-center justify-center">
                   {showDayHeader ? (
                     <div className="w-full flex items-center gap-2">
-                      <span className="h-px flex-1 bg-teal-500/35" />
+                      <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
                       <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
                         {dayLabel}
                       </span>
                       <span
                         className={[
-                          "h-px flex-1 bg-teal-500/35 relative",
+                          "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
                           showDayFooter
-                            ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                            ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
                             : "",
                         ].join(" ")}
                       />
                     </div>
                   ) : showDayFooter ? (
                     <div className="w-full flex items-center justify-end">
-                      <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                      <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
                     </div>
                   ) : (
                     <span aria-hidden className="invisible w-full">_</span>
@@ -484,41 +498,91 @@ export default function RevealPage() {
                   </div>
 
                   {f && (
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <div className="flex flex-col items-center text-center min-w-0">
-                        <TeamBadge
-                          name={f.home.name}
-                          shortName={f.home.shortName}
-                          badge={f.home.badge}
-                          tla={f.home.tla}
-                        />
-                        <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                          <span className="block">{teamAbbr(f.home)}</span>
+                    <>
+                      <div className="sm:hidden space-y-1">
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                          <div className="flex justify-center">
+                            <TeamBadge
+                              name={f.home.name}
+                              shortName={f.home.shortName}
+                              badge={f.home.badge}
+                              tla={f.home.tla}
+                            />
+                          </div>
+                          <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                            vs
+                          </span>
+                          <div className="flex justify-center">
+                            <TeamBadge
+                              name={f.away.name}
+                              shortName={f.away.shortName}
+                              badge={f.away.badge}
+                              tla={f.away.tla}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 justify-items-center">
+                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
+                              {teamAbbr(f.home)}
+                            </span>
+                            <PendulumName
+                              text={f.home.name}
+                              windowPx={68}
+                              className="font-display w-full text-[9px] text-muted leading-tight"
+                            />
+                          </div>
+                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
+                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
+                              {teamAbbr(f.away)}
+                            </span>
+                            <PendulumName
+                              text={f.away.name}
+                              windowPx={68}
+                              className="font-display w-full text-[9px] text-muted leading-tight"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={f.home.name}
+                            shortName={f.home.shortName}
+                            badge={f.home.badge}
+                            tla={f.home.tla}
+                          />
+                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                            {teamAbbr(f.home)}
+                          </span>
                           <PendulumName
                             text={f.home.name}
                             windowPx={null}
-                            className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                            className="font-display text-[10px] text-muted w-full"
                           />
+                        </div>
+                        <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                          vs
                         </span>
-                      </div>
-                      <div className="font-display text-xs text-muted uppercase">vs</div>
-                      <div className="flex flex-col items-center text-center min-w-0">
-                        <TeamBadge
-                          name={f.away.name}
-                          shortName={f.away.shortName}
-                          badge={f.away.badge}
-                          tla={f.away.tla}
-                        />
-                        <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                          <span className="block">{teamAbbr(f.away)}</span>
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={f.away.name}
+                            shortName={f.away.shortName}
+                            badge={f.away.badge}
+                            tla={f.away.tla}
+                          />
+                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                            {teamAbbr(f.away)}
+                          </span>
                           <PendulumName
                             text={f.away.name}
                             windowPx={null}
-                            className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                            className="font-display text-[10px] text-muted w-full"
                           />
-                        </span>
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   <div className="text-center">

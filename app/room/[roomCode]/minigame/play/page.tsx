@@ -840,17 +840,6 @@ export default function MiniGamePlayPage() {
             Waiting for <span className="font-display">{currentTurnName}</span> to pick…
           </div>
         )}
-        {!isParallelDraft && (
-          <div className="flex items-center justify-center pt-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/icons/icon-192.png"
-              alt="PL Predictions"
-              className="h-12 w-12 object-contain"
-              loading="lazy"
-            />
-          </div>
-        )}
       </div>
     </div>
   );

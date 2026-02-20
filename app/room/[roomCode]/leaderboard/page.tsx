@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { triggerTapHaptic } from "@/lib/haptics";
 import {
   collection,
   doc,
@@ -466,7 +467,10 @@ export default function LeaderboardMatrixPage() {
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">
               <button
-                onClick={() => router.push(`/room/${roomCode}`)}
+                onClick={() => {
+                  triggerTapHaptic();
+                  router.push(`/room/${roomCode}`);
+                }}
                 className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
                 data-action="back"
               >

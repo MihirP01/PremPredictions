@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../../../firebase";
+import { useAuth } from "../../../components/AuthProvider";
 
 type AccentTheme = {
   hex: string;
@@ -85,11 +86,44 @@ export default function RoomScopedLayout({
   children: React.ReactNode;
 }) {
   const params = useParams<{ roomCode: string }>();
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const roomCode = useMemo(
     () => String(params.roomCode || "").toUpperCase(),
     [params.roomCode],
   );
   const [accentKey, setAccentKey] = useState<string>("teal");
+  const redirectedRef = useRef(false);
+
+  useEffect(() => {
+    if (loading || !user || !roomCode) return;
+    const membershipRef = doc(db, "rooms", roomCode, "players", user.uid);
+    const forceToRoomGate = () => {
+      if (redirectedRef.current) return;
+      redirectedRef.current = true;
+      setDoc(
+        doc(db, "users", user.uid),
+        { currentRoomCode: null },
+        { merge: true },
+      ).catch(() => {});
+      router.replace("/room-gate?kicked=1");
+    };
+    const unsub = onSnapshot(
+      membershipRef,
+      (snap) => {
+        if (snap.exists()) {
+          redirectedRef.current = false;
+          return;
+        }
+        forceToRoomGate();
+      },
+      () => {
+        // When kicked, rules can deny read before `exists=false` is delivered.
+        forceToRoomGate();
+      },
+    );
+    return () => unsub();
+  }, [loading, user, roomCode, router]);
 
   useEffect(() => {
     if (!roomCode) return;

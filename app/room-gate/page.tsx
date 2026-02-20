@@ -1,15 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import LogoutButton from "../../components/LogoutButton";
 import {
   collection,
   doc,
   getDoc,
   getDocs,
-  runTransaction,
   setDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
@@ -26,6 +25,7 @@ type MemberRoom = { roomCode: string; role: "leader" | "member" };
 export default function RoomGatePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [displayName, setDisplayName] = useState("");
   const [currentRoomCode, setCurrentRoomCode] = useState("");
@@ -34,6 +34,7 @@ export default function RoomGatePage() {
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kicked = searchParams.get("kicked") === "1";
 
   // Load profile + joined rooms for quick switching/joining.
   useEffect(() => {
@@ -55,34 +56,72 @@ export default function RoomGatePage() {
       setCurrentRoomCode(existing);
       if (existing) setRoomCode(existing);
 
+      // Fast path for returning users: if saved room membership still exists, open it.
+      if (existing) {
+        try {
+          const existingMembership = await getDoc(
+            doc(db, "rooms", existing, "players", user.uid),
+          );
+          if (existingMembership.exists()) {
+            const role = String(existingMembership.data()?.role || "member");
+            setMemberRooms([
+              {
+                roomCode: existing,
+                role: role === "leader" ? "leader" : "member",
+              },
+            ]);
+            router.replace(`/room/${existing}`);
+            return;
+          }
+        } catch {
+          // Continue to room list lookup fallback below.
+        }
+      }
+
       setRoomsLoading(true);
-      const roomsSnap = await getDocs(collection(db, "rooms"));
-      const checks = await Promise.all(
-        roomsSnap.docs.map(async (roomDoc) => {
-          const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
-          const membershipSnap = await getDoc(membershipRef);
-          if (!membershipSnap.exists()) return null;
-          const role = String(membershipSnap.data()?.role || "member");
-          return {
-            roomCode: roomDoc.id,
-            role: role === "leader" ? "leader" : "member",
-          } satisfies MemberRoom;
-        }),
-      );
+      try {
+        const roomsSnap = await getDocs(collection(db, "rooms"));
+        const checks = await Promise.all(
+          roomsSnap.docs.map(async (roomDoc) => {
+            try {
+              const membershipRef = doc(
+                db,
+                "rooms",
+                roomDoc.id,
+                "players",
+                user.uid,
+              );
+              const membershipSnap = await getDoc(membershipRef);
+              if (!membershipSnap.exists()) return null;
+              const role = String(membershipSnap.data()?.role || "member");
+              return {
+                roomCode: roomDoc.id,
+                role: role === "leader" ? "leader" : "member",
+              } satisfies MemberRoom;
+            } catch {
+              return null;
+            }
+          }),
+        );
 
-      const joinedRooms = checks
-        .filter((r): r is MemberRoom => r !== null)
-        .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
-      setMemberRooms(joinedRooms);
-      setRoomsLoading(false);
+        const joinedRooms = checks
+          .filter((r): r is MemberRoom => r !== null)
+          .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
+        setMemberRooms(joinedRooms);
 
-      // Auto-open saved current room when still a valid joined room.
-      if (existing && joinedRooms.some((r) => r.roomCode === existing)) {
-        router.replace(`/room/${existing}`);
+        // Auto-open saved current room when still a valid joined room.
+        if (existing && joinedRooms.some((r) => r.roomCode === existing)) {
+          router.replace(`/room/${existing}`);
+        }
+      } catch {
+        // Do not hard-fail the gate if list fetch is blocked by rules.
+        setMemberRooms([]);
+      } finally {
+        setRoomsLoading(false);
       }
     })().catch(() => {
       setRoomsLoading(false);
-      setError("Failed to load room data.");
+      setError("Failed to load profile.");
     });
   }, [loading, user, router]);
 
@@ -119,27 +158,24 @@ export default function RoomGatePage() {
     setError(null);
 
     try {
-      const roomRef = doc(db, "rooms", code);
-      const roomSnap = await getDoc(roomRef);
-
-      if (!roomSnap.exists()) {
-        setError("Room not found.");
+      const password = window.prompt("Enter room password");
+      if (password === null) {
+        setBusy(false);
         return;
       }
-
-      // Add membership
-      await setDoc(doc(db, "rooms", code, "players", user.uid), {
-        displayName,
-        role: "member",
-        joinedAt: serverTimestamp(),
+      const res = await fetch("/api/room/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "join",
+          roomCode: code,
+          uid: user.uid,
+          displayName,
+          password,
+        }),
       });
-
-      // Set user's current room
-      await setDoc(
-        doc(db, "users", user.uid),
-        { displayName, currentRoomCode: code },
-        { merge: true },
-      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not join room.");
 
       router.replace(`/room/${code}`);
     } catch (e) {
@@ -166,43 +202,40 @@ export default function RoomGatePage() {
     setError(null);
 
     try {
-      // Transaction ensures uniqueness and sets leader atomically
-      await runTransaction(db, async (tx) => {
-        const roomRef = doc(db, "rooms", code);
-        const roomSnap = await tx.get(roomRef);
-
-        if (roomSnap.exists()) {
-          throw new Error("ROOM_EXISTS");
+      const password = window.prompt("Set room password (leave blank for none)");
+      if (password === null) {
+        setBusy(false);
+        return;
+      }
+      const trimmed = password.trim();
+      if (trimmed) {
+        const confirm = window.prompt("Confirm room password");
+        if (confirm === null) {
+          setBusy(false);
+          return;
         }
-
-        tx.set(roomRef, {
-          leaderUid: user.uid,
-          settings: {
-            gameModeStyle: "sprint",
-            sameResultLock: false,
-            themeAccent: "teal",
-          },
-          createdAt: serverTimestamp(),
-        });
-
-        tx.set(doc(db, "rooms", code, "players", user.uid), {
+        if (trimmed !== confirm.trim()) {
+          setError("Passwords do not match.");
+          setBusy(false);
+          return;
+        }
+      }
+      const res = await fetch("/api/room/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          roomCode: code,
+          uid: user.uid,
           displayName,
-          role: "leader",
-          joinedAt: serverTimestamp(),
-        });
-
-        tx.set(
-          doc(db, "users", user.uid),
-          { displayName, currentRoomCode: code },
-          { merge: true },
-        );
+          password: trimmed,
+        }),
       });
-
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not create room.");
       router.replace(`/room/${code}`);
     } catch (e: unknown) {
-      if (e instanceof Error && e.message === "ROOM_EXISTS")
-        setError("Room code already used.");
-      else setError("Could not create room.");
+      setError(e instanceof Error ? e.message : "Could not create room.");
     } finally {
       setBusy(false);
     }
@@ -216,6 +249,11 @@ export default function RoomGatePage() {
         <h1 className="text-2xl font-semibold text-foreground">
           Join or Create a Room
         </h1>
+        {kicked && (
+          <div className="text-sm rounded-lg px-3 py-2 bg-surface-2 border border-teal-500 text-muted">
+            You were removed from that room by the leader.
+          </div>
+        )}
 
         <div className="space-y-2">
           <div className="text-sm text-muted">Your joined rooms</div>
@@ -281,6 +319,10 @@ export default function RoomGatePage() {
           >
             Create room
           </button>
+        </div>
+
+        <div className="pt-1">
+          <LogoutButton />
         </div>
       </div>
     </div>

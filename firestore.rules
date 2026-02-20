@@ -2,79 +2,66 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function uid() {
-      return request.auth.uid;
-    }
-
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function isSelf(playerUid) { return signedIn() && playerUid == uid(); }
     function isMember(roomCode) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/rooms/$(roomCode)/players/$(uid()));
+      return signedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomCode)/players/$(uid()));
     }
-
     function isLeader(roomCode) {
-      return signedIn()
-        && get(/databases/$(database)/documents/rooms/$(roomCode)).data.leaderUid == uid();
+      return signedIn() &&
+        get(/databases/$(database)/documents/rooms/$(roomCode)).data.leaderUid == uid();
     }
 
-    // Users: only self (used by login + room-gate)
+    // Users: only self
     match /users/{userId} {
       allow read, create, update: if signedIn() && userId == uid();
       allow delete: if false;
     }
 
-    // Rooms
     match /rooms/{roomCode} {
-      // Needed so signed-in users can check room existence in room-gate
+      // Signed-in users can discover/open rooms; membership controls all sub-data.
       allow read: if signedIn();
+      // Room creation + settings/secure writes are server-only (Admin SDK routes).
+      allow create, update, delete: if false;
 
-      // Room creation from room-gate: creator must be leaderUid
-      allow create: if signedIn() && request.resource.data.leaderUid == uid();
-
-      // Lock direct room doc mutations from clients
-      allow update, delete: if false;
-
-      // Room players
-      match /players/{playerUid} {
-        // Only room members can see member list
-        allow read: if isMember(roomCode);
-
-        // Join/update own membership doc (room-gate flow)
-        allow create, update: if signedIn() && playerUid == uid();
-
-        // Allow self-leave OR leader kick (not self)
-        allow delete: if (signedIn() && playerUid == uid())
-                      || (isLeader(roomCode) && playerUid != uid());
+      // Explicitly lock private security material.
+      match /private/{docId} {
+        allow read, write: if false;
       }
 
-      // Game root docs
+      match /players/{playerUid} {
+        // Members can read full list; each user can also read their own membership doc.
+        allow read: if isMember(roomCode) || isSelf(playerUid);
+        // Joining is server-only to enforce password checks.
+        allow create: if false;
+        // Allow own profile updates (nickname/displayName) only.
+        allow update: if isSelf(playerUid);
+        // Self leave OR leader kick (not self).
+        allow delete: if isSelf(playerUid) || (isLeader(roomCode) && playerUid != uid());
+      }
+
+      // Legacy game root (kept read-only/member-aware for compatibility).
       match /games/{gameId} {
         allow read: if isMember(roomCode);
-        // Created/updated by Admin SDK API routes only
         allow create, update, delete: if false;
 
-        // Minigame lobby presence (client heartbeat)
         match /lobby/{playerUid} {
           allow read: if isMember(roomCode);
-          allow create, update, delete: if signedIn() && playerUid == uid();
+          allow create, update, delete: if isSelf(playerUid);
         }
-
-        // Picks + golden are server-authoritative via API (Admin SDK)
         match /picks/{docId} {
           allow read: if isMember(roomCode);
           allow write: if false;
         }
-
         match /golden/{playerUid} {
           allow read: if isMember(roomCode);
           allow write: if false;
         }
       }
 
-      // Season-scoped game + score data (current + historical seasons)
+      // Season-scoped data.
       match /seasons/{seasonKey} {
         allow read: if isMember(roomCode);
         allow write: if false;
@@ -85,14 +72,12 @@ service cloud.firestore {
 
           match /lobby/{playerUid} {
             allow read: if isMember(roomCode);
-            allow create, update, delete: if signedIn() && playerUid == uid();
+            allow create, update, delete: if isSelf(playerUid);
           }
-
           match /picks/{docId} {
             allow read: if isMember(roomCode);
             allow write: if false;
           }
-
           match /golden/{playerUid} {
             allow read: if isMember(roomCode);
             allow write: if false;
@@ -102,7 +87,6 @@ service cloud.firestore {
         match /scores/{gwId} {
           allow read: if isMember(roomCode);
           allow write: if false;
-
           match /users/{playerUid} {
             allow read: if isMember(roomCode);
             allow write: if false;
@@ -110,18 +94,16 @@ service cloud.firestore {
         }
       }
 
-      // Saved computed scores used by leaderboard page
+      // Legacy top-level score docs.
       match /scores/{gwId} {
         allow read: if isMember(roomCode);
         allow write: if false;
-
         match /users/{playerUid} {
           allow read: if isMember(roomCode);
           allow write: if false;
         }
       }
 
-      // Keep predictions locked unless you open this feature
       match /predictions/{gw}/items/{docId} {
         allow read: if isMember(roomCode);
         allow write: if false;

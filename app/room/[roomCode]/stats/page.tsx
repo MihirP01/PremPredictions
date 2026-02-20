@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { triggerTapHaptic } from "@/lib/haptics";
 import { collection, doc, getDoc, getDocs, onSnapshot, query } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
@@ -369,12 +370,18 @@ export default function RoomStatsPage() {
                 {roomCode} • {seasonLabel(seasonKey || "----")}
               </div>
             </div>
-            <button
-              onClick={() => router.push(`/room/${roomCode}`)}
-              className="h-10 text-sm rounded-lg px-4 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-            >
-              Back
-            </button>
+            <div className="ml-auto flex gap-2 page-actions-enter">
+              <button
+                onClick={() => {
+                  triggerTapHaptic();
+                  router.push(`/room/${roomCode}`);
+                }}
+                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
+                data-action="back"
+              >
+                Back
+              </button>
+            </div>
           </div>
           {!!seasonOptions.length && (
             <div className="w-[132px] sm:w-[140px] relative">
@@ -503,7 +510,7 @@ export default function RoomStatsPage() {
           </>
         )}
 
-        <div className="text-xs text-muted">
+        <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
           Last updated: {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
         </div>
       </div>

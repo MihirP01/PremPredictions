@@ -15,7 +15,6 @@ import {
   getDocs,
   onSnapshot,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
@@ -38,6 +37,7 @@ type RoomDoc = {
     sameResultLock?: boolean;
     themeAccent?: string;
     gameModeStyle?: "round_robin" | "sprint" | "captain";
+    hasPassword?: boolean;
   };
 };
 
@@ -78,13 +78,23 @@ export default function RoomPage() {
   const [switcherBusy, setSwitcherBusy] = useState(false);
   const [switcherError, setSwitcherError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [kickBusy, setKickBusy] = useState(false);
+  const [kickTarget, setKickTarget] = useState<Player | null>(null);
+  const [showKickControls, setShowKickControls] = useState(false);
   const [sameResultLock, setSameResultLock] = useState(true);
   const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
     "round_robin",
   );
   const [themeAccent, setThemeAccent] = useState<string>("teal");
+  const [hasPassword, setHasPassword] = useState(false);
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
   const [roomRulesOpen, setRoomRulesOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [currentPasswordDraft, setCurrentPasswordDraft] = useState("");
+  const [newPasswordDraft, setNewPasswordDraft] = useState("");
+  const [confirmPasswordDraft, setConfirmPasswordDraft] = useState("");
   const [nicknameExpanded, setNicknameExpanded] = useState(false);
   const [leaderToolsExpanded, setLeaderToolsExpanded] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -120,6 +130,7 @@ export default function RoomPage() {
         style === "sprint" ? false : style === "captain" ? true : sameResultLockValue,
       );
       setThemeAccent(String(roomData?.settings?.themeAccent || "teal"));
+      setHasPassword(Boolean(roomData?.settings?.hasPassword));
 
       // Guard: user must already be a room member (set via room-gate flow)
       const memberSnap = await getDoc(
@@ -222,14 +233,19 @@ export default function RoomPage() {
       const roomsSnap = await getDocs(collection(db, "rooms"));
       const checks = await Promise.all(
         roomsSnap.docs.map(async (roomDoc) => {
-          const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
-          const membershipSnap = await getDoc(membershipRef);
-          if (!membershipSnap.exists()) return null;
-          const data = membershipSnap.data() as { role?: "leader" | "member" };
-          return {
-            roomCode: roomDoc.id,
-            role: data.role === "leader" ? "leader" : "member",
-          } satisfies MemberRoom;
+          try {
+            const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
+            const membershipSnap = await getDoc(membershipRef);
+            if (!membershipSnap.exists()) return null;
+            const data = membershipSnap.data() as { role?: "leader" | "member" };
+            return {
+              roomCode: roomDoc.id,
+              role: data.role === "leader" ? "leader" : "member",
+            } satisfies MemberRoom;
+          } catch {
+            // Not a member or no read access to this room's players doc.
+            return null;
+          }
         }),
       );
       const rooms: MemberRoom[] = checks
@@ -275,24 +291,21 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      const roomRef = doc(db, "rooms", code);
-      const roomSnap = await getDoc(roomRef);
-      if (!roomSnap.exists()) throw new Error("Room not found.");
-
-      await setDoc(
-        doc(db, "rooms", code, "players", user.uid),
-        {
+      const password = window.prompt("Enter room password");
+      if (password === null) return;
+      const res = await fetch("/api/room/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "join",
+          roomCode: code,
+          uid: user.uid,
           displayName: myDisplayName,
-          role: "member",
-          joinedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      await setDoc(
-        doc(db, "users", user.uid),
-        { currentRoomCode: code, displayName: myDisplayName },
-        { merge: true },
-      );
+          password,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to join room.");
       setRoomSwitcherOpen(false);
       router.replace(`/room/${code}`);
     } catch (e) {
@@ -313,31 +326,29 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      await runTransaction(db, async (tx) => {
-        const roomRef = doc(db, "rooms", code);
-        const roomSnap = await tx.get(roomRef);
-        if (roomSnap.exists()) throw new Error("Room code already used.");
-
-        tx.set(roomRef, {
-          leaderUid: user.uid,
-          settings: {
-            gameModeStyle: "sprint",
-            sameResultLock: false,
-            themeAccent: "teal",
-          },
-          createdAt: serverTimestamp(),
-        });
-        tx.set(doc(db, "rooms", code, "players", user.uid), {
+      const password = window.prompt("Set room password (leave blank for none)");
+      if (password === null) return;
+      const trimmed = password.trim();
+      if (trimmed) {
+        const confirm = window.prompt("Confirm room password");
+        if (confirm === null) return;
+        if (trimmed !== confirm.trim()) {
+          throw new Error("Passwords do not match.");
+        }
+      }
+      const res = await fetch("/api/room/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          roomCode: code,
+          uid: user.uid,
           displayName: myDisplayName,
-          role: "leader",
-          joinedAt: serverTimestamp(),
-        });
-        tx.set(
-          doc(db, "users", user.uid),
-          { currentRoomCode: code, displayName: myDisplayName },
-          { merge: true },
-        );
+          password: trimmed,
+        }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to create room.");
       setRoomSwitcherOpen(false);
       router.replace(`/room/${code}`);
     } catch (e) {
@@ -415,6 +426,55 @@ export default function RoomPage() {
       setSwitcherError(msg);
     } finally {
       setDeleteBusy(false);
+    }
+  }
+
+  async function confirmKickPlayer() {
+    if (!user || !isLeader || !kickTarget) return;
+    setKickBusy(true);
+    setError(null);
+    try {
+      await deleteDoc(doc(db, "rooms", roomCode, "players", kickTarget.uid));
+      setKickTarget(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove player.");
+    } finally {
+      setKickBusy(false);
+    }
+  }
+
+  function openPasswordModal() {
+    setPasswordError(null);
+    setCurrentPasswordDraft("");
+    setNewPasswordDraft("");
+    setConfirmPasswordDraft("");
+    setPasswordModalOpen(true);
+  }
+
+  async function saveRoomPassword() {
+    if (!user || !isLeader) return;
+    setPasswordBusy(true);
+    setPasswordError(null);
+    try {
+      const res = await fetch("/api/room/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          currentPassword: currentPasswordDraft,
+          newPassword: newPasswordDraft,
+          confirmPassword: confirmPasswordDraft,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to save password.");
+      setHasPassword(true);
+      setPasswordModalOpen(false);
+    } catch (e) {
+      setPasswordError(e instanceof Error ? e.message : "Failed to save password.");
+    } finally {
+      setPasswordBusy(false);
     }
   }
 
@@ -706,30 +766,87 @@ export default function RoomPage() {
         {error && <div className="text-sm text-danger">{error}</div>}
 
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-          <div className="font-semibold mb-2 text-foreground">Players</div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="font-semibold text-foreground">Players</div>
+            {isLeader && (
+              <button
+                onClick={() => setShowKickControls((v) => !v)}
+                className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+              >
+                {showKickControls ? "Hide Kick" : "Show Kick"}
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
             {sortedPlayers.map((p) => (
               <div
                 key={p.uid}
-                className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
+                className="min-h-10 flex items-center justify-between border-b border-subtle last:border-0 py-2"
               >
-                <div className="font-medium text-foreground">
-                  <span className="font-display">
+                <div className="min-w-0 flex-1 font-medium text-foreground">
+                  <span className="font-display block truncate">
                     {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
                   </span>
                 </div>
-
-                {p.role === "leader" && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
-                    Leader
-                  </span>
-                )}
-
+                <div className="ml-2 w-[84px] h-6 flex items-center justify-end">
+                  {p.role === "leader" ? (
+                    <span className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
+                      Leader
+                    </span>
+                  ) : isLeader && showKickControls && p.uid !== user?.uid ? (
+                    <button
+                      onClick={() => setKickTarget(p)}
+                      className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-danger hover:bg-surface-2"
+                    >
+                      Kick
+                    </button>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="invisible font-display text-xs px-2 py-1 rounded-full border"
+                    >
+                      Kick
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
+      {kickTarget && (
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
+            <div className="text-lg font-semibold text-foreground">Remove Player</div>
+            <div className="text-sm text-muted">
+              Remove{" "}
+              <span className="font-display text-foreground">
+                {kickTarget.nickName
+                  ? `(${kickTarget.nickName}) ${kickTarget.displayName}`
+                  : kickTarget.displayName}
+              </span>{" "}
+              from room{" "}
+              <span className="font-display text-foreground">{roomCode}</span>?
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setKickTarget(null)}
+                disabled={kickBusy}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmKickPlayer}
+                disabled={kickBusy}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+              >
+                {kickBusy ? "Removing..." : "Confirm Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {roomSwitcherOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
@@ -842,6 +959,13 @@ export default function RoomPage() {
                 ×
               </button>
             </div>
+            <button
+              onClick={openPasswordModal}
+              disabled={roomSettingsBusy}
+              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+            >
+              {hasPassword ? "Change Password" : "Set Password"}
+            </button>
             <div className="space-y-1">
               <div className="text-xs text-muted">Theme Accent</div>
               <div className="relative">
@@ -931,6 +1055,63 @@ export default function RoomPage() {
             <div className="text-xs text-muted">
               Round-Robin: toggle Result Lock as needed. Sprint: Result Lock is forced OFF. Captain: Result Lock is forced ON.
             </div>
+          </div>
+        </div>
+      )}
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold text-foreground">
+                {hasPassword ? "Change Room Password" : "Set Room Password"}
+              </div>
+              <button
+                onClick={() => setPasswordModalOpen(false)}
+                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
+                aria-label="Close password settings"
+              >
+                ×
+              </button>
+            </div>
+            {hasPassword && (
+              <div className="space-y-1">
+                <label className="text-xs text-muted">Current Password</label>
+                <input
+                  type="password"
+                  value={currentPasswordDraft}
+                  onChange={(e) => setCurrentPasswordDraft(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+                />
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs text-muted">New Password</label>
+              <input
+                type="password"
+                value={newPasswordDraft}
+                onChange={(e) => setNewPasswordDraft(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted">Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPasswordDraft}
+                onChange={(e) => setConfirmPasswordDraft(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+              />
+            </div>
+            {passwordError && (
+              <div className="text-sm text-danger">{passwordError}</div>
+            )}
+            <button
+              onClick={saveRoomPassword}
+              disabled={passwordBusy}
+              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+            >
+              {passwordBusy ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
+            </button>
           </div>
         </div>
       )}

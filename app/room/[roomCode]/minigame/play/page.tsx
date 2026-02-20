@@ -17,6 +17,8 @@ type GameDoc = {
   totalTurns: number;
   players: string[];
   draftMode?: "turn" | "parallel";
+  gameModeStyle?: "round_robin" | "sprint" | "captain";
+  currentFixtureId?: number | null;
   draftReadyByUid?: Record<string, boolean>;
   sameResultLock?: boolean;
   lockAt?: unknown;
@@ -112,7 +114,7 @@ export default function MiniGamePlayPage() {
 
   const [allPicks, setAllPicks] = useState<PickDoc[]>([]);
   const [takenScores, setTakenScores] = useState<string[]>([]);
-  const [selectedFixtureId, setSelectedFixtureId] = useState<number | null>(null);
+  const [captainFixtureChoice, setCaptainFixtureChoice] = useState<number | null>(null);
   const [displayNamesByUid, setDisplayNamesByUid] = useState<Record<string, string>>(
     {},
   );
@@ -204,6 +206,11 @@ export default function MiniGamePlayPage() {
     );
   }, [roomCode]);
 
+  const isParallelDraft =
+    game?.draftMode === "parallel" ||
+    (game?.gameModeStyle === "sprint" && game?.draftMode !== "turn");
+  const isCaptainMode = !isParallelDraft && game?.gameModeStyle === "captain";
+
   const current = useMemo(() => {
     if (!game) return null;
     const order = game.order || [];
@@ -218,7 +225,14 @@ export default function MiniGamePlayPage() {
     const turnInFixture = turn % P;
     const rotatedIndex = (turnInFixture + fixtureIndex) % P;
     const uidTurn = order[rotatedIndex];
-    const fixtureId = fixtureIds[fixtureIndex];
+    let fixtureId: number | null = fixtureIds[fixtureIndex];
+    if (isCaptainMode) {
+      const stored = Number(game.currentFixtureId);
+      fixtureId =
+        Number.isFinite(stored) && fixtureIds.includes(stored)
+          ? stored
+          : null;
+    }
 
     return {
       uidTurn,
@@ -228,7 +242,7 @@ export default function MiniGamePlayPage() {
       rotatedIndex,
       turnInFixture,
     };
-  }, [game]);
+  }, [game, isCaptainMode]);
 
   const amITurn = !!user && !!current && current.uidTurn === user.uid;
 
@@ -273,8 +287,6 @@ export default function MiniGamePlayPage() {
     );
   }, [roomCode]);
 
-  const isParallelDraft = game?.sameResultLock === false;
-
   const myPickedFixtureIds = useMemo(() => {
     if (!user) return new Set<number>();
     const mine = allPicks.filter((p) => p.uid === user.uid);
@@ -284,40 +296,78 @@ export default function MiniGamePlayPage() {
         .filter((id) => Number.isFinite(id)),
     );
   }, [allPicks, user]);
-
-  useEffect(() => {
-    if (!isParallelDraft) return;
-    const fixtureIds = game?.fixtureIds ?? [];
-    if (!fixtureIds.length) return;
-    if (
-      selectedFixtureId != null &&
-      fixtureIds.includes(selectedFixtureId) &&
-      !myPickedFixtureIds.has(selectedFixtureId)
-    ) {
-      return;
+  const myPickByFixture = useMemo(() => {
+    const m = new Map<number, string>();
+    if (!user) return m;
+    for (const p of allPicks) {
+      if (p.uid !== user.uid) continue;
+      const fid = Number(p.fixtureId);
+      const sc = String(p.score || "").trim();
+      if (Number.isFinite(fid) && sc) m.set(fid, sc);
     }
-    const firstOpen = fixtureIds.find((id) => !myPickedFixtureIds.has(id)) ?? fixtureIds[0];
-    setSelectedFixtureId(firstOpen ?? null);
-  }, [isParallelDraft, game?.fixtureIds, myPickedFixtureIds, selectedFixtureId]);
+    return m;
+  }, [allPicks, user]);
+  const latestLockedPick = useMemo(() => {
+    const fixtureIds = game?.fixtureIds ?? [];
+    for (let i = fixtureIds.length - 1; i >= 0; i -= 1) {
+      const fid = fixtureIds[i];
+      const sc = myPickByFixture.get(fid);
+      if (sc) return { fixtureId: fid, score: sc };
+    }
+    return null;
+  }, [game?.fixtureIds, myPickByFixture]);
+
+  const parallelActiveFixtureId = useMemo(() => {
+    const fixtureIds = game?.fixtureIds ?? [];
+    if (!fixtureIds.length) return null;
+    const idx = Number(game?.currentTurn ?? 0);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= fixtureIds.length) return null;
+    return fixtureIds[idx];
+  }, [game?.fixtureIds, game?.currentTurn]);
 
   const activeFixtureId = isParallelDraft
-    ? selectedFixtureId
+    ? parallelActiveFixtureId
     : current?.fixtureId;
+  const remainingCaptainFixtureIds = useMemo(() => {
+    if (!isCaptainMode) return [] as number[];
+    const fixtureIds = game?.fixtureIds ?? [];
+    const usedFixtureIds = new Set(
+      allPicks
+        .map((p) => Number(p.fixtureId))
+        .filter((id) => Number.isFinite(id)),
+    );
+    return fixtureIds.filter((fid) => !usedFixtureIds.has(fid));
+  }, [isCaptainMode, game?.fixtureIds, allPicks]);
+  const captainTurnNeedsFixtureChoice =
+    isCaptainMode && !!amITurn && current?.turnInFixture === 0 && !activeFixtureId;
+  const effectiveFixtureId =
+    captainTurnNeedsFixtureChoice ? captainFixtureChoice : activeFixtureId;
+
+  useEffect(() => {
+    if (!captainTurnNeedsFixtureChoice) {
+      setCaptainFixtureChoice(null);
+      return;
+    }
+    setCaptainFixtureChoice((prev) => {
+      if (prev != null && remainingCaptainFixtureIds.includes(prev)) return prev;
+      return remainingCaptainFixtureIds[0] ?? null;
+    });
+  }, [captainTurnNeedsFixtureChoice, remainingCaptainFixtureIds]);
 
   useEffect(() => {
     const scores = allPicks
-      .filter((p) => Number(p.fixtureId) === activeFixtureId)
+      .filter((p) => Number(p.fixtureId) === effectiveFixtureId)
       .map((p) => String(p.score || "").trim())
       .filter(Boolean);
     setTakenScores(scores);
-  }, [allPicks, activeFixtureId]);
+  }, [allPicks, effectiveFixtureId]);
 
   useEffect(() => {
     // reset inputs when fixture changes
     setHomeScore("");
     setAwayScore("");
     setErr(null);
-  }, [activeFixtureId]);
+  }, [effectiveFixtureId]);
 
   if (gw == null || fixtures == null) {
     return (
@@ -350,7 +400,7 @@ export default function MiniGamePlayPage() {
     return null;
   }
 
-  const fixture = fixtures.find((f) => f.fixtureId === activeFixtureId);
+  const fixture = fixtures.find((f) => f.fixtureId === effectiveFixtureId);
   const gameLockAtMs = coerceMillis(game?.lockAt);
   const fallbackLockAtMs = fixtures.length
     ? fixtures
@@ -366,7 +416,7 @@ export default function MiniGamePlayPage() {
   const submitPick = async () => {
     if (!user) return;
     if (!isParallelDraft && !current) return;
-    if (activeFixtureId == null) {
+    if (effectiveFixtureId == null) {
       setErr("Select a fixture first.");
       return;
     }
@@ -379,7 +429,7 @@ export default function MiniGamePlayPage() {
       return;
     }
     const score = `${homeScore}-${awayScore}`;
-    if (isParallelDraft && myPickedFixtureIds.has(activeFixtureId)) {
+    if (isParallelDraft && myPickedFixtureIds.has(effectiveFixtureId)) {
       setErr("You already picked this fixture.");
       return;
     }
@@ -395,18 +445,12 @@ export default function MiniGamePlayPage() {
           gw,
           uid: user.uid,
           score,
-          fixtureId: activeFixtureId,
+          fixtureId: effectiveFixtureId,
           seasonKey,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Pick failed");
-      if (isParallelDraft && game?.fixtureIds?.length) {
-        const nextOpen = game.fixtureIds.find(
-          (id) => id !== activeFixtureId && !myPickedFixtureIds.has(id),
-        );
-        if (nextOpen != null) setSelectedFixtureId(nextOpen);
-      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Pick failed");
     } finally {
@@ -416,14 +460,36 @@ export default function MiniGamePlayPage() {
 
   const totalTurns = Math.max(Number(game.totalTurns ?? 0), 1);
   const turnNumber = Math.min(totalTurns, Number(game.currentTurn ?? 0) + 1);
+  const fixtureTurnNumber = Math.max(1, Number(current?.fixtureIndex ?? 0) + 1);
+  const fixtureTurnTotal = Math.max(1, game.fixtureIds?.length ?? 0);
+  const playerTurnNumber = Math.max(1, Number(current?.turnInFixture ?? 0) + 1);
+  const playerTurnTotal = Math.max(1, game.order?.length ?? 0);
+  const captainIsChoosingFixture = isCaptainMode && !activeFixtureId;
   const currentTurnName = current?.uidTurn
     ? displayNamesByUid[current.uidTurn] || current.uidTurn.slice(0, 6)
     : "current player";
+  const captainUid =
+    !isParallelDraft && current && game.order?.length
+      ? game.order[current.fixtureIndex % game.order.length]
+      : null;
+  const captainName = captainUid
+    ? displayNamesByUid[captainUid] || captainUid.slice(0, 6)
+    : null;
   const playersCount = game.players?.length ?? 0;
   const readyMap = game.draftReadyByUid ?? {};
   const lockedInCount = Object.values(readyMap).filter(Boolean).length;
-  const myLockedIn = !!(user && game.draftReadyByUid?.[user.uid]);
+  const myLockedIn = isParallelDraft
+    ? !!(user && game.draftReadyByUid?.[user.uid])
+    : !!(user && game.draftReadyByUid?.[user.uid]);
+  const playersLeftToLock = Math.max(playersCount - lockedInCount, 0);
+  const lockedProgressPct =
+    playersCount > 0 ? Math.round((lockedInCount / playersCount) * 100) : 0;
   const isLeader = !!user && !!leaderUid && user.uid === leaderUid;
+  const sprintTotalTurns = game.fixtureIds?.length ?? 0;
+  const sprintTurnNumber = Math.max(
+    1,
+    Math.min(Math.max(sprintTotalTurns, 1), Number(game.currentTurn ?? 0) + 1),
+  );
 
   const stopPredictions = async () => {
     if (!user || !isLeader || gw == null || !seasonKey) return;
@@ -464,23 +530,53 @@ export default function MiniGamePlayPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-ui text-2xl font-semibold text-foreground">
-              {isParallelDraft ? "Sprint" : "Round-Robin"}
+              {isParallelDraft
+                ? "Sprint"
+                : game.gameModeStyle === "captain"
+                  ? "Captain"
+                  : "Round-Robin"}
             </h1>
             <div className="font-display text-sm text-muted">
               Room {roomCode} • GW {gw}
             </div>
           </div>
-          {!isParallelDraft && (
-            <div className="text-right -mt-1">
+          <div className="text-right -mt-1">
+            {isParallelDraft ? (
+              <>
+                <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                  Turn {sprintTurnNumber}
+                </div>
+                <div className="font-display text-sm tracking-wide text-muted">
+                  Out of {Math.max(sprintTotalTurns, 1)}
+                </div>
+              </>
+            ) : isCaptainMode ? (
+              <>
+                <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                  Turn {captainIsChoosingFixture ? fixtureTurnNumber : playerTurnNumber}
+                </div>
+                <div className="font-display text-sm tracking-wide text-muted">
+                  Out of {captainIsChoosingFixture ? fixtureTurnTotal : playerTurnTotal}
+                </div>
+              </>
+            ) : (
+              <>
               <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
                 Turn {turnNumber}
               </div>
               <div className="font-display text-sm tracking-wide text-muted">
                 Out of {totalTurns}
               </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </div>
+        {!isParallelDraft && game.gameModeStyle === "captain" && captainName && (
+          <div className="border border-teal-500 rounded-xl p-3 bg-surface-2 text-center">
+            <span className="text-xs text-muted uppercase tracking-wide">Captain</span>{" "}
+            <span className="font-display font-semibold text-foreground">{captainName}</span>
+          </div>
+        )}
         {isLeader && game.state === "DRAFT" && (
           <button
             onClick={stopPredictions}
@@ -490,45 +586,70 @@ export default function MiniGamePlayPage() {
             {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
           </button>
         )}
-        {isParallelDraft ? (
-          <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
-            <div className="text-right sm:text-left">
-              <div className="text-base font-semibold text-foreground">All players pick together</div>
-              <div className="text-xs text-muted uppercase tracking-wide">
-                Locked in {lockedInCount}/{playersCount}
-              </div>
-              <div className="text-xs text-muted uppercase tracking-wide">
-                Your picks {myPickedFixtureIds.size}/{game.fixtureIds?.length ?? 0}
-              </div>
-            </div>
-          </div>
-        ) : null}
         {/* fixture */}
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-          {isParallelDraft && (
-            <div className="mb-3">
-              <label className="sr-only" htmlFor="parallel-fixture-select">
-                Select fixture
-              </label>
-              <select
-                id="parallel-fixture-select"
-                value={activeFixtureId ?? ""}
-                onChange={(e) => setSelectedFixtureId(Number(e.target.value))}
-                className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-3 focus:outline-none focus:ring-2 focus:ring-accent"
-              >
-                {(game.fixtureIds ?? []).map((fid) => {
+          {captainTurnNeedsFixtureChoice && (
+            <div className="mb-3 space-y-2">
+              <div className="text-xs text-muted text-center">Captain: choose fixture</div>
+              <div className="grid grid-cols-2 gap-2">
+                {remainingCaptainFixtureIds.map((fid) => {
                   const f = fixtures.find((x) => x.fixtureId === fid);
-                  const picked = myPickedFixtureIds.has(fid);
-                  const label = f
-                    ? `${f.home.shortName || f.home.name} vs ${f.away.shortName || f.away.name}`
-                    : `Fixture ${fid}`;
+                  const isSelected = captainFixtureChoice === fid;
+                  const kickoffDate = f ? fmtKickoffDateWithOrdinal(f.kickoff) : null;
+                  const kickoffTime = f ? fmtKickoffTime(f.kickoff) : "";
                   return (
-                    <option key={fid} value={fid}>
-                      {picked ? "✓ " : ""}{label}
-                    </option>
+                    <button
+                      key={fid}
+                      type="button"
+                      onClick={() => setCaptainFixtureChoice(fid)}
+                      className={[
+                        "rounded-lg border p-2 text-left transition-colors",
+                        isSelected
+                          ? "bg-accent text-accent-foreground border-teal-400"
+                          : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                      ].join(" ")}
+                    >
+                      <div className="font-display text-[10px] mb-1">
+                        {kickoffDate ? (
+                          <>
+                            {kickoffDate.dayNum}
+                            <sup className="text-[8px] ml-[1px]">{kickoffDate.suffix}</sup>{" "}
+                            {kickoffDate.monthYear}
+                          </>
+                        ) : (
+                          `Fixture ${fid}`
+                        )}
+                      </div>
+                      <div className="font-display text-[10px] mb-2">{kickoffTime}</div>
+                      {f ? (
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={f.home.name}
+                              shortName={f.home.shortName}
+                              badge={f.home.badge}
+                            />
+                            <span className="font-display mt-1 text-[10px] font-semibold truncate w-full">
+                              {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                            </span>
+                          </div>
+                          <span className="font-display text-[9px] uppercase">vs</span>
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={f.away.name}
+                              shortName={f.away.shortName}
+                              badge={f.away.badge}
+                            />
+                            <span className="font-display mt-1 text-[10px] font-semibold truncate w-full">
+                              {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </button>
                   );
                 })}
-              </select>
+              </div>
             </div>
           )}
           {fixture && (
@@ -590,26 +711,28 @@ export default function MiniGamePlayPage() {
             </div>
           )}
 
-          <div className="mt-3 text-sm text-center">
-            <div className="font-semibold mb-2 text-foreground">
-              Taken scores
-            </div>
-
-            {takenScores.length === 0 ? (
-              <div className="text-muted">None yet</div>
-            ) : (
-              <div className="flex flex-wrap justify-center gap-2">
-                {takenScores.map((s, idx) => (
-                  <span
-                    key={`${s}-${idx}`}
-                    className="text-xs bg-surface border border-teal-500 rounded-full px-2 py-1 text-foreground"
-                  >
-                    {s.replace("-", "–")}
-                  </span>
-                ))}
+          {!isParallelDraft && (
+            <div className="mt-3 text-sm text-center">
+              <div className="font-semibold mb-2 text-foreground">
+                Taken scores
               </div>
-            )}
-          </div>
+
+              {takenScores.length === 0 ? (
+                <div className="text-muted">None yet</div>
+              ) : (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {takenScores.map((s, idx) => (
+                    <span
+                      key={`${s}-${idx}`}
+                      className="text-xs bg-surface border border-teal-500 rounded-full px-2 py-1 text-foreground"
+                    >
+                      {s.replace("-", "–")}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {err && (
@@ -621,18 +744,29 @@ export default function MiniGamePlayPage() {
         {/* pick action */}
         {isParallelDraft ? (
           myLockedIn ? (
-            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-              <div className="font-semibold text-foreground">You are locked in.</div>
-              <div className="text-sm text-muted mt-1">
-                Waiting for others... {lockedInCount}/{playersCount} locked.
+            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3 text-center">
+              <div className="font-semibold text-foreground">Locked In</div>
+              {latestLockedPick && (
+                <div className="text-sm text-muted">
+                  Your pick:{" "}
+                  <span className="font-display text-foreground font-semibold tabular-nums">
+                    {latestLockedPick.score.replace("-", "–")}
+                  </span>
+                </div>
+              )}
+              <div className="w-full h-2 rounded-full border border-teal-500 bg-surface overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-all duration-500"
+                  style={{ width: `${lockedProgressPct}%` }}
+                />
+              </div>
+              <div className="text-sm text-muted">
+                Waiting for others... {playersLeftToLock} left.
               </div>
             </div>
           ) : (
             <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
               <div className="font-semibold text-foreground">Submit your pick</div>
-              <div className="text-xs text-muted">
-                Progress: {myPickedFixtureIds.size}/{game.fixtureIds?.length ?? 0} fixtures
-              </div>
               <div className="flex items-center justify-center gap-3">
                 <input
                   value={homeScore}
@@ -640,7 +774,7 @@ export default function MiniGamePlayPage() {
                     onlyDigitsOrEmpty(e.target.value) &&
                     setHomeScore(e.target.value)
                   }
-                  className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="0"
                   inputMode="numeric"
                 />
@@ -651,13 +785,13 @@ export default function MiniGamePlayPage() {
                     onlyDigitsOrEmpty(e.target.value) &&
                     setAwayScore(e.target.value)
                   }
-                  className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                  className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                   placeholder="0"
                   inputMode="numeric"
                 />
               </div>
               <button
-                disabled={submitting || isLocked || activeFixtureId == null}
+                disabled={submitting || isLocked || effectiveFixtureId == null}
                 onClick={submitPick}
                 className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
               >
@@ -667,7 +801,7 @@ export default function MiniGamePlayPage() {
           )
         ) : amITurn ? (
           <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
-            <div className="font-semibold text-foreground">Your turn</div>
+            <div className="font-semibold text-foreground text-center">Your turn</div>
 
             <div className="flex items-center justify-center gap-3">
               <input
@@ -676,7 +810,7 @@ export default function MiniGamePlayPage() {
                   onlyDigitsOrEmpty(e.target.value) &&
                   setHomeScore(e.target.value)
                 }
-                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="0"
                 inputMode="numeric"
               />
@@ -687,14 +821,14 @@ export default function MiniGamePlayPage() {
                   onlyDigitsOrEmpty(e.target.value) &&
                   setAwayScore(e.target.value)
                 }
-                className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
                 placeholder="0"
                 inputMode="numeric"
               />
             </div>
 
             <button
-              disabled={submitting || isLocked}
+              disabled={submitting || isLocked || effectiveFixtureId == null}
               onClick={submitPick}
               className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
             >

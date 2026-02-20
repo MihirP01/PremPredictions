@@ -528,14 +528,11 @@ export default function FixturesPage() {
     }
   }
 
-  function toggleCompactMode() {
-    setCompactMode((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("fixturesCompactMode", next ? "1" : "0");
-      }
-      return next;
-    });
+  function setCompactModeValue(next: boolean) {
+    setCompactMode(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("fixturesCompactMode", next ? "1" : "0");
+    }
   }
 
   function toggleFixtureExpanded(fixtureId: number) {
@@ -742,40 +739,47 @@ export default function FixturesPage() {
         <div className="rounded-xl p-3 bg-surface-2 border border-teal-500">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-xs font-semibold text-foreground">Prediction Key</div>
-            <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
-              <span>Compact</span>
+            <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden min-w-[152px]">
+              <span
+                aria-hidden
+                className={[
+                  "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
+                  compactMode ? "left-[calc(50%+0.125rem)]" : "left-1",
+                ].join(" ")}
+              />
               <button
                 type="button"
-                role="switch"
-                aria-checked={compactMode}
-                onClick={toggleCompactMode}
+                onClick={() => setCompactModeValue(false)}
                 className={[
-                  "relative h-6 w-11 rounded-full border transition-colors",
-                  compactMode
-                    ? "bg-accent/20 border-teal-400"
-                    : "bg-surface border-teal-500",
+                  "font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                  compactMode ? "text-foreground" : "text-accent-foreground",
                 ].join(" ")}
               >
-                <span
-                  className={[
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all",
-                    compactMode ? "left-6" : "left-0.5",
-                  ].join(" ")}
-                />
+                Full
               </button>
-            </label>
+              <button
+                type="button"
+                onClick={() => setCompactModeValue(true)}
+                className={[
+                  "font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                  compactMode ? "text-accent-foreground" : "text-foreground",
+                ].join(" ")}
+              >
+                Compact
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted">
-            <div className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
+            <div className="font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
               Correct Result
             </div>
-            <div className="rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
+            <div className="font-display rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
               Exact Score
             </div>
-            <div className="rounded-md border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-2 py-1 text-center">
+            <div className="font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-2 py-1 text-center">
               Golden + Result
             </div>
-            <div className="rounded-md border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-2 py-1 text-center">
+            <div className="font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-2 py-1 text-center">
               Golden + Exact
             </div>
           </div>

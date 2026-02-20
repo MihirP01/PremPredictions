@@ -37,6 +37,7 @@ type RoomDoc = {
   settings?: {
     sameResultLock?: boolean;
     themeAccent?: string;
+    gameModeStyle?: "round_robin" | "sprint" | "captain";
   };
 };
 
@@ -78,6 +79,9 @@ export default function RoomPage() {
   const [switcherError, setSwitcherError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [sameResultLock, setSameResultLock] = useState(true);
+  const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
+    "round_robin",
+  );
   const [themeAccent, setThemeAccent] = useState<string>("teal");
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
   const [roomRulesOpen, setRoomRulesOpen] = useState(false);
@@ -107,7 +111,14 @@ export default function RoomPage() {
       }
       const roomData = roomSnap.data() as RoomDoc;
       setLeaderUid(roomData?.leaderUid ?? null);
-      setSameResultLock(roomData?.settings?.sameResultLock !== false);
+      const sameResultLockValue = roomData?.settings?.sameResultLock !== false;
+      const style =
+        roomData?.settings?.gameModeStyle ??
+        (sameResultLockValue ? "round_robin" : "sprint");
+      setGameModeStyle(style);
+      setSameResultLock(
+        style === "sprint" ? false : style === "captain" ? true : sameResultLockValue,
+      );
       setThemeAccent(String(roomData?.settings?.themeAccent || "teal"));
 
       // Guard: user must already be a room member (set via room-gate flow)
@@ -309,6 +320,11 @@ export default function RoomPage() {
 
         tx.set(roomRef, {
           leaderUid: user.uid,
+          settings: {
+            gameModeStyle: "sprint",
+            sameResultLock: false,
+            themeAccent: "teal",
+          },
           createdAt: serverTimestamp(),
         });
         tx.set(doc(db, "rooms", code, "players", user.uid), {
@@ -403,7 +419,7 @@ export default function RoomPage() {
   }
 
   async function toggleSameResultLock() {
-    if (!user || !isLeader || roomSettingsBusy) return;
+    if (!user || !isLeader || roomSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain") return;
     const nextValue = !sameResultLock;
     setRoomSettingsBusy(true);
     setError(null);
@@ -420,6 +436,33 @@ export default function RoomPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
       setSameResultLock(nextValue);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update settings.");
+    } finally {
+      setRoomSettingsBusy(false);
+    }
+  }
+
+  async function updateGameModeStyle(nextStyle: "round_robin" | "sprint" | "captain") {
+    if (!user || !isLeader || roomSettingsBusy) return;
+    setRoomSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          gameModeStyle: nextStyle,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
+      setGameModeStyle(nextStyle);
+      setSameResultLock(
+        nextStyle === "sprint" ? false : nextStyle === "captain" ? true : data?.sameResultLock !== false,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update settings.");
     } finally {
@@ -503,7 +546,7 @@ export default function RoomPage() {
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="relative z-30 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Room</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Hub</h1>
             <div className="font-display text-sm text-muted">{roomCode}</div>
           </div>
           <div ref={settingsWrapRef} className="relative page-actions-enter">
@@ -819,19 +862,74 @@ export default function RoomPage() {
                 </span>
               </div>
             </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted">Game Mode</div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => updateGameModeStyle("round_robin")}
+                  disabled={roomSettingsBusy}
+                  className={[
+                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    gameModeStyle === "round_robin"
+                      ? "bg-accent text-accent-foreground border-teal-400"
+                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                  ].join(" ")}
+                >
+                  Round-Robin
+                </button>
+                <button
+                  onClick={() => updateGameModeStyle("captain")}
+                  disabled={roomSettingsBusy}
+                  className={[
+                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    gameModeStyle === "captain"
+                      ? "bg-accent text-accent-foreground border-teal-400"
+                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                  ].join(" ")}
+                >
+                  Captain
+                </button>
+                <button
+                  onClick={() => updateGameModeStyle("sprint")}
+                  disabled={roomSettingsBusy}
+                  className={[
+                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    gameModeStyle === "sprint"
+                      ? "bg-accent text-accent-foreground border-teal-400"
+                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                  ].join(" ")}
+                >
+                  Sprint
+                </button>
+              </div>
+              <div className="text-xs text-muted">
+                {gameModeStyle === "sprint"
+                  ? "Sprint is the quickest mode for larger rooms."
+                  : "Recommended for 5 or fewer players."}
+              </div>
+            </div>
             <button
               onClick={toggleSameResultLock}
-              disabled={roomSettingsBusy}
-              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              disabled={roomSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain"}
+              className={[
+                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                gameModeStyle === "sprint" || gameModeStyle === "captain"
+                  ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
+                  : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+              ].join(" ")}
             >
               {roomSettingsBusy
                 ? "Saving..."
+                : gameModeStyle === "sprint"
+                  ? "Result Lock: OFF (Sprint)"
+                : gameModeStyle === "captain"
+                  ? "Result Lock: ON (Captain)"
                 : sameResultLock
-                  ? "Same Result Lock: ON"
-                  : "Same Result Lock: OFF"}
+                  ? "Result Lock: ON"
+                  : "Result Lock: OFF"}
             </button>
             <div className="text-xs text-muted">
-              ON: users cannot pick duplicate scores for the same fixture.
+              Round-Robin: toggle Result Lock as needed. Sprint: Result Lock is forced OFF. Captain: Result Lock is forced ON.
             </div>
           </div>
         </div>

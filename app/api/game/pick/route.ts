@@ -26,6 +26,8 @@ type GameDoc = {
   currentTurn?: number;
   totalTurns?: number;
   draftMode?: "turn" | "parallel";
+  gameModeStyle?: "round_robin" | "sprint" | "captain";
+  currentFixtureId?: number | null;
   sameResultLock?: boolean;
   draftReadyByUid?: Record<string, boolean>;
   lockAt?: unknown;
@@ -123,6 +125,11 @@ export async function POST(req: Request) {
         : [];
       const currentTurn: number = Number(game.currentTurn ?? 0);
       const draftMode: "turn" | "parallel" = sameResultLock ? "turn" : "parallel";
+      const modeFromGame: "turn" | "parallel" | null =
+        game.draftMode === "turn" || game.draftMode === "parallel"
+          ? game.draftMode
+          : null;
+      const activeDraftMode: "turn" | "parallel" = modeFromGame ?? draftMode;
       const readyByUid: Record<string, boolean> = {
         ...(game.draftReadyByUid ?? {}),
       };
@@ -134,15 +141,18 @@ export async function POST(req: Request) {
       const totalTurns: number = Number(
         game.totalTurns ?? P * fixtureIds.length,
       );
-      let myPickCountBeforeWrite = 0;
+      const isCaptainMode = game.gameModeStyle === "captain";
 
       let fixtureIdToPick: number;
-      if (draftMode === "parallel") {
-        if (!Number.isFinite(reqFixtureId))
-          throw new Error("Missing fixtureId");
-        fixtureIdToPick = reqFixtureId;
-        if (!fixtureIds.includes(fixtureIdToPick))
-          throw new Error("Fixture not part of this game");
+      if (activeDraftMode === "parallel") {
+        const currentFixtureIndex = Number(game.currentTurn ?? 0);
+        if (currentFixtureIndex >= fixtureIds.length) {
+          throw new Error("Draft already complete");
+        }
+        fixtureIdToPick = fixtureIds[currentFixtureIndex];
+        if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
+          throw new Error("This fixture is locked. Wait for current round to complete.");
+        }
       } else {
         if (currentTurn >= totalTurns) throw new Error("Draft already complete");
 
@@ -153,9 +163,39 @@ export async function POST(req: Request) {
         const turnInFixture = currentTurn % P;
         const rotatedIndex = (turnInFixture + fixtureIndex) % P;
         const currentUid = order[rotatedIndex];
-        fixtureIdToPick = fixtureIds[fixtureIndex];
 
         if (currentUid !== userUid) throw new Error("Not your turn");
+        if (isCaptainMode) {
+          const storedFixtureId = Number(game.currentFixtureId);
+          const hasStoredFixture =
+            Number.isFinite(storedFixtureId) && fixtureIds.includes(storedFixtureId);
+
+          if (turnInFixture === 0) {
+            if (!Number.isFinite(reqFixtureId))
+              throw new Error("Captain must choose a fixture");
+            if (!fixtureIds.includes(reqFixtureId))
+              throw new Error("Fixture not part of this game");
+
+            const picksForCaptainSnap = await tx.get(picksCol);
+            const usedFixtureIds = new Set(
+              picksForCaptainSnap.docs
+                .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
+                .filter((id) => Number.isFinite(id)),
+            );
+            if (usedFixtureIds.has(reqFixtureId))
+              throw new Error("Fixture already completed");
+            fixtureIdToPick = reqFixtureId;
+          } else {
+            if (!hasStoredFixture)
+              throw new Error("Waiting for captain to choose fixture");
+            fixtureIdToPick = storedFixtureId;
+            if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
+              throw new Error("This fixture is locked for this round");
+            }
+          }
+        } else {
+          fixtureIdToPick = fixtureIds[fixtureIndex];
+        }
       }
 
       // Uniqueness: score can't be taken twice for same fixture
@@ -177,10 +217,6 @@ export async function POST(req: Request) {
       const alreadyPickedSnap = await tx.get(pickRef);
       if (alreadyPickedSnap.exists)
         throw new Error("You already picked this fixture");
-      if (draftMode === "parallel") {
-        const myPicksSnap = await tx.get(picksCol.where("uid", "==", userUid));
-        myPickCountBeforeWrite = myPicksSnap.size;
-      }
 
       // -------- WRITES AFTER --------
       tx.set(
@@ -194,20 +230,49 @@ export async function POST(req: Request) {
         { merge: false },
       );
 
-      if (draftMode === "parallel") {
-        const myPickCountAfterWrite = myPickCountBeforeWrite + 1;
-        if (myPickCountAfterWrite >= fixtureIds.length) {
-          readyByUid[userUid] = true;
-        }
-
+      if (activeDraftMode === "parallel") {
+        readyByUid[userUid] = true;
         const everyoneReady = order.every((uidInGame) => readyByUid[uidInGame] === true);
-        tx.update(gameRef, {
-          draftReadyByUid: readyByUid,
-          ...(everyoneReady ? { state: "GOLDEN" } : {}),
-        });
+        if (everyoneReady) {
+          const nextFixtureIndex = Number(game.currentTurn ?? 0) + 1;
+          if (nextFixtureIndex >= fixtureIds.length) {
+            tx.update(gameRef, {
+              state: "GOLDEN",
+              draftReadyByUid: {},
+              currentTurn: nextFixtureIndex,
+            });
+          } else {
+            tx.update(gameRef, {
+              currentTurn: nextFixtureIndex,
+              draftReadyByUid: {},
+            });
+          }
+        } else {
+          tx.update(gameRef, {
+            draftReadyByUid: readyByUid,
+          });
+        }
       } else {
         const nextTurn = currentTurn + 1;
-        if (nextTurn >= totalTurns) {
+        if (isCaptainMode) {
+          if (nextTurn >= totalTurns) {
+            tx.update(gameRef, {
+              currentTurn: nextTurn,
+              currentFixtureId: null,
+              state: "GOLDEN",
+            });
+          } else if (nextTurn % P === 0) {
+            tx.update(gameRef, {
+              currentTurn: nextTurn,
+              currentFixtureId: null,
+            });
+          } else {
+            tx.update(gameRef, {
+              currentTurn: nextTurn,
+              currentFixtureId: fixtureIdToPick,
+            });
+          }
+        } else if (nextTurn >= totalTurns) {
           tx.update(gameRef, { currentTurn: nextTurn, state: "GOLDEN" });
         } else {
           tx.update(gameRef, { currentTurn: nextTurn });

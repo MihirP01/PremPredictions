@@ -23,7 +23,13 @@ type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type UserDoc = { displayName?: string; nickName?: string };
 type LobbyDoc = { displayName?: string };
 type GameStateDoc = { state?: string };
-type RoomDoc = { leaderUid?: string; settings?: { sameResultLock?: boolean } };
+type RoomDoc = {
+  leaderUid?: string;
+  settings?: {
+    sameResultLock?: boolean;
+    gameModeStyle?: "round_robin" | "sprint" | "captain";
+  };
+};
 type Fixture = { kickoff?: string };
 
 export default function MiniGameLobbyPage() {
@@ -47,7 +53,12 @@ export default function MiniGameLobbyPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [starting, setStarting] = useState(false);
-  const [sameResultLockEnabled, setSameResultLockEnabled] = useState<boolean>(true);
+  const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
+    "round_robin",
+  );
+  const [sameResultLock, setSameResultLock] = useState<boolean>(true);
+  const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
+  const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
 
@@ -75,7 +86,12 @@ export default function MiniGameLobbyPage() {
       if (!cancelled) {
         const roomData = roomSnap.data() as RoomDoc | undefined;
         setLeaderUid(roomData?.leaderUid ?? null);
-        setSameResultLockEnabled(roomData?.settings?.sameResultLock !== false);
+        const sameResultLock = roomData?.settings?.sameResultLock !== false;
+        setGameModeStyle(
+          roomData?.settings?.gameModeStyle ??
+            (sameResultLock ? "round_robin" : "sprint"),
+        );
+        setSameResultLock(sameResultLock);
       }
     })().catch(() => setError("Failed to load room."));
 
@@ -403,6 +419,57 @@ export default function MiniGameLobbyPage() {
     }
   }
 
+  async function updateGameModeStyle(nextStyle: "round_robin" | "sprint" | "captain") {
+    if (!user || !isLeader || modeSettingsBusy) return;
+    setModeSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          gameModeStyle: nextStyle,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update mode.");
+      setGameModeStyle(nextStyle);
+      setSameResultLock(data?.sameResultLock !== false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update mode.");
+    } finally {
+      setModeSettingsBusy(false);
+    }
+  }
+
+  async function toggleSameResultLock() {
+    if (!user || !isLeader || modeSettingsBusy) return;
+    if (gameModeStyle === "sprint" || gameModeStyle === "captain") return;
+    const nextValue = !sameResultLock;
+    setModeSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          sameResultLock: nextValue,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update lock.");
+      setSameResultLock(data?.sameResultLock !== false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update lock.");
+    } finally {
+      setModeSettingsBusy(false);
+    }
+  }
+
   // Simple loading guard
   if (loading) return null;
 
@@ -472,11 +539,31 @@ export default function MiniGameLobbyPage() {
             Mini-game Controls
           </div>
           <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
-            <div className="text-sm font-semibold text-foreground">Mini-game Style</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-foreground">Mini-game Style</div>
+              {isLeader && (
+                <button
+                  onClick={() => setModeSettingsOpen(true)}
+                  className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                >
+                  Mode
+                </button>
+              )}
+            </div>
             <div className="text-sm text-muted">
               Style:{" "}
               <span className="font-display text-foreground font-semibold">
-                {sameResultLockEnabled ? "Round-Robin" : "Sprint"}
+                {gameModeStyle === "round_robin"
+                  ? "Round-Robin"
+                  : gameModeStyle === "captain"
+                    ? "Captain"
+                    : "Sprint"}
+              </span>
+            </div>
+            <div className="text-xs text-muted">
+              Result Lock:{" "}
+              <span className="font-display text-foreground">
+                {sameResultLock ? "ON" : "OFF"}
               </span>
             </div>
           </div>
@@ -605,6 +692,80 @@ export default function MiniGameLobbyPage() {
           </div>
         </div>
       </div>
+      {modeSettingsOpen && isLeader && (
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold text-foreground">Mini-game Mode</div>
+              <button
+                onClick={() => setModeSettingsOpen(false)}
+                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
+                aria-label="Close mode settings"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => updateGameModeStyle("round_robin")}
+                disabled={modeSettingsBusy}
+                className={[
+                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
+                  gameModeStyle === "round_robin"
+                    ? "bg-accent text-accent-foreground border-teal-400"
+                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                ].join(" ")}
+              >
+                Round-Robin
+              </button>
+              <button
+                onClick={() => updateGameModeStyle("captain")}
+                disabled={modeSettingsBusy}
+                className={[
+                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
+                  gameModeStyle === "captain"
+                    ? "bg-accent text-accent-foreground border-teal-400"
+                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                ].join(" ")}
+              >
+                Captain
+              </button>
+              <button
+                onClick={() => updateGameModeStyle("sprint")}
+                disabled={modeSettingsBusy}
+                className={[
+                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
+                  gameModeStyle === "sprint"
+                    ? "bg-accent text-accent-foreground border-teal-400"
+                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                ].join(" ")}
+              >
+                Sprint
+              </button>
+            </div>
+            <button
+              onClick={toggleSameResultLock}
+              disabled={modeSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain"}
+              className={[
+                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                gameModeStyle === "sprint" || gameModeStyle === "captain"
+                  ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
+                  : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+              ].join(" ")}
+            >
+              {modeSettingsBusy
+                ? "Saving..."
+                : gameModeStyle === "sprint"
+                  ? "Result Lock: OFF (Sprint)"
+                  : gameModeStyle === "captain"
+                    ? "Result Lock: ON (Captain)"
+                    : sameResultLock
+                      ? "Result Lock: ON"
+                      : "Result Lock: OFF"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

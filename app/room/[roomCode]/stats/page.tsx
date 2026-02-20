@@ -366,7 +366,7 @@ export default function RoomStatsPage() {
             <div>
               <h1 className="text-2xl font-semibold text-foreground">Player Stats</h1>
               <div className="font-display text-sm text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")} • GW 1 - GW {currentGw}
+                {roomCode} • {seasonLabel(seasonKey || "----")}
               </div>
             </div>
             <button

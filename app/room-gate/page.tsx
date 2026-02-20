@@ -177,6 +177,11 @@ export default function RoomGatePage() {
 
         tx.set(roomRef, {
           leaderUid: user.uid,
+          settings: {
+            gameModeStyle: "sprint",
+            sameResultLock: false,
+            themeAccent: "teal",
+          },
           createdAt: serverTimestamp(),
         });
 

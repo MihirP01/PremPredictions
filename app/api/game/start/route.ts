@@ -16,6 +16,7 @@ type RoomDoc = {
   leaderUid?: string;
   settings?: {
     sameResultLock?: boolean;
+    gameModeStyle?: "round_robin" | "sprint" | "captain";
   };
 };
 
@@ -57,10 +58,16 @@ export async function POST(req: Request) {
     const room = roomSnap.data() as RoomDoc;
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
-    const sameResultLock = room.settings?.sameResultLock !== false;
-    const draftMode: "turn" | "parallel" = sameResultLock
-      ? "turn"
-      : "parallel";
+    const style: "round_robin" | "sprint" | "captain" =
+      room.settings?.gameModeStyle ?? "round_robin";
+    const draftMode: "turn" | "parallel" =
+      style === "sprint" ? "parallel" : "turn";
+    const sameResultLock =
+      style === "sprint"
+        ? false
+        : style === "captain"
+          ? true
+          : room.settings?.sameResultLock !== false;
 
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
 
@@ -149,10 +156,12 @@ export async function POST(req: Request) {
           players,
           order,
           fixtureIds: fixtureIds10,
+          currentFixtureId: null,
           currentTurn: 0,
           totalTurns: order.length * fixtureIds10.length,
           draftMode,
           sameResultLock,
+          gameModeStyle: style,
           draftReadyByUid: {},
           firstKickoffAt,
           lockAt,

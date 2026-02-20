@@ -461,7 +461,7 @@ export default function LeaderboardMatrixPage() {
             <div>
               <h1 className="text-2xl font-semibold text-foreground">Leaderboard</h1>
               <div className="font-display text-sm text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")} • GW1 - GW{currentGw}
+                {roomCode} • {seasonLabel(seasonKey || "----")}
               </div>
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">

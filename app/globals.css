@@ -184,6 +184,48 @@ body > div {
   box-shadow: var(--shadow-card);
 }
 
+.font-display {
+  font-family: var(--font-display), Arial, Helvetica, sans-serif;
+}
+
+.font-ui {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+select,
+option {
+  font-family: var(--font-display), Arial, Helvetica, sans-serif;
+}
+
+@keyframes team-name-pan {
+  0%,
+  14% {
+    transform: translateX(0);
+  }
+  86%,
+  100% {
+    transform: translateX(calc(-1 * var(--team-pan, 0px)));
+  }
+}
+
+.team-name-scroll {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.team-name-scroll-inner {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.team-name-scroll.is-animated .team-name-scroll-inner {
+  animation: team-name-pan var(--team-pan-duration, 7s) ease-in-out infinite alternate;
+}
+
 /* Room-level accent strategy:
    - default teal utility borders become neutral/subtle (non-clickable surfaces)
    - interactive controls keep accent-colored borders */
@@ -223,65 +265,70 @@ body > div {
 }
 
 .room-theme .btn-3d-accent {
-  transition: all 150ms;
-  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 2px 0 0 rgba(var(--room-accent-rgb), 0.28);
 }
 
 .room-theme .btn-3d-accent:hover {
   transform: translateY(-1px);
-  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.34);
 }
 
 .room-theme .btn-3d-accent:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.24);
 }
 
 .room-theme .select-3d-accent {
-  transition: all 150ms;
-  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.25);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 2px 0 0 rgba(var(--room-accent-rgb), 0.24);
 }
 
 .room-theme .select-3d-accent:hover {
   transform: translateY(-1px);
-  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.35);
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
 }
 
 /* App-wide (room pages) automatic 3D treatment for controls */
 .room-theme button,
 .room-theme select,
 .room-theme [role="button"] {
-  transition: all 150ms;
-  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 2px 0 0 rgba(var(--room-accent-rgb), 0.28);
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .room-theme .page-action-btn {
-  transition: all 150ms;
-  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.3);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 2px 0 0 rgba(var(--room-accent-rgb), 0.28);
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .room-theme button:hover:not(:disabled),
 .room-theme select:hover:not(:disabled),
 .room-theme [role="button"]:hover:not([aria-disabled="true"]) {
   transform: translateY(-1px);
-  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.34);
 }
 
 .room-theme .page-action-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 5px 0 0 rgba(var(--room-accent-rgb), 0.4);
+  box-shadow: 0 3px 0 0 rgba(var(--room-accent-rgb), 0.34);
 }
 
 .room-theme button:active:not(:disabled),
 .room-theme [role="button"]:active:not([aria-disabled="true"]) {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.24);
 }
 
 .room-theme .page-action-btn:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.25);
+  box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.24);
 }
+
 
 /* Keep toggle switches neutral (no accent 3D shadow) */
 .room-theme [role="switch"] {
@@ -300,6 +347,24 @@ body > div {
     transition: none !important;
     transform: none !important;
     box-shadow: none !important;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .room-theme button,
+  .room-theme select,
+  .room-theme [role="button"],
+  .room-theme .page-action-btn {
+    transition: transform 80ms ease, box-shadow 80ms ease;
+    box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.22);
+  }
+
+  .room-theme button:hover:not(:disabled),
+  .room-theme select:hover:not(:disabled),
+  .room-theme [role="button"]:hover:not([aria-disabled="true"]),
+  .room-theme .page-action-btn:hover {
+    transform: none;
+    box-shadow: 0 1px 0 0 rgba(var(--room-accent-rgb), 0.22);
   }
 }
 

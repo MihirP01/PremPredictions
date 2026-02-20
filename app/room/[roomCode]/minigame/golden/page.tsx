@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
+import PendulumName from "../../../../../components/PendulumName";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
@@ -97,6 +98,21 @@ function formatFixtureDateParts(iso: string) {
     year: "2-digit",
   });
   return { day, suffix, monthYear };
+}
+
+function fixtureDayKey(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fixtureDayLabel(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { weekday: "long" });
 }
 
 export default function GoldenPage() {
@@ -210,6 +226,11 @@ export default function GoldenPage() {
         if (st === "REVEAL") {
           routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/reveal`);
+          return;
+        }
+        if (st === "LOBBY") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame`);
           return;
         }
       },
@@ -416,6 +437,25 @@ export default function GoldenPage() {
   const orderedFixtureIds = game.fixtureIds?.length
     ? game.fixtureIds
     : fixtures.map((f) => f.fixtureId);
+  const dayBoundaryByIdx = (() => {
+    const firstIdxByDay = new Map<string, number>();
+    const lastIdxByDay = new Map<string, number>();
+    orderedFixtureIds.forEach((fid, idx) => {
+      const fixture = fixtureMap.get(fid);
+      const dayKey = fixtureDayKey(fixture?.kickoff || "");
+      if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
+      lastIdxByDay.set(dayKey, idx);
+    });
+    return orderedFixtureIds.map((fid, idx) => {
+      const fixture = fixtureMap.get(fid);
+      const dayKey = fixtureDayKey(fixture?.kickoff || "");
+      return {
+        showDayHeader: firstIdxByDay.get(dayKey) === idx,
+        showDayFooter: lastIdxByDay.get(dayKey) === idx,
+        dayLabel: fixtureDayLabel(fixture?.kickoff || ""),
+      };
+    });
+  })();
   const gameLockAtMs = coerceMillis(game?.lockAt);
   const fallbackLockAtMs = fixtures.length
     ? fixtures
@@ -435,9 +475,9 @@ export default function GoldenPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              Golden Pick
+              Golden (Golden Pick)
             </h1>
-            <div className="text-sm text-muted">
+            <div className="font-display text-sm text-muted">
               Room {roomCode} • GW {gw} Golden Picks
             </div>
             <div className="text-xs text-muted">
@@ -530,40 +570,72 @@ export default function GoldenPage() {
 	                </label>
 	              </div>
 	              <div className="grid grid-cols-2 gap-3">
-	              {orderedFixtureIds.map((fid) => {
+	              {orderedFixtureIds.map((fid, idx) => {
 	                const f = fixtureMap.get(fid);
 	                const myScore = myPicksByFixture[fid];
 	                const kickoff = f ? new Date(f.kickoff) : null;
 	                const kickoffDate = f ? formatFixtureDateParts(f.kickoff) : null;
 	                const kickoffTime = kickoff
-	                  ? kickoff.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+	                  ? kickoff.toLocaleTimeString("en-GB", {
+	                      hour: "2-digit",
+	                      minute: "2-digit",
+	                      hour12: false,
+	                    })
 	                  : "";
 
 	                const others = (picksByFixture.get(fid) ?? [])
 	                  .filter((p) => p.uid !== user.uid)
 	                  .map((p) => p.score);
+                  const dayBoundary = dayBoundaryByIdx[idx];
+                  const showDayHeader = !!dayBoundary?.showDayHeader;
+                  const showDayFooter = !!dayBoundary?.showDayFooter;
+                  const dayLabel = dayBoundary?.dayLabel || "";
 
                 const isSelected = selectedFixtureId === fid;
 
                 return (
+                  <div key={fid} className="space-y-2">
+                    <div className="h-5 sm:h-6 flex items-center justify-center">
+                      {showDayHeader ? (
+                        <div className="w-full flex items-center gap-2">
+                          <span className="h-px flex-1 bg-teal-500/35" />
+                          <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                            {dayLabel}
+                          </span>
+                          <span
+                            className={[
+                              "h-px flex-1 bg-teal-500/35 relative",
+                              showDayFooter
+                                ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                                : "",
+                            ].join(" ")}
+                          />
+                        </div>
+                      ) : showDayFooter ? (
+                        <div className="w-full flex items-center justify-end">
+                          <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                        </div>
+                      ) : (
+                        <span aria-hidden className="invisible w-full">_</span>
+                      )}
+                    </div>
 	                  <button
-	                    key={fid}
 	                    type="button"
 	                    onClick={() => setSelectedFixtureId(fid)}
 	                    disabled={!myScore}
 	                    className={[
 	                      "w-full h-full text-left rounded-xl p-3 border transition-all duration-200",
 	                      isSelected
-	                        ? "border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)] -translate-y-[1px]"
+	                        ? "border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)]"
 	                        : "border-subtle",
 	                      !myScore
 	                        ? "opacity-60 cursor-not-allowed"
-	                        : "hover:bg-surface hover:border-subtle hover:-translate-y-[1px]",
+	                        : "hover:bg-surface hover:border-subtle",
 	                    ].join(" ")}
 	                  >
 	                    <div className="space-y-2">
 	                      <div className="flex flex-col items-center text-xs text-muted">
-	                        <div>
+	                        <div className="font-display font-semibold">
 	                          {kickoffDate ? (
 	                            <>
 	                              {kickoffDate.day}
@@ -577,7 +649,7 @@ export default function GoldenPage() {
 	                            </>
 	                          ) : null}
 	                        </div>
-	                        <div className="font-semibold tabular-nums mt-0.5">{kickoffTime}</div>
+	                        <div className="font-display font-semibold tabular-nums mt-0.5">{kickoffTime}</div>
 	                      </div>
 	                      <div>
 	                        {f ? (
@@ -589,16 +661,18 @@ export default function GoldenPage() {
                                 shortName={f.home.shortName}
                                 badge={f.home.badge}
                               />
-                              <div className="mt-1 w-full text-center font-semibold text-foreground">
-                                <span className="sm:hidden text-[11px]">
+                              <div className="font-display mt-1 w-full text-center font-semibold text-foreground">
+                                <span className="block text-[11px]">
                                   {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
                                 </span>
-                                <span className="hidden sm:inline text-xs truncate w-full">
-                                  {f.home.name}
-                                </span>
+                                <PendulumName
+                                  text={f.home.name}
+                                  windowPx={null}
+                                  className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                                />
                               </div>
 	                            </div>
-	                            <div className="text-xs text-muted uppercase">vs</div>
+	                            <div className="font-display text-xs text-muted uppercase">vs</div>
 	                            <div className="flex flex-col items-center text-center min-w-0">
                               <TeamBadge
                                 name={f.away.name}
@@ -606,13 +680,15 @@ export default function GoldenPage() {
                                 shortName={f.away.shortName}
                                 badge={f.away.badge}
                               />
-                              <div className="mt-1 w-full text-center font-semibold text-foreground">
-                                <span className="sm:hidden text-[11px]">
+                              <div className="font-display mt-1 w-full text-center font-semibold text-foreground">
+                                <span className="block text-[11px]">
                                   {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
                                 </span>
-                                <span className="hidden sm:inline text-xs truncate w-full">
-                                  {f.away.name}
-                                </span>
+                                <PendulumName
+                                  text={f.away.name}
+                                  windowPx={null}
+                                  className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                                />
 	                              </div>
 	                            </div>
 	                          </div>
@@ -629,7 +705,7 @@ export default function GoldenPage() {
 	                        ].join(" ")}
 	                      >
 	                        <div className="text-xs text-muted">Your pick</div>
-	                        <div className="text-lg font-semibold text-foreground tabular-nums">
+	                        <div className="font-display text-lg font-semibold text-foreground tabular-nums">
 	                          {myScore ? myScore.replace("-", " - ") : "—"}
 	                        </div>
 	                      </div>
@@ -651,7 +727,7 @@ export default function GoldenPage() {
 	                          {others.slice(0, 10).map((score, idx) => (
 	                            <span
 	                              key={`${fid}-other-${idx}-${score}`}
-	                              className="rounded-full border border-subtle px-2.5 py-1 text-xs text-foreground tabular-nums"
+	                              className="font-display rounded-full border border-subtle px-2.5 py-1 text-xs text-foreground tabular-nums"
 	                            >
 	                              {String(score).replace("-", " - ")}
 	                            </span>
@@ -666,6 +742,7 @@ export default function GoldenPage() {
                       </div>
                     )}
 	                  </button>
+                  </div>
 	                );
 	              })}
 	              </div>

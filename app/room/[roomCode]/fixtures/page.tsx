@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDown, Settings } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
+import PendulumName from "../../../../components/PendulumName";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import {
@@ -98,6 +99,21 @@ function fmtKickoffParts(iso: string) {
     hour12: false,
   });
   return { dayNum, suffix, monthYear, time };
+}
+
+function fixtureDayKey(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fixtureDayLabel(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { weekday: "long" });
 }
 
 
@@ -578,8 +594,8 @@ export default function FixturesPage() {
           <div className="flex items-start justify-between gap-2">
             <div>
               <h1 className="text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">Fixtures</h1>
-              <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} Fixtures
+              <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
+                {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} 
               </div>
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">
@@ -786,14 +802,46 @@ export default function FixturesPage() {
           {!isLoading &&
             fixtures.length > 0 &&
             (() => {
-              const leftColumn: Array<{ fixture: Fixture; idx: number }> = [];
-              const rightColumn: Array<{ fixture: Fixture; idx: number }> = [];
+              const leftColumn: Array<{
+                fixture: Fixture;
+                idx: number;
+                showDayHeader: boolean;
+                showDayFooter: boolean;
+                dayLabel: string;
+              }> = [];
+              const rightColumn: Array<{
+                fixture: Fixture;
+                idx: number;
+                showDayHeader: boolean;
+                showDayFooter: boolean;
+                dayLabel: string;
+              }> = [];
+              const firstIdxByDay = new Map<string, number>();
+              const lastIdxByDay = new Map<string, number>();
               fixtures.forEach((fixture, idx) => {
-                if (idx % 2 === 0) leftColumn.push({ fixture, idx });
-                else rightColumn.push({ fixture, idx });
+                const dayKey = fixtureDayKey(fixture.kickoff);
+                if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
+                lastIdxByDay.set(dayKey, idx);
+              });
+              fixtures.forEach((fixture, idx) => {
+                const dayKey = fixtureDayKey(fixture.kickoff);
+                const showDayHeader = firstIdxByDay.get(dayKey) === idx;
+                const showDayFooter = lastIdxByDay.get(dayKey) === idx;
+                const dayLabel = fixtureDayLabel(fixture.kickoff);
+                if (idx % 2 === 0) {
+                  leftColumn.push({ fixture, idx, showDayHeader, showDayFooter, dayLabel });
+                } else {
+                  rightColumn.push({ fixture, idx, showDayHeader, showDayFooter, dayLabel });
+                }
               });
 
-              const renderFixtureCard = (f: Fixture, idx: number) => {
+              const renderFixtureCard = (
+                f: Fixture,
+                idx: number,
+                showDayHeader: boolean,
+                showDayFooter: boolean,
+                dayLabel: string,
+              ) => {
               const actual = f.result ?? null;
               const kickoffParts = fmtKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
@@ -801,8 +849,32 @@ export default function FixturesPage() {
               const desktopOddPredictions = players.length % 3 !== 0;
 
               return (
+                <div key={f.fixtureId} className="space-y-2">
+                  <div className="h-5 sm:h-6 flex items-center justify-center">
+                    {showDayHeader ? (
+                      <div className="w-full flex items-center gap-2">
+                        <span className="h-px flex-1 bg-teal-500/35" />
+                        <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                          {dayLabel}
+                        </span>
+                        <span
+                          className={[
+                            "h-px flex-1 bg-teal-500/35 relative",
+                            showDayFooter
+                              ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                              : "",
+                          ].join(" ")}
+                        />
+                      </div>
+                    ) : showDayFooter ? (
+                      <div className="w-full flex items-center justify-end">
+                        <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                      </div>
+                    ) : (
+                      <span aria-hidden className="invisible w-full">_</span>
+                    )}
+                  </div>
                 <div
-                  key={f.fixtureId}
                   className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2 page-action-btn cursor-pointer"
                   style={{
                     animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
@@ -822,43 +894,63 @@ export default function FixturesPage() {
                     <div>
                       <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-2">
                         <div className="sm:hidden flex items-center justify-between gap-2">
-                          <span>
+                          <span className="font-display font-semibold">
                             {kickoffParts.dayNum}
                             <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
                             {kickoffParts.monthYear}
                           </span>
-                          <span>{kickoffParts.time}</span>
+                          <span className="font-display font-semibold">{kickoffParts.time}</span>
                         </div>
                         <div className="hidden sm:flex items-center justify-between gap-2">
-                          <span>
+                          <span className="font-display font-semibold">
                             {kickoffParts.dayNum}
                             <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
                             {kickoffParts.monthYear}
                           </span>
-                          <span>{kickoffParts.time}</span>
+                          <span className="font-display font-semibold">{kickoffParts.time}</span>
                         </div>
                       </div>
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:hidden">
-                        <div className="flex flex-col items-center gap-1">
-                          <TeamBadge
-                            name={f.home.name}
-                            shortName={f.home.shortName}
-                            badge={f.home.badge}
-                          />
-                          <span className="text-[10px] text-muted uppercase tracking-wide">
-                            {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                      <div className="sm:hidden space-y-1">
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                          <div className="flex justify-center">
+                            <TeamBadge
+                              name={f.home.name}
+                              shortName={f.home.shortName}
+                              badge={f.home.badge}
+                            />
+                          </div>
+                          <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                            vs
                           </span>
+                          <div className="flex justify-center">
+                            <TeamBadge
+                              name={f.away.name}
+                              shortName={f.away.shortName}
+                              badge={f.away.badge}
+                            />
+                          </div>
                         </div>
-                        <span className="text-[10px] font-semibold text-muted uppercase">vs</span>
-                        <div className="flex flex-col items-center gap-1">
-                          <TeamBadge
-                            name={f.away.name}
-                            shortName={f.away.shortName}
-                            badge={f.away.badge}
-                          />
-                          <span className="text-[10px] text-muted uppercase tracking-wide">
-                            {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                          </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="font-display text-[10px] text-foreground uppercase tracking-wide">
+                              {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
+                            </span>
+                            <PendulumName
+                              text={f.home.name}
+                              windowPx={68}
+                              className="font-display text-[9px] text-muted mx-auto leading-tight"
+                            />
+                          </div>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="font-display text-[10px] text-foreground uppercase tracking-wide">
+                              {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
+                            </span>
+                            <PendulumName
+                              text={f.away.name}
+                              windowPx={68}
+                              className="font-display text-[9px] text-muted mx-auto leading-tight"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -869,26 +961,38 @@ export default function FixturesPage() {
                             shortName={f.home.shortName}
                             badge={f.home.badge}
                           />
-                          <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
-                            {f.home.shortName || f.home.name}
+                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                            {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
                           </span>
+                          <PendulumName
+                            text={f.home.name}
+                            windowPx={null}
+                            className="font-display text-[10px] text-muted w-full"
+                          />
                         </div>
-                        <span className="text-xs font-semibold text-muted uppercase">H vs A</span>
+                        <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                          vs
+                        </span>
                         <div className="flex flex-col items-center text-center min-w-0">
                           <TeamBadge
                             name={f.away.name}
                             shortName={f.away.shortName}
                             badge={f.away.badge}
                           />
-                          <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
-                            {f.away.shortName || f.away.name}
+                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                            {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
                           </span>
+                          <PendulumName
+                            text={f.away.name}
+                            windowPx={null}
+                            className="font-display text-[10px] text-muted w-full"
+                          />
                         </div>
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Result</div>
-                      <div className="text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground">
+                      <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
                         {actual ? actual.replace("-", " – ") : "TBD"}
                       </div>
                     </div>
@@ -977,7 +1081,7 @@ export default function FixturesPage() {
                             >
                               <div
                                 className={[
-                                  "text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
+                                  "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
                                   "text-muted",
                                 ].join(" ")}
                               >
@@ -986,7 +1090,7 @@ export default function FixturesPage() {
 
                               <div
                                 className={[
-                                  "mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold",
+                                  "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums",
                                   "text-foreground",
                                 ].join(" ")}
                               >
@@ -1001,16 +1105,21 @@ export default function FixturesPage() {
                     </div>
                   </div>
                 </div>
+                </div>
               );
               };
 
               return (
                 <>
                   <div className="space-y-3 sm:space-y-4">
-                    {leftColumn.map(({ fixture, idx }) => renderFixtureCard(fixture, idx))}
+                    {leftColumn.map(({ fixture, idx, showDayHeader, showDayFooter, dayLabel }) =>
+                      renderFixtureCard(fixture, idx, showDayHeader, showDayFooter, dayLabel),
+                    )}
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    {rightColumn.map(({ fixture, idx }) => renderFixtureCard(fixture, idx))}
+                    {rightColumn.map(({ fixture, idx, showDayHeader, showDayFooter, dayLabel }) =>
+                      renderFixtureCard(fixture, idx, showDayHeader, showDayFooter, dayLabel),
+                    )}
                   </div>
                 </>
               );

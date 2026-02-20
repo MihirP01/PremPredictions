@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
+import PendulumName from "../../../../../components/PendulumName";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
@@ -12,6 +13,7 @@ type GameDoc = {
   players: string[];
   order?: string[];
   fixtureIds: number[];
+  forcedReveal?: boolean;
 };
 
 type Fixture = {
@@ -108,6 +110,21 @@ function fmtKickoffParts(iso: string) {
     hour12: false,
   });
   return { dayNum, suffix, monthYear, time };
+}
+
+function fixtureDayKey(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fixtureDayLabel(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { weekday: "long" });
 }
 
 export default function RevealPage() {
@@ -313,6 +330,25 @@ export default function RevealPage() {
     (fixtures ?? []).forEach((f) => m.set(f.fixtureId, f));
     return m;
   }, [fixtures]);
+  const dayBoundaryByIdx = useMemo(() => {
+    const firstIdxByDay = new Map<string, number>();
+    const lastIdxByDay = new Map<string, number>();
+    fixtureIds.forEach((fid, idx) => {
+      const fixture = fixtureMap.get(fid);
+      const dayKey = fixtureDayKey(fixture?.kickoff || "");
+      if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
+      lastIdxByDay.set(dayKey, idx);
+    });
+    return fixtureIds.map((fid, idx) => {
+      const fixture = fixtureMap.get(fid);
+      const dayKey = fixtureDayKey(fixture?.kickoff || "");
+      return {
+        showDayHeader: firstIdxByDay.get(dayKey) === idx,
+        showDayFooter: lastIdxByDay.get(dayKey) === idx,
+        dayLabel: fixtureDayLabel(fixture?.kickoff || ""),
+      };
+    });
+  }, [fixtureIds, fixtureMap]);
 
   const picksByUserFixture = useMemo(() => {
     const m = new Map<string, string>(); // key = uid|fixtureId
@@ -325,7 +361,7 @@ export default function RevealPage() {
     return Object.values(goldensByUid).filter((g) => g?.locked).length;
   }, [goldensByUid]);
 
-  const allLocked = players.length > 0 && lockedCount >= players.length;
+  const allLocked = !!game?.forcedReveal || (players.length > 0 && lockedCount >= players.length);
 
   if (loading || !user) return null;
 
@@ -360,9 +396,9 @@ export default function RevealPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              Predictions Overview
+              Final Overview
             </h1>
-            <div className="text-sm text-muted">
+            <div className="font-display text-sm text-muted">
               {roomCode} • GW {gw}
             </div>
           </div>
@@ -393,28 +429,54 @@ export default function RevealPage() {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          {fixtureIds.map((fid) => {
+          {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
             const actual = f?.result ? fmtScore(f.result) : "TBD";
             const kickoffParts = f ? fmtKickoffParts(f.kickoff) : null;
+            const dayBoundary = dayBoundaryByIdx[idx];
+            const showDayHeader = !!dayBoundary?.showDayHeader;
+            const showDayFooter = !!dayBoundary?.showDayFooter;
+            const dayLabel = dayBoundary?.dayLabel || "";
 
             return (
-              <div
-                key={fid}
-                className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2"
-              >
-                <div className="space-y-2">
+              <div key={fid} className="space-y-2">
+                <div className="h-5 sm:h-6 flex items-center justify-center">
+                  {showDayHeader ? (
+                    <div className="w-full flex items-center gap-2">
+                      <span className="h-px flex-1 bg-teal-500/35" />
+                      <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                        {dayLabel}
+                      </span>
+                      <span
+                        className={[
+                          "h-px flex-1 bg-teal-500/35 relative",
+                          showDayFooter
+                            ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75"
+                            : "",
+                        ].join(" ")}
+                      />
+                    </div>
+                  ) : showDayFooter ? (
+                    <div className="w-full flex items-center justify-end">
+                      <span className="h-px w-12 sm:w-16 bg-teal-500/35 relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-teal-400/75" />
+                    </div>
+                  ) : (
+                    <span aria-hidden className="invisible w-full">_</span>
+                  )}
+                </div>
+                <div className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2">
+                  <div className="space-y-2">
                   <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
                     {kickoffParts ? (
                       <div className="flex items-center justify-between gap-2">
-                        <span>
+                        <span className="font-display font-semibold">
                           {kickoffParts.dayNum}
                           <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
                             {kickoffParts.suffix}
                           </span>{" "}
                           {kickoffParts.monthYear}
                         </span>
-                        <span className="tabular-nums">{kickoffParts.time}</span>
+                        <span className="font-display font-semibold tabular-nums">{kickoffParts.time}</span>
                       </div>
                     ) : (
                       <span>Fixture {fid}</span>
@@ -430,12 +492,16 @@ export default function RevealPage() {
                           badge={f.home.badge}
                           tla={f.home.tla}
                         />
-                        <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
-                          <span className="sm:hidden">{teamAbbr(f.home)}</span>
-                          <span className="hidden sm:inline">{f.home.shortName || f.home.name}</span>
+                        <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                          <span className="block">{teamAbbr(f.home)}</span>
+                          <PendulumName
+                            text={f.home.name}
+                            windowPx={null}
+                            className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                          />
                         </span>
                       </div>
-                      <div className="text-xs text-muted uppercase">vs</div>
+                      <div className="font-display text-xs text-muted uppercase">vs</div>
                       <div className="flex flex-col items-center text-center min-w-0">
                         <TeamBadge
                           name={f.away.name}
@@ -443,9 +509,13 @@ export default function RevealPage() {
                           badge={f.away.badge}
                           tla={f.away.tla}
                         />
-                        <span className="mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground truncate w-full">
-                          <span className="sm:hidden">{teamAbbr(f.away)}</span>
-                          <span className="hidden sm:inline">{f.away.shortName || f.away.name}</span>
+                        <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
+                          <span className="block">{teamAbbr(f.away)}</span>
+                          <PendulumName
+                            text={f.away.name}
+                            windowPx={null}
+                            className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                          />
                         </span>
                       </div>
                     </div>
@@ -453,7 +523,7 @@ export default function RevealPage() {
 
                   <div className="text-center">
                     <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Actual</div>
-                    <div className="text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground">
+                    <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
                       {actual}
                     </div>
                   </div>
@@ -475,11 +545,11 @@ export default function RevealPage() {
                               isGolden ? "text-yellow-300 font-semibold" : "text-muted",
                             ].join(" ")}
                           >
-                            {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                            <span className="font-display">{displayNamesByUid[uid] ?? uid.slice(0, 6)}</span>
                           </div>
                           <span
                             className={[
-                              "mt-1 inline-flex items-center justify-center rounded-full border border-subtle px-2.5 py-1 text-sm font-semibold text-foreground tabular-nums min-w-[58px]",
+                              "font-display mt-1 inline-flex items-center justify-center rounded-full border border-subtle px-2.5 py-1 text-sm font-semibold text-foreground tabular-nums min-w-[58px]",
                               isGolden
                                 ? "bg-gradient-to-r from-yellow-500/25 to-amber-300/15 border-yellow-300/70"
                                 : "bg-surface/70",
@@ -491,6 +561,7 @@ export default function RevealPage() {
                       );
                     })}
                   </div>
+                </div>
                 </div>
               </div>
             );

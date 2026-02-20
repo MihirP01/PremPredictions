@@ -3,9 +3,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
+import PendulumName from "../../../../../components/PendulumName";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query } from "firebase/firestore";
 import { coerceMillis, ONE_HOUR_MS } from "../lock-utils";
 
 type GameDoc = {
@@ -15,6 +16,9 @@ type GameDoc = {
   currentTurn: number;
   totalTurns: number;
   players: string[];
+  draftMode?: "turn" | "parallel";
+  draftReadyByUid?: Record<string, boolean>;
+  sameResultLock?: boolean;
   lockAt?: unknown;
 };
 
@@ -22,13 +26,14 @@ type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string; shortName?: string; badge?: string | null };
-  away: { name: string; shortName?: string; badge?: string | null };
+  home: { name: string; shortName?: string; tla?: string; badge?: string | null };
+  away: { name: string; shortName?: string; tla?: string; badge?: string | null };
   result?: string | null;
 };
 
-type PickDoc = { score?: string };
+type PickDoc = { uid?: string; fixtureId?: number; score?: string };
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
+type RoomDoc = { leaderUid?: string };
 const BTN_3D = "btn-3d-accent";
 
 function onlyDigitsOrEmpty(v: string) {
@@ -59,6 +64,14 @@ function fmtKickoffDateWithOrdinal(iso: string) {
     year: "2-digit",
   });
   return { dayNum, suffix, monthYear };
+}
+
+function teamAbbr(name: string, tla?: string, shortName?: string) {
+  const t = String(tla || "").trim().toUpperCase();
+  if (t.length === 3) return t;
+  const s = String(shortName || "").trim();
+  if (s && s.length <= 4) return s.toUpperCase();
+  return (name || "").slice(0, 3).toUpperCase();
 }
 
 function TeamBadge({
@@ -97,14 +110,18 @@ export default function MiniGamePlayPage() {
   const [game, setGame] = useState<GameDoc | null>(null);
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
 
+  const [allPicks, setAllPicks] = useState<PickDoc[]>([]);
   const [takenScores, setTakenScores] = useState<string[]>([]);
+  const [selectedFixtureId, setSelectedFixtureId] = useState<number | null>(null);
   const [displayNamesByUid, setDisplayNamesByUid] = useState<Record<string, string>>(
     {},
   );
+  const [leaderUid, setLeaderUid] = useState<string | null>(null);
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [stoppingPredictions, setStoppingPredictions] = useState(false);
   const [nowMs, setNowMs] = useState<number>(Date.now());
 
   // auth guard
@@ -174,6 +191,19 @@ export default function MiniGamePlayPage() {
     });
   }, [roomCode, gw, seasonKey]);
 
+  // room leader
+  useEffect(() => {
+    const roomRef = doc(db, "rooms", roomCode);
+    return onSnapshot(
+      roomRef,
+      (snap) => {
+        const data = snap.data() as RoomDoc | undefined;
+        setLeaderUid(data?.leaderUid ?? null);
+      },
+      () => setLeaderUid(null),
+    );
+  }, [roomCode]);
+
   const current = useMemo(() => {
     if (!game) return null;
     const order = game.order || [];
@@ -186,10 +216,7 @@ export default function MiniGamePlayPage() {
     if (fixtureIndex >= fixtureIds.length) return null;
 
     const turnInFixture = turn % P;
-
-    // ✅ ROTATION: each new fixture shifts who goes first
     const rotatedIndex = (turnInFixture + fixtureIndex) % P;
-
     const uidTurn = order[rotatedIndex];
     const fixtureId = fixtureIds[fixtureIndex];
 
@@ -205,9 +232,9 @@ export default function MiniGamePlayPage() {
 
   const amITurn = !!user && !!current && current.uidTurn === user.uid;
 
-  // listen to taken scores for current fixture
+  // listen to all picks for this GW
   useEffect(() => {
-    if (gw == null || !current || !seasonKey) return;
+    if (gw == null || !seasonKey) return;
 
     const picksQ = query(
       collection(
@@ -220,14 +247,13 @@ export default function MiniGamePlayPage() {
         `gw-${gw}`,
         "picks",
       ),
-      where("fixtureId", "==", current.fixtureId),
     );
 
     return onSnapshot(picksQ, (snap) => {
-      const scores = snap.docs.map((d) => String((d.data() as PickDoc).score));
-      setTakenScores(scores);
+      const picks = snap.docs.map((d) => d.data() as PickDoc);
+      setAllPicks(picks);
     });
-  }, [roomCode, gw, current, seasonKey]);
+  }, [roomCode, gw, seasonKey]);
 
   // player display names (nickname first)
   useEffect(() => {
@@ -247,12 +273,51 @@ export default function MiniGamePlayPage() {
     );
   }, [roomCode]);
 
+  const isParallelDraft = game?.sameResultLock === false;
+
+  const myPickedFixtureIds = useMemo(() => {
+    if (!user) return new Set<number>();
+    const mine = allPicks.filter((p) => p.uid === user.uid);
+    return new Set(
+      mine
+        .map((p) => Number(p.fixtureId))
+        .filter((id) => Number.isFinite(id)),
+    );
+  }, [allPicks, user]);
+
+  useEffect(() => {
+    if (!isParallelDraft) return;
+    const fixtureIds = game?.fixtureIds ?? [];
+    if (!fixtureIds.length) return;
+    if (
+      selectedFixtureId != null &&
+      fixtureIds.includes(selectedFixtureId) &&
+      !myPickedFixtureIds.has(selectedFixtureId)
+    ) {
+      return;
+    }
+    const firstOpen = fixtureIds.find((id) => !myPickedFixtureIds.has(id)) ?? fixtureIds[0];
+    setSelectedFixtureId(firstOpen ?? null);
+  }, [isParallelDraft, game?.fixtureIds, myPickedFixtureIds, selectedFixtureId]);
+
+  const activeFixtureId = isParallelDraft
+    ? selectedFixtureId
+    : current?.fixtureId;
+
+  useEffect(() => {
+    const scores = allPicks
+      .filter((p) => Number(p.fixtureId) === activeFixtureId)
+      .map((p) => String(p.score || "").trim())
+      .filter(Boolean);
+    setTakenScores(scores);
+  }, [allPicks, activeFixtureId]);
+
   useEffect(() => {
     // reset inputs when fixture changes
     setHomeScore("");
     setAwayScore("");
     setErr(null);
-  }, [current?.fixtureId]);
+  }, [activeFixtureId]);
 
   if (gw == null || fixtures == null) {
     return (
@@ -272,6 +337,10 @@ export default function MiniGamePlayPage() {
   }
 
   // phase routing
+  if (game.state === "LOBBY") {
+    router.replace(`/room/${roomCode}/minigame`);
+    return null;
+  }
   if (game.state === "GOLDEN") {
     router.replace(`/room/${roomCode}/minigame/golden`);
     return null;
@@ -281,7 +350,7 @@ export default function MiniGamePlayPage() {
     return null;
   }
 
-  const fixture = fixtures.find((f) => f.fixtureId === current?.fixtureId);
+  const fixture = fixtures.find((f) => f.fixtureId === activeFixtureId);
   const gameLockAtMs = coerceMillis(game?.lockAt);
   const fallbackLockAtMs = fixtures.length
     ? fixtures
@@ -295,7 +364,12 @@ export default function MiniGamePlayPage() {
   const isLocked = lockAtMs != null && nowMs >= lockAtMs;
 
   const submitPick = async () => {
-    if (!current || !user) return;
+    if (!user) return;
+    if (!isParallelDraft && !current) return;
+    if (activeFixtureId == null) {
+      setErr("Select a fixture first.");
+      return;
+    }
     if (isLocked) {
       setErr("Mini-game is locked (deadline passed).");
       return;
@@ -305,6 +379,10 @@ export default function MiniGamePlayPage() {
       return;
     }
     const score = `${homeScore}-${awayScore}`;
+    if (isParallelDraft && myPickedFixtureIds.has(activeFixtureId)) {
+      setErr("You already picked this fixture.");
+      return;
+    }
 
     setSubmitting(true);
     setErr(null);
@@ -312,10 +390,23 @@ export default function MiniGamePlayPage() {
       const res = await fetch("/api/game/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode, gw, uid: user.uid, score, seasonKey }),
+        body: JSON.stringify({
+          roomCode,
+          gw,
+          uid: user.uid,
+          score,
+          fixtureId: activeFixtureId,
+          seasonKey,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Pick failed");
+      if (isParallelDraft && game?.fixtureIds?.length) {
+        const nextOpen = game.fixtureIds.find(
+          (id) => id !== activeFixtureId && !myPickedFixtureIds.has(id),
+        );
+        if (nextOpen != null) setSelectedFixtureId(nextOpen);
+      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Pick failed");
     } finally {
@@ -325,81 +416,121 @@ export default function MiniGamePlayPage() {
 
   const totalTurns = Math.max(Number(game.totalTurns ?? 0), 1);
   const turnNumber = Math.min(totalTurns, Number(game.currentTurn ?? 0) + 1);
-  const turnsRemaining = Math.max(totalTurns - turnNumber, 0);
-  const turnProgress = Math.min(turnNumber / totalTurns, 1);
-  const turnRingLength = 213.63;
   const currentTurnName = current?.uidTurn
     ? displayNamesByUid[current.uidTurn] || current.uidTurn.slice(0, 6)
     : "current player";
+  const playersCount = game.players?.length ?? 0;
+  const readyMap = game.draftReadyByUid ?? {};
+  const lockedInCount = Object.values(readyMap).filter(Boolean).length;
+  const myLockedIn = !!(user && game.draftReadyByUid?.[user.uid]);
+  const isLeader = !!user && !!leaderUid && user.uid === leaderUid;
+
+  const stopPredictions = async () => {
+    if (!user || !isLeader || gw == null || !seasonKey) return;
+    if (stoppingPredictions) return;
+    const confirmed = window.confirm(
+      "Stop this mini-game and send everyone back to lobby?",
+    );
+    if (!confirmed) return;
+
+    setStoppingPredictions(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/game/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          gw,
+          leaderUid: user.uid,
+          seasonKey,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to stop predictions");
+    } catch (e: unknown) {
+      setErr(
+        e instanceof Error ? e.message : "Failed to stop predictions",
+      );
+    } finally {
+      setStoppingPredictions(false);
+    }
+  };
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <div className="flex items-start justify-between">
+        <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm text-muted">
+            <h1 className="font-ui text-2xl font-semibold text-foreground">
+              {isParallelDraft ? "Sprint" : "Round-Robin"}
+            </h1>
+            <div className="font-display text-sm text-muted">
               Room {roomCode} • GW {gw}
             </div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              Predicicton Round-Robin
-            </h1>
           </div>
-        </div>
-
-        <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
-          <div className="grid grid-cols-[auto_1fr] sm:grid-cols-[auto_auto_1fr] items-center gap-3">
-            <div className="relative w-16 h-16">
-              <svg
-                className="absolute inset-0 w-full h-full -rotate-90"
-                viewBox="0 0 80 80"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="40"
-                  cy="40"
-                  r="34"
-                  fill="none"
-                  stroke="rgba(45, 212, 191, 0.2)"
-                  strokeWidth="4"
-                />
-                <circle
-                  cx="40"
-                  cy="40"
-                  r="34"
-                  fill="none"
-                  stroke="#2dd4bf"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={turnRingLength}
-                  strokeDashoffset={turnRingLength - turnProgress * turnRingLength}
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-semibold text-foreground leading-none">
-                  {turnsRemaining}
-                </span>
+          {!isParallelDraft && (
+            <div className="text-right -mt-1">
+              <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                Turn {turnNumber}
+              </div>
+              <div className="font-display text-sm tracking-wide text-muted">
+                Out of {totalTurns}
               </div>
             </div>
-
-            <div className="hidden sm:flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/icons/pl-lion.png"
-                alt="Premier League"
-                className="h-12 w-12 object-contain"
-                loading="lazy"
-              />
-            </div>
-
+          )}
+        </div>
+        {isLeader && game.state === "DRAFT" && (
+          <button
+            onClick={stopPredictions}
+            disabled={stoppingPredictions}
+            className={`w-full rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60 ${BTN_3D}`}
+          >
+            {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
+          </button>
+        )}
+        {isParallelDraft ? (
+          <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
             <div className="text-right sm:text-left">
-              <div className="text-base font-semibold text-foreground">Turn {turnNumber}</div>
-              <div className="text-xs text-muted uppercase tracking-wide">Out of {totalTurns}</div>
+              <div className="text-base font-semibold text-foreground">All players pick together</div>
+              <div className="text-xs text-muted uppercase tracking-wide">
+                Locked in {lockedInCount}/{playersCount}
+              </div>
+              <div className="text-xs text-muted uppercase tracking-wide">
+                Your picks {myPickedFixtureIds.size}/{game.fixtureIds?.length ?? 0}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
         {/* fixture */}
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+          {isParallelDraft && (
+            <div className="mb-3">
+              <label className="sr-only" htmlFor="parallel-fixture-select">
+                Select fixture
+              </label>
+              <select
+                id="parallel-fixture-select"
+                value={activeFixtureId ?? ""}
+                onChange={(e) => setSelectedFixtureId(Number(e.target.value))}
+                className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-3 focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                {(game.fixtureIds ?? []).map((fid) => {
+                  const f = fixtures.find((x) => x.fixtureId === fid);
+                  const picked = myPickedFixtureIds.has(fid);
+                  const label = f
+                    ? `${f.home.shortName || f.home.name} vs ${f.away.shortName || f.away.name}`
+                    : `Fixture ${fid}`;
+                  return (
+                    <option key={fid} value={fid}>
+                      {picked ? "✓ " : ""}{label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
           {fixture && (
             <div className="space-y-2 mb-2">
               <div className="relative text-xs text-muted h-4">
@@ -407,7 +538,7 @@ export default function MiniGamePlayPage() {
                   {(() => {
                     const d = fmtKickoffDateWithOrdinal(fixture.kickoff);
                     return (
-                      <span>
+                      <span className="font-display font-semibold">
                         {d.dayNum}
                         <sup className="text-[9px] ml-[1px]">{d.suffix}</sup>{" "}
                         {d.monthYear}
@@ -415,7 +546,7 @@ export default function MiniGamePlayPage() {
                     );
                   })()}
                 </div>
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                <div className="font-display font-semibold absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                   {fmtKickoffTime(fixture.kickoff)}
                 </div>
               </div>
@@ -427,10 +558,17 @@ export default function MiniGamePlayPage() {
                   badge={fixture.home.badge}
                 />
                 <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                  {fixture.home.shortName || fixture.home.name}
+                  <span className="font-display block">
+                    {teamAbbr(fixture.home.name, fixture.home.tla, fixture.home.shortName)}
+                  </span>
+                  <PendulumName
+                    text={fixture.home.name}
+                    windowPx={null}
+                    className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                  />
                 </div>
               </div>
-              <div className="text-xs text-muted uppercase">vs</div>
+              <div className="font-display text-xs text-muted uppercase">vs</div>
               <div className="flex flex-col items-center text-center min-w-0">
                 <TeamBadge
                   name={fixture.away.name}
@@ -438,7 +576,14 @@ export default function MiniGamePlayPage() {
                   badge={fixture.away.badge}
                 />
                 <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                  {fixture.away.shortName || fixture.away.name}
+                  <span className="font-display block">
+                    {teamAbbr(fixture.away.name, fixture.away.tla, fixture.away.shortName)}
+                  </span>
+                  <PendulumName
+                    text={fixture.away.name}
+                    windowPx={null}
+                    className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                  />
                 </div>
               </div>
               </div>
@@ -454,9 +599,9 @@ export default function MiniGamePlayPage() {
               <div className="text-muted">None yet</div>
             ) : (
               <div className="flex flex-wrap justify-center gap-2">
-                {takenScores.map((s) => (
+                {takenScores.map((s, idx) => (
                   <span
-                    key={s}
+                    key={`${s}-${idx}`}
                     className="text-xs bg-surface border border-teal-500 rounded-full px-2 py-1 text-foreground"
                   >
                     {s.replace("-", "–")}
@@ -473,8 +618,54 @@ export default function MiniGamePlayPage() {
           </div>
         )}
 
-        {/* your turn or waiting */}
-        {amITurn ? (
+        {/* pick action */}
+        {isParallelDraft ? (
+          myLockedIn ? (
+            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
+              <div className="font-semibold text-foreground">You are locked in.</div>
+              <div className="text-sm text-muted mt-1">
+                Waiting for others... {lockedInCount}/{playersCount} locked.
+              </div>
+            </div>
+          ) : (
+            <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
+              <div className="font-semibold text-foreground">Submit your pick</div>
+              <div className="text-xs text-muted">
+                Progress: {myPickedFixtureIds.size}/{game.fixtureIds?.length ?? 0} fixtures
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <input
+                  value={homeScore}
+                  onChange={(e) =>
+                    onlyDigitsOrEmpty(e.target.value) &&
+                    setHomeScore(e.target.value)
+                  }
+                  className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+                <span className="text-2xl text-muted">-</span>
+                <input
+                  value={awayScore}
+                  onChange={(e) =>
+                    onlyDigitsOrEmpty(e.target.value) &&
+                    setAwayScore(e.target.value)
+                  }
+                  className="w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </div>
+              <button
+                disabled={submitting || isLocked || activeFixtureId == null}
+                onClick={submitPick}
+                className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
+              >
+                {submitting ? "Submitting…" : "Confirm score"}
+              </button>
+            </div>
+          )
+        ) : amITurn ? (
           <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
             <div className="font-semibold text-foreground">Your turn</div>
 
@@ -512,7 +703,18 @@ export default function MiniGamePlayPage() {
           </div>
         ) : (
           <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-            Waiting for {currentTurnName} to pick…
+            Waiting for <span className="font-display">{currentTurnName}</span> to pick…
+          </div>
+        )}
+        {!isParallelDraft && (
+          <div className="flex items-center justify-center pt-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icons/icon-192.png"
+              alt="PL Predictions"
+              className="h-12 w-12 object-contain"
+              loading="lazy"
+            />
           </div>
         )}
       </div>

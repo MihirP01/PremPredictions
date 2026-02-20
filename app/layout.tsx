@@ -1,6 +1,13 @@
 import "./globals.css";
 import { AuthProvider } from "../components/AuthProvider";
 import PWARegister from "../components/PWARegister";
+import { Orbitron } from "next/font/google";
+
+const displayFont = Orbitron({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
 
 export const metadata = {
   title: "PL Predictions",
@@ -29,7 +36,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-[100dvh]">
+      <body className={`min-h-[100dvh] ${displayFont.variable}`}>
         <AuthProvider>
           <PWARegister />
           {children}

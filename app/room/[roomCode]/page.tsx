@@ -501,10 +501,11 @@ export default function RoomPage() {
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <div className="relative z-30 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Room: <span className="italic font-thin text-xl">{roomCode}</span>
-          </h1>
+        <div className="relative z-30 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Room</h1>
+            <div className="font-display text-sm text-muted">{roomCode}</div>
+          </div>
           <div ref={settingsWrapRef} className="relative page-actions-enter">
             <button
               onClick={() => setSettingsOpen((v) => !v)}
@@ -670,7 +671,9 @@ export default function RoomPage() {
                 className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
               >
                 <div className="font-medium text-foreground">
-                  {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                  <span className="font-display">
+                    {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                  </span>
                 </div>
 
                 {p.role === "leader" && (
@@ -695,7 +698,7 @@ export default function RoomPage() {
                 onClick={() => setRoomSwitcherOpen(false)}
                 className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
               >
-                Stay in {roomCode}
+                Stay in <span className="font-display">{roomCode}</span>
               </button>
             </div>
 
@@ -719,7 +722,7 @@ export default function RoomPage() {
                     onClick={() => switchToRoom(r.roomCode)}
                     className="w-full text-left text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
                   >
-                    {r.roomCode} {r.roomCode === roomCode ? "• Current" : ""}
+                    <span className="font-display">{r.roomCode}</span> {r.roomCode === roomCode ? "• Current" : ""}
                   </button>
                 ))
               )}

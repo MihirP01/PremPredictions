@@ -14,6 +14,9 @@ type StartBody = {
 
 type RoomDoc = {
   leaderUid?: string;
+  settings?: {
+    sameResultLock?: boolean;
+  };
 };
 
 type GameDoc = { state?: string };
@@ -54,6 +57,10 @@ export async function POST(req: Request) {
     const room = roomSnap.data() as RoomDoc;
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
+    const sameResultLock = room.settings?.sameResultLock !== false;
+    const draftMode: "turn" | "parallel" = sameResultLock
+      ? "turn"
+      : "parallel";
 
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
 
@@ -63,7 +70,7 @@ export async function POST(req: Request) {
       .get();
     const players = lobbySnap.docs.map((d) => d.id);
 
-    if (players.length < 2)
+    if (players.length < 1)
       return NextResponse.json(
         { error: "Need at least 2 players in lobby" },
         { status: 400 },
@@ -144,6 +151,9 @@ export async function POST(req: Request) {
           fixtureIds: fixtureIds10,
           currentTurn: 0,
           totalTurns: order.length * fixtureIds10.length,
+          draftMode,
+          sameResultLock,
+          draftReadyByUid: {},
           firstKickoffAt,
           lockAt,
           seasonKey,

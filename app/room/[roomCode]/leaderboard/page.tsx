@@ -460,7 +460,7 @@ export default function LeaderboardMatrixPage() {
           <div className="flex items-start justify-between gap-2">
             <div>
               <h1 className="text-2xl font-semibold text-foreground">Leaderboard</h1>
-              <div className="text-sm text-muted">
+              <div className="font-display text-sm text-muted">
                 {roomCode} • {seasonLabel(seasonKey || "----")} • GW1 - GW{currentGw}
               </div>
             </div>
@@ -591,7 +591,7 @@ export default function LeaderboardMatrixPage() {
                   key={`${topView}-top-${p.uid}`}
                   className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
                 >
-                  {rankLabel(rank)} {p.displayName} - {scoreForTopView(p.uid)}
+                  <span className="font-display">{rankLabel(rank)} {p.displayName} - {scoreForTopView(p.uid)}</span>
                 </div>
               );
             })}
@@ -615,10 +615,10 @@ export default function LeaderboardMatrixPage() {
                     key={`${topView}-rank-${p.uid}`}
                     className="flex items-center justify-between rounded-md border border-subtle px-2 py-1 text-sm"
                   >
-                    <span className="text-foreground">
+                    <span className="font-display text-foreground">
                       {i + 1}. {p.displayName}
                     </span>
-                    <span className="font-semibold text-foreground">{scoreForTopView(p.uid)}</span>
+                    <span className="font-display font-semibold text-foreground">{scoreForTopView(p.uid)}</span>
                   </div>
                 ))}
               </div>
@@ -688,11 +688,11 @@ export default function LeaderboardMatrixPage() {
                         : "border-teal-500 bg-surface",
                   ].join(" ")}
                 >
-                  <div className="text-sm text-foreground">
+                  <div className="font-display text-sm text-foreground">
                     {i < 3 ? `${rankLabel(i + 1)} ` : ""}
                     {p.displayName}
                   </div>
-                  <div className="text-sm font-semibold text-foreground">{pts}</div>
+                  <div className="font-display text-sm font-semibold text-foreground">{pts}</div>
                 </div>
               );
             })}
@@ -712,7 +712,7 @@ export default function LeaderboardMatrixPage() {
                     key={p.uid}
                     className="w-[120px] p-3 text-center border-b border-subtle font-semibold"
                   >
-                    <span className="block truncate">{p.displayName}</span>
+                    <span className="font-display block truncate">{p.displayName}</span>
                   </th>
                 ))}
               </tr>
@@ -735,7 +735,7 @@ export default function LeaderboardMatrixPage() {
                         : "bg-surface-2 text-foreground",
                     ].join(" ")}
                   >
-                    GW{gw}
+                    <span className="font-display">GW{gw}</span>
                   </td>
                   {sortedPlayers.map((p) => (
                     <td key={p.uid} className="p-3 text-center text-foreground">
@@ -746,7 +746,7 @@ export default function LeaderboardMatrixPage() {
                         return (
                       <span
                         className={[
-                          "inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
+                          "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
                           rankToHighlight === 1
                             ? "bg-yellow-400/20 border border-yellow-400/80"
                             : rankToHighlight === 2

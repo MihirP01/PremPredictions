@@ -23,6 +23,7 @@ type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type UserDoc = { displayName?: string; nickName?: string };
 type LobbyDoc = { displayName?: string };
 type GameStateDoc = { state?: string };
+type RoomDoc = { leaderUid?: string; settings?: { sameResultLock?: boolean } };
 type Fixture = { kickoff?: string };
 
 export default function MiniGameLobbyPage() {
@@ -46,6 +47,7 @@ export default function MiniGameLobbyPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [starting, setStarting] = useState(false);
+  const [sameResultLockEnabled, setSameResultLockEnabled] = useState<boolean>(true);
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
 
@@ -70,7 +72,11 @@ export default function MiniGameLobbyPage() {
         router.replace("/room-gate");
         return;
       }
-      if (!cancelled) setLeaderUid(roomSnap.data()?.leaderUid ?? null);
+      if (!cancelled) {
+        const roomData = roomSnap.data() as RoomDoc | undefined;
+        setLeaderUid(roomData?.leaderUid ?? null);
+        setSameResultLockEnabled(roomData?.settings?.sameResultLock !== false);
+      }
     })().catch(() => setError("Failed to load room."));
 
     return () => {
@@ -442,9 +448,9 @@ export default function MiniGameLobbyPage() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              Matchday Draft Lobby
+              Mini-Game Lobby
             </h1>
-            <div className="text-sm text-muted">
+            <div className="font-display text-sm text-muted">
               {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
             </div>
           </div>
@@ -464,6 +470,15 @@ export default function MiniGameLobbyPage() {
         <div className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
           <div className="font-semibold text-foreground">
             Mini-game Controls
+          </div>
+          <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
+            <div className="text-sm font-semibold text-foreground">Mini-game Style</div>
+            <div className="text-sm text-muted">
+              Style:{" "}
+              <span className="font-display text-foreground font-semibold">
+                {sameResultLockEnabled ? "Round-Robin" : "Sprint"}
+              </span>
+            </div>
           </div>
           <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-3">
             <div className="text-sm font-semibold text-foreground">Weekend Lock Countdown</div>
@@ -499,12 +514,12 @@ export default function MiniGameLobbyPage() {
                       />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg sm:text-xl font-semibold text-foreground leading-none">
+                      <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
                         {unit.value}
                       </span>
                     </div>
                   </div>
-                  <div className="text-[11px] uppercase tracking-wide text-accent font-semibold">
+                  <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
                     {unit.label}
                   </div>
                 </div>
@@ -519,7 +534,7 @@ export default function MiniGameLobbyPage() {
                 disabled={
                   starting ||
                   gameweek == null ||
-                  players.length < 2 ||
+                  players.length < 1 ||
                   !allPlayersInLobby ||
                   isLocked
                 }
@@ -565,16 +580,16 @@ export default function MiniGameLobbyPage() {
                     key={p.uid}
                     className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
                   >
-                    <div className="font-medium text-foreground">{p.displayName}</div>
+                    <div className="font-display font-medium text-foreground">{p.displayName}</div>
                     <div className="flex items-center gap-2">
                       {p.uid === leaderUid && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
+                        <span className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
                           Leader
                         </span>
                       )}
                       <span
                         className={[
-                          "text-xs px-2 py-1 rounded-full border",
+                          "font-display text-xs px-2 py-1 rounded-full border",
                           inLobby
                             ? "bg-emerald-400/15 border-emerald-400 text-emerald-300"
                             : "bg-amber-400/15 border-amber-400 text-amber-300",

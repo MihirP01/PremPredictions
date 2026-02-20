@@ -365,7 +365,7 @@ export default function RoomStatsPage() {
           <div className="flex items-start justify-between gap-2">
             <div>
               <h1 className="text-2xl font-semibold text-foreground">Player Stats</h1>
-              <div className="text-sm text-muted">
+              <div className="font-display text-sm text-muted">
                 {roomCode} • {seasonLabel(seasonKey || "----")} • GW 1 - GW {currentGw}
               </div>
             </div>
@@ -406,10 +406,10 @@ export default function RoomStatsPage() {
             <select
               value={effectiveSelectedUid}
               onChange={(e) => setSelectedUid(e.target.value)}
-              className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               {players.map((p) => (
-                <option key={p.uid} value={p.uid}>
+                <option className="font-display" key={p.uid} value={p.uid}>
                   {p.displayName}
                 </option>
               ))}
@@ -431,33 +431,33 @@ export default function RoomStatsPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Total Points</div>
-                <div className="text-xl font-semibold text-foreground">{stats.totalPoints}</div>
+                <div className="font-display text-xl font-semibold text-foreground">{stats.totalPoints}</div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Weeks Scored</div>
-                <div className="text-xl font-semibold text-foreground">{stats.weeksScored}</div>
+                <div className="font-display text-xl font-semibold text-foreground">{stats.weeksScored}</div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Exact Scores</div>
-                <div className="text-xl font-semibold text-foreground">
+                <div className="font-display text-xl font-semibold text-foreground">
                   {stats.exactCount} ({pct(stats.exactCount, stats.totalGradedPicks)})
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Correct Results</div>
-                <div className="text-xl font-semibold text-foreground">
+                <div className="font-display text-xl font-semibold text-foreground">
                   {stats.resultOnlyCount} ({pct(stats.resultOnlyCount, stats.totalGradedPicks)})
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Golden Bonus Points</div>
-                <div className="text-xl font-semibold text-foreground">
+                <div className="font-display text-xl font-semibold text-foreground">
                   {stats.goldenBonusPoints}
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Best GW</div>
-                <div className="text-xl font-semibold text-foreground">
+                <div className="font-display text-xl font-semibold text-foreground">
                   {stats.bestGw ? `GW${stats.bestGw} (${stats.bestGwPoints})` : "-"}
                 </div>
               </div>
@@ -471,8 +471,8 @@ export default function RoomStatsPage() {
                     key={gw}
                     className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
                   >
-                    <span className="text-sm text-muted">GW {gw}</span>
-                    <span className="font-semibold text-foreground">{stats.byGw[gw] ?? 0}</span>
+                    <span className="font-display text-sm text-muted">GW {gw}</span>
+                    <span className="font-display font-semibold text-foreground">{stats.byGw[gw] ?? 0}</span>
                   </div>
                 ))}
               </div>
@@ -491,7 +491,7 @@ export default function RoomStatsPage() {
                     className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
                   >
                     <span className="text-sm text-muted">{t.label}</span>
-                    <span className="font-semibold text-foreground">
+                    <span className="font-display font-semibold text-foreground">
                       {stats.outcomeHits[t.key]}/{stats.outcomeAttempts[t.key]} (
                       {pct(stats.outcomeHits[t.key], stats.outcomeAttempts[t.key])})
                     </span>

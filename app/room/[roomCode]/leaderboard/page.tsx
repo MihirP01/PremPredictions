@@ -2,11 +2,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Settings } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
+import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../../components/RoomSettingsMenu";
+import PageBackButton from "../../../../components/PageBackButton";
+import PageShell from "../../../../components/PageShell";
+import SliderSwitch from "../../../../components/SliderSwitch";
+import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { triggerTapHaptic } from "@/lib/haptics";
 import {
   collection,
   doc,
@@ -108,6 +112,8 @@ export default function LeaderboardMatrixPage() {
   const [gwScoreComputedAt, setGwScoreComputedAt] = useState<Date | null>(null);
   const [leaderboardRefreshedAt, setLeaderboardRefreshedAt] =
     useState<Date | null>(null);
+  const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [latestScoredGw, setLatestScoredGw] = useState<number | null>(null);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
   const [topView, setTopView] = useState<"overall" | "current" | "previous">(
@@ -233,6 +239,12 @@ export default function LeaderboardMatrixPage() {
       document.removeEventListener("touchstart", onPointerDown);
     };
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (refreshLockedUntil <= nowMs) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [refreshLockedUntil, nowMs]);
 
   // room leader (for leader-only tools)
   useEffect(() => {
@@ -380,6 +392,10 @@ export default function LeaderboardMatrixPage() {
   }, [players, pointsByUserByGw, currentGw]);
 
   const isLeader = !!user && leaderUid === user.uid;
+  const refreshLockSeconds = Math.max(
+    0,
+    Math.ceil((refreshLockedUntil - nowMs) / 1000),
+  );
   const rankedByTopView = useMemo(() => {
     if (topView === "current") return currentGwSortedPlayers;
     if (topView === "previous") return previousGwSortedPlayers;
@@ -454,30 +470,21 @@ export default function LeaderboardMatrixPage() {
     }
   }
 
+  async function refreshLeaderboard() {
+    if (busy || refreshLockSeconds > 0) return;
+    setRefreshLockedUntil(Date.now() + 10_000);
+    setNowMs(Date.now());
+    await loadSavedScores();
+  }
+
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
-      <div className="max-w-6xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+    <PageShell>
         <div className="relative z-30 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground">Leaderboard</h1>
-              <div className="font-display text-sm text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")}
-              </div>
-            </div>
-            <div className="ml-auto flex gap-2 page-actions-enter">
-              <button
-                onClick={() => {
-                  triggerTapHaptic();
-                  router.push(`/room/${roomCode}`);
-                }}
-                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
-                data-action="back"
-              >
-                Back
-              </button>
-            </div>
-          </div>
+          <TopActionRow
+            title="Leaderboard"
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
+          />
 
           <div className="flex items-center justify-between gap-2">
             {!!seasonOptions.length && (
@@ -502,27 +509,13 @@ export default function LeaderboardMatrixPage() {
                 </span>
               </div>
             )}
-            <div ref={settingsWrapRef} className="relative ml-auto page-actions-enter">
-              <button
-                onClick={() => setSettingsOpen((v) => !v)}
-                className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
-                data-action="settings"
-                aria-label="Open settings"
-              >
-                <Settings size={16} />
-              </button>
-              {settingsOpen && (
-                <div className="absolute top-0 right-[calc(100%+12px)] w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
-                  <div className="font-semibold text-foreground">Settings</div>
-                  <button
-                    onClick={() => loadSavedScores()}
-                    disabled={busy}
-                    className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                  >
-                    {busy ? "Refreshing..." : "Refresh Leaderboard"}
-                  </button>
-                  {isLeader && (
-                    <div className="rounded-lg border border-teal-500 p-3 space-y-2">
+            <div className="ml-auto flex items-center gap-2 page-actions-enter">
+              {isLeader && (
+                <div ref={settingsWrapRef} className="relative">
+                  <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+                  <SettingsDropdownPanel open={settingsOpen}>
+                    <div className="font-semibold text-foreground">Leader Tools</div>
+                    <div className="space-y-2">
                       <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
                         Leader Tools
                       </div>
@@ -539,9 +532,22 @@ export default function LeaderboardMatrixPage() {
                           : "Recalculate Scores"}
                       </button>
                     </div>
-                  )}
+                  </SettingsDropdownPanel>
                 </div>
               )}
+              <button
+                onClick={refreshLeaderboard}
+                disabled={busy || refreshLockSeconds > 0}
+                className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn disabled:opacity-60"
+                aria-label="Refresh leaderboard"
+                title={
+                  refreshLockSeconds > 0
+                    ? `Refresh locked (${refreshLockSeconds}s)`
+                    : "Refresh leaderboard"
+                }
+              >
+                <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
+              </button>
             </div>
           </div>
         </div>
@@ -556,37 +562,17 @@ export default function LeaderboardMatrixPage() {
           className="rounded-xl p-3 bg-surface-2 border border-teal-500 space-y-3"
           style={{ animationDelay: "120ms", animationDuration: "520ms" }}
         >
-          <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface p-1 overflow-hidden">
-            <span
-              aria-hidden
-              className={[
-                "absolute top-1 bottom-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                topView === "overall"
-                  ? "translate-x-0"
-                  : topView === "current"
-                    ? "translate-x-full"
-                    : "translate-x-[200%]",
-              ].join(" ")}
-            />
-            <button
-              onClick={() => setTopView("overall")}
-              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "overall" ? "text-accent-foreground" : "text-foreground"}`}
-            >
-              Overall
-            </button>
-            <button
-              onClick={() => setTopView("current")}
-              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "current" ? "text-accent-foreground" : "text-foreground"}`}
-            >
-              GW{currentGw}
-            </button>
-            <button
-              onClick={() => setTopView("previous")}
-              className={`relative z-10 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${topView === "previous" ? "text-accent-foreground" : "text-foreground"}`}
-            >
-              GW{medalsGw}
-            </button>
-          </div>
+          <SliderSwitch
+            options={[
+              { value: "overall", label: "Overall" },
+              { value: "current", label: `GW${currentGw}` },
+              { value: "previous", label: `GW${medalsGw}` },
+            ]}
+            value={topView}
+            onChange={setTopView}
+            className="relative grid rounded-lg border border-teal-500 bg-surface p-1 overflow-hidden"
+            buttonClassName="relative z-10 rounded-md px-2 py-2 text-xs font-semibold text-foreground transition-colors"
+          />
           <div className="mt-2 flex flex-wrap justify-center gap-2">
             {rankedByTopView.slice(0, 3).map((p, i) => {
               const rank = i + 1;
@@ -786,7 +772,6 @@ export default function LeaderboardMatrixPage() {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

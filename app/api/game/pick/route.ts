@@ -3,11 +3,6 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
-import {
-  coerceMillis,
-  getBaseUrl,
-  loadGwFixturesWithLockWindow,
-} from "../lock-window";
 import { resolveSeasonKey } from "../../season";
 
 type PickBody = {
@@ -60,8 +55,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Bad gw" }, { status: 400 });
     if (!userUid)
       return NextResponse.json({ error: "Missing uid" }, { status: 400 });
-    if (!scoreOk(sc))
-      return NextResponse.json({ error: "Bad score" }, { status: 400 });
 
     const seasonBase = `rooms/${rc}/seasons/${sk}`;
     const roomRef = adminDb.doc(`rooms/${rc}`);
@@ -71,30 +64,6 @@ export async function POST(req: Request) {
     const preGameSnap = await gameRef.get();
     if (!preGameSnap.exists) {
       return NextResponse.json({ error: "Game not started" }, { status: 400 });
-    }
-
-    const preGame = preGameSnap.data() as GameDoc;
-    let lockAtMs = coerceMillis(preGame.lockAt);
-
-    if (lockAtMs == null) {
-      const baseUrl = getBaseUrl(req);
-      const { firstKickoffAt, lockAt } = await loadGwFixturesWithLockWindow(
-        baseUrl,
-        gwn,
-        sk,
-      );
-      await gameRef.set({ firstKickoffAt, lockAt }, { merge: true });
-      lockAtMs = lockAt.getTime();
-    }
-
-    if (lockAtMs != null && Date.now() >= lockAtMs) {
-      return NextResponse.json(
-        {
-          error:
-            "Mini-game is locked (deadline is 1 hour before first kickoff).",
-        },
-        { status: 409 },
-      );
     }
 
     await adminDb.runTransaction(async (tx) => {
@@ -111,13 +80,6 @@ export async function POST(req: Request) {
           ? gameSameResultLock
           : (roomSnap.data() as RoomDoc | undefined)?.settings?.sameResultLock !==
             false;
-
-      const txLockAtMs = coerceMillis(game.lockAt) ?? lockAtMs;
-      if (txLockAtMs != null && Date.now() >= txLockAtMs) {
-        throw new Error(
-          "Mini-game is locked (deadline is 1 hour before first kickoff).",
-        );
-      }
 
       const order: string[] = Array.isArray(game.order) ? game.order : [];
       const fixtureIds: number[] = Array.isArray(game.fixtureIds)
@@ -142,9 +104,52 @@ export async function POST(req: Request) {
         game.totalTurns ?? P * fixtureIds.length,
       );
       const isCaptainMode = game.gameModeStyle === "captain";
+      const captainParallelMode = isCaptainMode && !sameResultLock;
+      let shouldWritePick = true;
 
       let fixtureIdToPick: number;
-      if (activeDraftMode === "parallel") {
+      if (captainParallelMode) {
+        const captainRoundIndex = Number(game.currentTurn ?? 0);
+        if (captainRoundIndex >= fixtureIds.length) {
+          throw new Error("Draft already complete");
+        }
+
+        const captainUid = order[captainRoundIndex % P];
+        const storedFixtureId = Number(game.currentFixtureId);
+        const hasStoredFixture =
+          Number.isFinite(storedFixtureId) && fixtureIds.includes(storedFixtureId);
+
+        if (!hasStoredFixture) {
+          if (userUid !== captainUid) {
+            throw new Error("Waiting for captain to choose fixture");
+          }
+          if (!Number.isFinite(reqFixtureId)) {
+            throw new Error("Captain must choose a fixture");
+          }
+          if (!fixtureIds.includes(reqFixtureId)) {
+            throw new Error("Fixture not part of this game");
+          }
+
+          const picksForCaptainSnap = await tx.get(picksCol);
+          const usedFixtureIds = new Set(
+            picksForCaptainSnap.docs
+              .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
+              .filter((id) => Number.isFinite(id)),
+          );
+          if (usedFixtureIds.has(reqFixtureId)) {
+            throw new Error("Fixture already completed");
+          }
+
+          fixtureIdToPick = reqFixtureId;
+          shouldWritePick = false;
+        } else {
+          fixtureIdToPick = storedFixtureId;
+          if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
+            throw new Error("This fixture is locked for this round");
+          }
+          if (!scoreOk(sc)) throw new Error("Bad score");
+        }
+      } else if (activeDraftMode === "parallel") {
         const currentFixtureIndex = Number(game.currentTurn ?? 0);
         if (currentFixtureIndex >= fixtureIds.length) {
           throw new Error("Draft already complete");
@@ -153,6 +158,7 @@ export async function POST(req: Request) {
         if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
           throw new Error("This fixture is locked. Wait for current round to complete.");
         }
+        if (!scoreOk(sc)) throw new Error("Bad score");
       } else {
         if (currentTurn >= totalTurns) throw new Error("Draft already complete");
 
@@ -196,6 +202,7 @@ export async function POST(req: Request) {
         } else {
           fixtureIdToPick = fixtureIds[fixtureIndex];
         }
+        if (!scoreOk(sc)) throw new Error("Bad score");
       }
 
       // Uniqueness: score can't be taken twice for same fixture
@@ -209,28 +216,64 @@ export async function POST(req: Request) {
       }
 
       const pickId = `${userUid}_${fixtureIdToPick}`;
-      const pickRef = adminDb.doc(
-        `${seasonBase}/games/gw-${gwn}/picks/${pickId}`,
-      );
-
-      // Optional safety: prevent same user picking same fixture twice
-      const alreadyPickedSnap = await tx.get(pickRef);
-      if (alreadyPickedSnap.exists)
-        throw new Error("You already picked this fixture");
+      const pickRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}/picks/${pickId}`);
+      if (shouldWritePick) {
+        // Optional safety: prevent same user picking same fixture twice
+        const alreadyPickedSnap = await tx.get(pickRef);
+        if (alreadyPickedSnap.exists) throw new Error("You already picked this fixture");
+      }
 
       // -------- WRITES AFTER --------
-      tx.set(
-        pickRef,
-        {
-          uid: userUid,
-          fixtureId: fixtureIdToPick,
-          score: sc,
-          createdAt: new Date(),
-        },
-        { merge: false },
-      );
+      if (shouldWritePick) {
+        tx.set(
+          pickRef,
+          {
+            uid: userUid,
+            fixtureId: fixtureIdToPick,
+            score: sc,
+            createdAt: new Date(),
+          },
+          { merge: false },
+        );
+      }
 
-      if (activeDraftMode === "parallel") {
+      if (captainParallelMode) {
+        const roundIndex = Number(game.currentTurn ?? 0);
+        const hasSelectedFixture =
+          Number.isFinite(Number(game.currentFixtureId)) &&
+          fixtureIds.includes(Number(game.currentFixtureId));
+
+        if (!hasSelectedFixture || !shouldWritePick) {
+          tx.update(gameRef, {
+            currentFixtureId: fixtureIdToPick,
+            draftReadyByUid: {},
+          });
+        } else {
+          readyByUid[userUid] = true;
+          const everyoneReady = order.every((uidInGame) => readyByUid[uidInGame] === true);
+          if (everyoneReady) {
+            const nextFixtureIndex = roundIndex + 1;
+            if (nextFixtureIndex >= fixtureIds.length) {
+              tx.update(gameRef, {
+                state: "GOLDEN",
+                draftReadyByUid: {},
+                currentTurn: nextFixtureIndex,
+                currentFixtureId: null,
+              });
+            } else {
+              tx.update(gameRef, {
+                currentTurn: nextFixtureIndex,
+                draftReadyByUid: {},
+                currentFixtureId: null,
+              });
+            }
+          } else {
+            tx.update(gameRef, {
+              draftReadyByUid: readyByUid,
+            });
+          }
+        }
+      } else if (activeDraftMode === "parallel") {
         readyByUid[userUid] = true;
         const everyoneReady = order.every((uidInGame) => readyByUid[uidInGame] === true);
         if (everyoneReady) {

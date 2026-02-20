@@ -3,11 +3,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
-import PendulumName from "../../../../../components/PendulumName";
+import AnimatedModal from "../../../../../components/AnimatedModal";
+import SpecialBreak from "../../../../../components/SpecialBreak";
+import TeamBadge from "../../../../../components/TeamBadge";
+import TeamLabel from "../../../../../components/TeamLabel";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { formatDateWithOrdinal, formatTime24 } from "@/lib/dateDisplay";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
-import { coerceMillis, ONE_HOUR_MS } from "../lock-utils";
+import {
+  CaptainBanner,
+  CaptainChooseFixturePanel,
+  CaptainTurnIndicator,
+} from "./modes/CaptainMode";
+import { RoundRobinActionPanel, RoundRobinTurnIndicator } from "./modes/RoundRobinMode";
+import { SprintActionPanel, SprintTurnIndicator } from "./modes/SprintMode";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -42,62 +52,6 @@ function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);
 }
 
-function fmtKickoffTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function fmtKickoffDateWithOrdinal(iso: string) {
-  const dt = new Date(iso);
-  const dayNum = dt.getDate();
-  const suffix =
-    dayNum % 10 === 1 && dayNum % 100 !== 11
-      ? "st"
-      : dayNum % 10 === 2 && dayNum % 100 !== 12
-        ? "nd"
-        : dayNum % 10 === 3 && dayNum % 100 !== 13
-          ? "rd"
-          : "th";
-  const monthYear = dt.toLocaleDateString("en-GB", {
-    month: "short",
-    year: "2-digit",
-  });
-  return { dayNum, suffix, monthYear };
-}
-
-function teamAbbr(name: string, tla?: string, shortName?: string) {
-  const t = String(tla || "").trim().toUpperCase();
-  if (t.length === 3) return t;
-  const s = String(shortName || "").trim();
-  if (s && s.length <= 4) return s.toUpperCase();
-  return (name || "").slice(0, 3).toUpperCase();
-}
-
-function TeamBadge({
-  name,
-  shortName,
-  badge,
-}: {
-  name: string;
-  shortName?: string;
-  badge?: string | null;
-}) {
-  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
-  return (
-    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-      {badge ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
-      )}
-    </div>
-  );
-}
-
 export default function MiniGamePlayPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -124,7 +78,7 @@ export default function MiniGamePlayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [stoppingPredictions, setStoppingPredictions] = useState(false);
-  const [nowMs, setNowMs] = useState<number>(Date.now());
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
 
   // auth guard
   useEffect(() => {
@@ -153,11 +107,6 @@ export default function MiniGamePlayPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   // load fixtures for GW
@@ -206,10 +155,14 @@ export default function MiniGamePlayPage() {
     );
   }, [roomCode]);
 
+  const isCaptainMode = game?.gameModeStyle === "captain";
+  const isCaptainParallelMode =
+    isCaptainMode &&
+    (game?.sameResultLock === false || game?.draftMode === "parallel");
   const isParallelDraft =
     game?.draftMode === "parallel" ||
     (game?.gameModeStyle === "sprint" && game?.draftMode !== "turn");
-  const isCaptainMode = !isParallelDraft && game?.gameModeStyle === "captain";
+  const isCaptainTurnMode = isCaptainMode && !isCaptainParallelMode;
 
   const current = useMemo(() => {
     if (!game) return null;
@@ -226,7 +179,7 @@ export default function MiniGamePlayPage() {
     const rotatedIndex = (turnInFixture + fixtureIndex) % P;
     const uidTurn = order[rotatedIndex];
     let fixtureId: number | null = fixtureIds[fixtureIndex];
-    if (isCaptainMode) {
+    if (isCaptainTurnMode) {
       const stored = Number(game.currentFixtureId);
       fixtureId =
         Number.isFinite(stored) && fixtureIds.includes(stored)
@@ -242,7 +195,7 @@ export default function MiniGamePlayPage() {
       rotatedIndex,
       turnInFixture,
     };
-  }, [game, isCaptainMode]);
+  }, [game, isCaptainTurnMode]);
 
   const amITurn = !!user && !!current && current.uidTurn === user.uid;
 
@@ -325,9 +278,20 @@ export default function MiniGamePlayPage() {
     return fixtureIds[idx];
   }, [game?.fixtureIds, game?.currentTurn]);
 
-  const activeFixtureId = isParallelDraft
-    ? parallelActiveFixtureId
-    : current?.fixtureId;
+  const activeFixtureId = useMemo(() => {
+    if (!game) return null;
+    if (isCaptainParallelMode) {
+      const stored = Number(game.currentFixtureId);
+      return Number.isFinite(stored) ? stored : null;
+    }
+    return isParallelDraft ? parallelActiveFixtureId : current?.fixtureId ?? null;
+  }, [
+    game,
+    isCaptainParallelMode,
+    isParallelDraft,
+    parallelActiveFixtureId,
+    current?.fixtureId,
+  ]);
   const remainingCaptainFixtureIds = useMemo(() => {
     if (!isCaptainMode) return [] as number[];
     const fixtureIds = game?.fixtureIds ?? [];
@@ -339,7 +303,15 @@ export default function MiniGamePlayPage() {
     return fixtureIds.filter((fid) => !usedFixtureIds.has(fid));
   }, [isCaptainMode, game?.fixtureIds, allPicks]);
   const captainTurnNeedsFixtureChoice =
-    isCaptainMode && !!amITurn && current?.turnInFixture === 0 && !activeFixtureId;
+    (isCaptainTurnMode &&
+      !!amITurn &&
+      current?.turnInFixture === 0 &&
+      !activeFixtureId) ||
+    (isCaptainParallelMode &&
+      !!user &&
+      !!game?.order?.length &&
+      game.order[Number(game.currentTurn ?? 0) % game.order.length] === user.uid &&
+      !activeFixtureId);
   const effectiveFixtureId =
     captainTurnNeedsFixtureChoice ? captainFixtureChoice : activeFixtureId;
 
@@ -401,17 +373,7 @@ export default function MiniGamePlayPage() {
   }
 
   const fixture = fixtures.find((f) => f.fixtureId === effectiveFixtureId);
-  const gameLockAtMs = coerceMillis(game?.lockAt);
-  const fallbackLockAtMs = fixtures.length
-    ? fixtures
-        .map((f) => Date.parse(String(f.kickoff || "")))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)[0] - ONE_HOUR_MS
-    : null;
-  const lockAtMs =
-    gameLockAtMs ??
-    (Number.isFinite(fallbackLockAtMs ?? NaN) ? fallbackLockAtMs : null);
-  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const isLocked = false;
 
   const submitPick = async () => {
     if (!user) return;
@@ -420,15 +382,12 @@ export default function MiniGamePlayPage() {
       setErr("Select a fixture first.");
       return;
     }
-    if (isLocked) {
-      setErr("Mini-game is locked (deadline passed).");
-      return;
-    }
-    if (homeScore === "" || awayScore === "") {
+    const choosingCaptainFixture = captainTurnNeedsFixtureChoice;
+    if (!choosingCaptainFixture && (homeScore === "" || awayScore === "")) {
       setErr("Enter both scores.");
       return;
     }
-    const score = `${homeScore}-${awayScore}`;
+    const score = !choosingCaptainFixture ? `${homeScore}-${awayScore}` : undefined;
     if (isParallelDraft && myPickedFixtureIds.has(effectiveFixtureId)) {
       setErr("You already picked this fixture.");
       return;
@@ -469,9 +428,11 @@ export default function MiniGamePlayPage() {
     ? displayNamesByUid[current.uidTurn] || current.uidTurn.slice(0, 6)
     : "current player";
   const captainUid =
-    !isParallelDraft && current && game.order?.length
-      ? game.order[current.fixtureIndex % game.order.length]
-      : null;
+    game?.order?.length && isCaptainParallelMode
+      ? game.order[Number(game.currentTurn ?? 0) % game.order.length] || null
+      : game?.order?.length && isCaptainTurnMode && current
+        ? game.order[current.fixtureIndex % game.order.length] || null
+        : null;
   const captainName = captainUid
     ? displayNamesByUid[captainUid] || captainUid.slice(0, 6)
     : null;
@@ -490,14 +451,21 @@ export default function MiniGamePlayPage() {
     1,
     Math.min(Math.max(sprintTotalTurns, 1), Number(game.currentTurn ?? 0) + 1),
   );
+  const captainParallelTurnNumber = Math.max(
+    1,
+    Math.min(Math.max(playerTurnTotal, 1), lockedInCount + (myLockedIn ? 0 : 1)),
+  );
 
   const stopPredictions = async () => {
     if (!user || !isLeader || gw == null || !seasonKey) return;
     if (stoppingPredictions) return;
-    const confirmed = window.confirm(
-      "Stop this mini-game and send everyone back to lobby?",
-    );
-    if (!confirmed) return;
+    setStopConfirmOpen(true);
+  };
+
+  const confirmStopPredictions = async () => {
+    if (!user || !isLeader || gw == null || !seasonKey) return;
+    if (stoppingPredictions) return;
+    setStopConfirmOpen(false);
 
     setStoppingPredictions(true);
     setErr(null);
@@ -530,10 +498,10 @@ export default function MiniGamePlayPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-ui text-2xl font-semibold text-foreground">
-              {isParallelDraft
-                ? "Sprint"
-                : game.gameModeStyle === "captain"
-                  ? "Captain"
+              {game.gameModeStyle === "captain"
+                ? "Captain"
+                : isParallelDraft
+                  ? "Sprint"
                   : "Round-Robin"}
             </h1>
             <div className="font-display text-sm text-muted">
@@ -541,108 +509,144 @@ export default function MiniGamePlayPage() {
             </div>
           </div>
           <div className="text-right -mt-1">
-            {isParallelDraft ? (
-              <>
-                <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                  Turn {sprintTurnNumber}
-                </div>
-                <div className="font-display text-sm tracking-wide text-muted">
-                  Out of {Math.max(sprintTotalTurns, 1)}
-                </div>
-              </>
-            ) : isCaptainMode ? (
-              <>
-                <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                  Turn {captainIsChoosingFixture ? fixtureTurnNumber : playerTurnNumber}
-                </div>
-                <div className="font-display text-sm tracking-wide text-muted">
-                  Out of {captainIsChoosingFixture ? fixtureTurnTotal : playerTurnTotal}
-                </div>
-              </>
+            {isCaptainMode ? (
+              <CaptainTurnIndicator
+                captainIsChoosingFixture={captainIsChoosingFixture}
+                fixtureTurnNumber={fixtureTurnNumber}
+                fixtureTurnTotal={fixtureTurnTotal}
+                playerTurnNumber={isCaptainParallelMode ? captainParallelTurnNumber : playerTurnNumber}
+                playerTurnTotal={playerTurnTotal}
+              />
+            ) : isParallelDraft ? (
+              <SprintTurnIndicator
+                turnNumber={sprintTurnNumber}
+                totalTurns={Math.max(sprintTotalTurns, 1)}
+              />
             ) : (
-              <>
-              <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                Turn {turnNumber}
-              </div>
-              <div className="font-display text-sm tracking-wide text-muted">
-                Out of {totalTurns}
-              </div>
-              </>
+              <RoundRobinTurnIndicator turnNumber={turnNumber} totalTurns={totalTurns} />
             )}
           </div>
         </div>
-        {!isParallelDraft && game.gameModeStyle === "captain" && captainName && (
-          <div className="border border-teal-500 rounded-xl p-3 bg-surface-2 text-center">
-            <span className="text-xs text-muted uppercase tracking-wide">Captain</span>{" "}
-            <span className="font-display font-semibold text-foreground">{captainName}</span>
-          </div>
+        {isCaptainMode && captainName && (
+          <CaptainBanner captainName={captainName} />
         )}
         {isLeader && game.state === "DRAFT" && (
           <button
-            onClick={stopPredictions}
-            disabled={stoppingPredictions}
-            className={`w-full rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60 ${BTN_3D}`}
-          >
+              onClick={stopPredictions}
+              disabled={stoppingPredictions}
+              className={`w-full rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60 ${BTN_3D}`}
+            >
             {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
           </button>
         )}
+        <AnimatedModal
+          open={stopConfirmOpen}
+          onClose={() => setStopConfirmOpen(false)}
+          zIndexClassName="z-50"
+          overlayClassName="bg-black/50"
+          panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
+        >
+          <div className="text-lg font-semibold text-foreground">Stop Mini-game</div>
+          <div className="text-sm text-muted">
+            Stop this mini-game and send everyone back to lobby?
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setStopConfirmOpen(false)}
+              disabled={stoppingPredictions}
+              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmStopPredictions}
+              disabled={stoppingPredictions}
+              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+            >
+              Confirm Stop
+            </button>
+          </div>
+        </AnimatedModal>
         {/* fixture */}
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
           {captainTurnNeedsFixtureChoice && (
             <div className="mb-3 space-y-2">
               <div className="text-xs text-muted text-center">Captain: choose fixture</div>
-              <div className="grid grid-cols-2 gap-2">
+              <SpecialBreak />
+              <div className="flex flex-wrap justify-center gap-2">
                 {remainingCaptainFixtureIds.map((fid) => {
                   const f = fixtures.find((x) => x.fixtureId === fid);
                   const isSelected = captainFixtureChoice === fid;
-                  const kickoffDate = f ? fmtKickoffDateWithOrdinal(f.kickoff) : null;
-                  const kickoffTime = f ? fmtKickoffTime(f.kickoff) : "";
+                  const kickoffDate = f ? formatDateWithOrdinal(f.kickoff) : null;
+                  const kickoffTime = f ? formatTime24(f.kickoff) : "";
                   return (
                     <button
                       key={fid}
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "rounded-lg border p-2 text-left transition-colors",
+                        "w-[calc(50%-0.25rem)] lg:w-[calc(33.333%-0.45rem)] xl:w-[calc(25%-0.5rem)] rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
                         isSelected
                           ? "bg-accent text-accent-foreground border-teal-400"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                       ].join(" ")}
                     >
-                      <div className="font-display text-[10px] mb-1">
-                        {kickoffDate ? (
-                          <>
-                            {kickoffDate.dayNum}
-                            <sup className="text-[8px] ml-[1px]">{kickoffDate.suffix}</sup>{" "}
-                            {kickoffDate.monthYear}
-                          </>
-                        ) : (
-                          `Fixture ${fid}`
-                        )}
+                      <div className="text-[10px] text-muted mb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-display">
+                            {kickoffDate ? (
+                              <>
+                                {kickoffDate.dayNum}
+                                <sup className="text-[8px] ml-[1px]">{kickoffDate.suffix}</sup>{" "}
+                                {kickoffDate.monthYear}
+                              </>
+                            ) : (
+                              `Fixture ${fid}`
+                            )}
+                          </span>
+                          <span className="font-display tabular-nums">{kickoffTime}</span>
+                        </div>
                       </div>
-                      <div className="font-display text-[10px] mb-2">{kickoffTime}</div>
                       {f ? (
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
                           <div className="flex flex-col items-center text-center min-w-0">
                             <TeamBadge
                               name={f.home.name}
+                              tla={f.home.tla}
                               shortName={f.home.shortName}
                               badge={f.home.badge}
+                              wrapperClassName="h-10 w-10 rounded-full"
+                              imageClassName="h-8 w-8 object-contain"
+                              fallbackClassName="text-[10px] font-bold text-foreground"
                             />
-                            <span className="font-display mt-1 text-[10px] font-semibold truncate w-full">
-                              {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                            </span>
+                            <TeamLabel
+                              name={f.home.name}
+                              tla={f.home.tla}
+                              shortName={f.home.shortName}
+                              wrapperClassName="w-full"
+                              abbrClassName="font-display mt-1 text-[10px] font-semibold truncate w-full"
+                              fullNameClassName="hidden"
+                            />
                           </div>
                           <span className="font-display text-[9px] uppercase">vs</span>
                           <div className="flex flex-col items-center text-center min-w-0">
                             <TeamBadge
                               name={f.away.name}
+                              tla={f.away.tla}
                               shortName={f.away.shortName}
                               badge={f.away.badge}
+                              wrapperClassName="h-10 w-10 rounded-full"
+                              imageClassName="h-8 w-8 object-contain"
+                              fallbackClassName="text-[10px] font-bold text-foreground"
                             />
-                            <span className="font-display mt-1 text-[10px] font-semibold truncate w-full">
-                              {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                            </span>
+                            <TeamLabel
+                              name={f.away.name}
+                              tla={f.away.tla}
+                              shortName={f.away.shortName}
+                              wrapperClassName="w-full"
+                              abbrClassName="font-display mt-1 text-[10px] font-semibold truncate w-full"
+                              fullNameClassName="hidden"
+                            />
                           </div>
                         </div>
                       ) : null}
@@ -654,10 +658,10 @@ export default function MiniGamePlayPage() {
           )}
           {fixture && (
             <div className="space-y-2 mb-2">
-              <div className="relative text-xs text-muted h-4">
-                <div className="absolute left-0 top-1/2 -translate-y-1/2">
+              <div className="text-xs text-muted">
+                <div className="flex items-center justify-between gap-2">
                   {(() => {
-                    const d = fmtKickoffDateWithOrdinal(fixture.kickoff);
+                    const d = formatDateWithOrdinal(fixture.kickoff);
                     return (
                       <span className="font-display font-semibold">
                         {d.dayNum}
@@ -666,52 +670,58 @@ export default function MiniGamePlayPage() {
                       </span>
                     );
                   })()}
-                </div>
-                <div className="font-display font-semibold absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                  {fmtKickoffTime(fixture.kickoff)}
+                  <span className="font-display font-semibold tabular-nums">
+                    {formatTime24(fixture.kickoff)}
+                  </span>
                 </div>
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <div className="flex flex-col items-center text-center min-w-0">
                 <TeamBadge
                   name={fixture.home.name}
+                  tla={fixture.home.tla}
                   shortName={fixture.home.shortName}
                   badge={fixture.home.badge}
+                  wrapperClassName="h-10 w-10 rounded-full"
+                  imageClassName="h-8 w-8 object-contain"
+                  fallbackClassName="text-[10px] font-bold text-foreground"
                 />
-                <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                  <span className="font-display block">
-                    {teamAbbr(fixture.home.name, fixture.home.tla, fixture.home.shortName)}
-                  </span>
-                  <PendulumName
-                    text={fixture.home.name}
-                    windowPx={null}
-                    className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                  />
-                </div>
+                <TeamLabel
+                  name={fixture.home.name}
+                  tla={fixture.home.tla}
+                  shortName={fixture.home.shortName}
+                  wrapperClassName="mt-1 text-xs font-semibold text-foreground truncate w-full"
+                  abbrClassName="font-display block"
+                  fullNameClassName="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                  fullNameWindowPx={null}
+                />
               </div>
               <div className="font-display text-xs text-muted uppercase">vs</div>
               <div className="flex flex-col items-center text-center min-w-0">
                 <TeamBadge
                   name={fixture.away.name}
+                  tla={fixture.away.tla}
                   shortName={fixture.away.shortName}
                   badge={fixture.away.badge}
+                  wrapperClassName="h-10 w-10 rounded-full"
+                  imageClassName="h-8 w-8 object-contain"
+                  fallbackClassName="text-[10px] font-bold text-foreground"
                 />
-                <div className="mt-1 text-xs font-semibold text-foreground truncate w-full">
-                  <span className="font-display block">
-                    {teamAbbr(fixture.away.name, fixture.away.tla, fixture.away.shortName)}
-                  </span>
-                  <PendulumName
-                    text={fixture.away.name}
-                    windowPx={null}
-                    className="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                  />
-                </div>
+                <TeamLabel
+                  name={fixture.away.name}
+                  tla={fixture.away.tla}
+                  shortName={fixture.away.shortName}
+                  wrapperClassName="mt-1 text-xs font-semibold text-foreground truncate w-full"
+                  abbrClassName="font-display block"
+                  fullNameClassName="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
+                  fullNameWindowPx={null}
+                />
               </div>
               </div>
             </div>
           )}
 
-          {!isParallelDraft && (
+          {!isParallelDraft && game.sameResultLock !== false && (
             <div className="mt-3 text-sm text-center">
               <div className="font-semibold mb-2 text-foreground">
                 Taken scores
@@ -742,103 +752,52 @@ export default function MiniGamePlayPage() {
         )}
 
         {/* pick action */}
-        {isParallelDraft ? (
-          myLockedIn ? (
-            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3 text-center">
-              <div className="font-semibold text-foreground">Locked In</div>
-              {latestLockedPick && (
-                <div className="text-sm text-muted">
-                  Your pick:{" "}
-                  <span className="font-display text-foreground font-semibold tabular-nums">
-                    {latestLockedPick.score.replace("-", "–")}
-                  </span>
-                </div>
-              )}
-              <div className="w-full h-2 rounded-full border border-teal-500 bg-surface overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-all duration-500"
-                  style={{ width: `${lockedProgressPct}%` }}
-                />
-              </div>
-              <div className="text-sm text-muted">
-                Waiting for others... {playersLeftToLock} left.
-              </div>
-            </div>
-          ) : (
-            <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
-              <div className="font-semibold text-foreground">Submit your pick</div>
-              <div className="flex items-center justify-center gap-3">
-                <input
-                  value={homeScore}
-                  onChange={(e) =>
-                    onlyDigitsOrEmpty(e.target.value) &&
-                    setHomeScore(e.target.value)
-                  }
-                  className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-                <span className="text-2xl text-muted">-</span>
-                <input
-                  value={awayScore}
-                  onChange={(e) =>
-                    onlyDigitsOrEmpty(e.target.value) &&
-                    setAwayScore(e.target.value)
-                  }
-                  className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </div>
-              <button
-                disabled={submitting || isLocked || effectiveFixtureId == null}
-                onClick={submitPick}
-                className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
-              >
-                {submitting ? "Submitting…" : "Confirm score"}
-              </button>
-            </div>
-          )
-        ) : amITurn ? (
-          <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
-            <div className="font-semibold text-foreground text-center">Your turn</div>
-
-            <div className="flex items-center justify-center gap-3">
-              <input
-                value={homeScore}
-                onChange={(e) =>
-                  onlyDigitsOrEmpty(e.target.value) &&
-                  setHomeScore(e.target.value)
-                }
-                className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-                placeholder="0"
-                inputMode="numeric"
-              />
-              <span className="text-2xl text-muted">-</span>
-              <input
-                value={awayScore}
-                onChange={(e) =>
-                  onlyDigitsOrEmpty(e.target.value) &&
-                  setAwayScore(e.target.value)
-                }
-                className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-                placeholder="0"
-                inputMode="numeric"
-              />
-            </div>
-
-            <button
-              disabled={submitting || isLocked || effectiveFixtureId == null}
-              onClick={submitPick}
-              className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
-            >
-              {submitting ? "Submitting…" : "Confirm score"}
-            </button>
-          </div>
+        {captainTurnNeedsFixtureChoice ? (
+          <CaptainChooseFixturePanel
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+            btnClassName={BTN_3D}
+          />
+        ) : isParallelDraft ? (
+          <SprintActionPanel
+            myLockedIn={myLockedIn}
+            latestLockedPick={latestLockedPick}
+            lockedProgressPct={lockedProgressPct}
+            playersLeftToLock={playersLeftToLock}
+            homeScore={homeScore}
+            awayScore={awayScore}
+            onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
+            onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+            btnClassName={BTN_3D}
+          />
         ) : (
-          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-            Waiting for <span className="font-display">{currentTurnName}</span> to pick…
-          </div>
+          <RoundRobinActionPanel
+            amITurn={amITurn}
+            currentTurnName={currentTurnName}
+            waitingText={
+              isCaptainParallelMode && !activeFixtureId ? (
+                <>
+                  Waiting for <span className="font-display">{captainName || "captain"}</span> to
+                  choose fixture…
+                </>
+              ) : undefined
+            }
+            homeScore={homeScore}
+            awayScore={awayScore}
+            onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
+            onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+            btnClassName={BTN_3D}
+          />
         )}
       </div>
     </div>

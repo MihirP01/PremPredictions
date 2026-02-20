@@ -2,12 +2,26 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
-import PendulumName from "../../../../components/PendulumName";
+import AnimatedModal from "../../../../components/AnimatedModal";
+import ModalExitButton from "../../../../components/ModalExitButton";
+import PageBackButton from "../../../../components/PageBackButton";
+import GameweekNavigator from "../../../../components/GameweekNavigator";
+import SectionCard from "../../../../components/SectionCard";
+import SliderSwitch from "../../../../components/SliderSwitch";
+import SpecialBreak from "../../../../components/SpecialBreak";
+import TeamBadge from "../../../../components/TeamBadge";
+import TeamLabel from "../../../../components/TeamLabel";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { triggerTapHaptic } from "@/lib/haptics";
+import {
+  fixtureDayKey,
+  fixtureDayLabel,
+  formatDateTimeLabel,
+  formatKickoffParts,
+} from "@/lib/dateDisplay";
+import { teamAbbr } from "@/lib/teamDisplay";
 import {
   collection,
   getDocs,
@@ -64,13 +78,9 @@ const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
   { key: "AWAY", label: "Away" },
 ];
 
-const TABLE_MODE_SLIDER_LEFT: Record<TableMode, string> = {
-  HOME: "left-1",
-  TOTAL: "left-[calc(33.333%+0.02rem)]",
-  AWAY: "left-[calc(66.666%+0.02rem)]",
-};
 const BTN_3D = "btn-3d-accent";
 const SELECT_3D = "select-3d-accent";
+
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
@@ -78,44 +88,6 @@ function seasonLabel(seasonKey: string) {
 
 const MIN_GW = 1;
 const MAX_GW = 38;
-
-function fmtKickoffParts(iso: string) {
-  const dt = new Date(iso);
-  const dayNum = dt.getDate();
-  const suffix =
-    dayNum % 10 === 1 && dayNum % 100 !== 11
-      ? "st"
-      : dayNum % 10 === 2 && dayNum % 100 !== 12
-        ? "nd"
-        : dayNum % 10 === 3 && dayNum % 100 !== 13
-          ? "rd"
-          : "th";
-  const monthYear = dt.toLocaleDateString("en-GB", {
-    month: "short",
-    year: "2-digit",
-  });
-  const time = dt.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return { dayNum, suffix, monthYear, time };
-}
-
-function fixtureDayKey(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function fixtureDayLabel(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-GB", { weekday: "long" });
-}
 
 
 function fmtScore(s?: string | null) {
@@ -135,28 +107,6 @@ function parseOutcome(score?: string | null) {
   return "D";
 }
 
-function TeamBadge({
-  name,
-  shortName,
-  badge,
-}: {
-  name: string;
-  shortName?: string;
-  badge?: string | null;
-}) {
-  const fallback = (shortName || name || "FC").slice(0, 3).toUpperCase();
-  return (
-    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-      {badge ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
-      )}
-    </div>
-  );
-}
-
 function asDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -167,47 +117,9 @@ function asDate(value: unknown): Date | null {
   return null;
 }
 
-function fmtDateTime(d: Date) {
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
 function toInt(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
-}
-
-function teamAbbr(team: { name?: string; tla?: string | null; shortName?: string }) {
-  const tla = String(team.tla || "").trim().toUpperCase();
-  if (/^[A-Z]{2,4}$/.test(tla)) return tla;
-
-  const short = String(team.shortName || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
-
-  const name = String(team.name || "").trim().toUpperCase();
-  if (!name) return "FC";
-
-  const words = name.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return words
-      .slice(0, 3)
-      .map((w) => w[0])
-      .join("");
-  }
-  return name.slice(0, 3);
-}
-
-function fixtureAbbr(name?: string, tla?: string | null, shortName?: string) {
-  const code = String(tla || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(code)) return code;
-  const short = String(shortName || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
-  return teamAbbr({ name, shortName });
 }
 
 export default function FixturesPage() {
@@ -227,8 +139,9 @@ export default function FixturesPage() {
   const [gw, setGw] = useState<number>(1);
   const [seasonKey, setSeasonKey] = useState<string>("");
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [refreshingFixtures, setRefreshingFixtures] = useState(false);
+  const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [fixturesGeneratedAt, setFixturesGeneratedAt] = useState<Date | null>(
     null,
   );
@@ -249,7 +162,37 @@ export default function FixturesPage() {
     AWAY: [],
   });
   const [tableError, setTableError] = useState<string | null>(null);
-  const settingsWrapRef = useRef<HTMLDivElement | null>(null);
+  const [tableAnimatingOut, setTableAnimatingOut] = useState(false);
+  const tableSwapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleTableSwap = useCallback((apply: () => void) => {
+    if (tableSwapTimerRef.current) {
+      clearTimeout(tableSwapTimerRef.current);
+      tableSwapTimerRef.current = null;
+    }
+    setTableAnimatingOut(true);
+    tableSwapTimerRef.current = setTimeout(() => {
+      apply();
+      setTableAnimatingOut(false);
+      tableSwapTimerRef.current = null;
+    }, 150);
+  }, []);
+
+  const selectTableMode = useCallback(
+    (next: TableMode) => {
+      if (next === tableMode) return;
+      scheduleTableSwap(() => setTableMode(next));
+    },
+    [scheduleTableSwap, tableMode],
+  );
+
+  const selectTableView = useCallback(
+    (next: TableView) => {
+      if (next === tableView) return;
+      scheduleTableSwap(() => setTableView(next));
+    },
+    [scheduleTableSwap, tableView],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -317,20 +260,10 @@ export default function FixturesPage() {
   }, [compactMode, fixtures]);
 
   useEffect(() => {
-    if (!settingsOpen) return;
-    const onPointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (settingsWrapRef.current?.contains(target)) return;
-      setSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-    };
-  }, [settingsOpen]);
+    if (refreshLockedUntil <= nowMs) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [refreshLockedUntil, nowMs]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -509,15 +442,17 @@ export default function FixturesPage() {
     };
   }, [roomCode, gw, seasonKey]);
 
-  const gameweeks = useMemo(
-    () => Array.from({ length: MAX_GW }, (_, i) => i + 1),
-    [],
-  );
   const isLoading = fixtures === null || fixturesLoading;
   const navLoading = !bootstrapped;
+  const refreshLockSeconds = Math.max(
+    0,
+    Math.ceil((refreshLockedUntil - nowMs) / 1000),
+  );
 
   async function refreshFixtures() {
-    if (refreshingFixtures) return;
+    if (refreshingFixtures || refreshLockSeconds > 0) return;
+    setRefreshLockedUntil(Date.now() + 10_000);
+    setNowMs(Date.now());
     setRefreshingFixtures(true);
     try {
       await loadFixtures({ force: true, showSpinner: false });
@@ -560,6 +495,11 @@ export default function FixturesPage() {
 
   async function openTablePopup() {
     if (tableOpen || tableLoading) return;
+    if (tableSwapTimerRef.current) {
+      clearTimeout(tableSwapTimerRef.current);
+      tableSwapTimerRef.current = null;
+    }
+    setTableAnimatingOut(false);
     setTableOpen(true);
     setTableLoading(true);
     setTableError(null);
@@ -583,6 +523,12 @@ export default function FixturesPage() {
     }
   }
 
+  useEffect(() => {
+    return () => {
+      if (tableSwapTimerRef.current) clearTimeout(tableSwapTimerRef.current);
+    };
+  }, []);
+
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
@@ -597,16 +543,10 @@ export default function FixturesPage() {
               </div>
             </div>
             <div className="ml-auto flex gap-2 page-actions-enter">
-              <button
-                onClick={() => {
-                  triggerTapHaptic();
-                  router.push(`/room/${roomCode}`);
-                }}
-                className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
-                data-action="back"
-              >
-                Back
-              </button>
+              <PageBackButton
+                onClick={() => router.push(`/room/${roomCode}`)}
+                className={BTN_3D}
+              />
             </div>
           </div>
 
@@ -641,137 +581,60 @@ export default function FixturesPage() {
               >
                 {tableLoading ? "Loading…" : "Table"}
               </button>
-            <div ref={settingsWrapRef} className="relative page-actions-enter">
               <button
-                onClick={() => setSettingsOpen((v) => !v)}
-                className={`h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
-                data-action="settings"
-                aria-label="Open settings"
+                onClick={refreshFixtures}
+                disabled={refreshingFixtures || refreshLockSeconds > 0}
+                className={`h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn disabled:opacity-60 ${BTN_3D}`}
+                aria-label="Refresh fixtures"
+                title={
+                  refreshLockSeconds > 0
+                    ? `Refresh locked (${refreshLockSeconds}s)`
+                    : "Refresh fixtures"
+                }
               >
-                <Settings size={16} />
+                <RefreshCw
+                  size={16}
+                  className={refreshingFixtures ? "animate-spin" : ""}
+                />
               </button>
-              {settingsOpen && (
-                <div className="absolute top-0 right-[calc(100%+12px)] w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
-                  <div className="font-semibold text-foreground">Settings</div>
-                  <button
-                    onClick={refreshFixtures}
-                    disabled={refreshingFixtures}
-                    className={`w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60 ${BTN_3D}`}
-                  >
-                    {refreshingFixtures ? "Refreshing..." : "Refresh Fixtures"}
-                  </button>
-                </div>
-              )}
-            </div>
             </div>
           </div>
         </div>
 
         {/* GW nav */}
-        <div className="gw-nav-controls flex items-center gap-3 w-full max-w-md mx-auto">
-          <button
-            disabled={navLoading || gw === MIN_GW}
-            onClick={() => setGw((x) => Math.max(MIN_GW, x - 1))}
-            className={`
-    h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
-    flex items-center justify-center p-0 leading-none
-    rounded-lg
-    bg-surface
-    border border-teal-500
-    text-foreground
-    hover:bg-surface-2
-    disabled:opacity-40
-    ${BTN_3D}
-  `}
-          >
-            <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
-          </button>
+        <GameweekNavigator
+          value={gw}
+          min={MIN_GW}
+          max={MAX_GW}
+          disabled={navLoading}
+          onChange={setGw}
+          buttonClassName={`
+            h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
+            flex items-center justify-center p-0 leading-none rounded-lg
+            bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-40
+            ${BTN_3D}
+          `}
+          selectClassName={`
+            w-full h-[clamp(2.45rem,3.2vw,2.85rem)] px-8 rounded-lg border border-teal-500
+            bg-surface text-foreground text-[clamp(0.85rem,1.1vw,1rem)] font-semibold text-center
+            appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500
+            ${SELECT_3D}
+          `}
+        />
 
-          <div className="relative min-w-0 flex-1">
-            <select
-              value={gw}
-              disabled={navLoading}
-              onChange={(e) => setGw(Number(e.target.value))}
-              className={`
-      w-full
-      h-[clamp(2.45rem,3.2vw,2.85rem)]
-      px-8
-      rounded-lg
-      border border-teal-500
-      bg-surface
-      text-foreground
-      text-[clamp(0.85rem,1.1vw,1rem)] font-semibold
-      text-center
-      appearance-none
-      [text-align-last:center]
-      focus:outline-none
-      focus:ring-2
-      focus:ring-teal-500
-      ${SELECT_3D}
-    `}
-            >
-              {gameweeks.map((n) => (
-                <option key={n} value={n}>
-                  GW {n}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-              ▼
-            </span>
-          </div>
-
-          <button
-            disabled={navLoading || gw === MAX_GW}
-            onClick={() => setGw((x) => Math.min(MAX_GW, x + 1))}
-            className={`
-    h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
-    flex items-center justify-center p-0 leading-none
-    rounded-lg
-    bg-surface
-    border border-teal-500
-    text-foreground
-    hover:bg-surface-2
-    disabled:opacity-40
-    ${BTN_3D}
-  `}
-          >
-            <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
-          </button>
-        </div>
-
-        <div className="rounded-xl p-3 bg-surface-2 border border-teal-500">
+        <SectionCard className="rounded-xl p-3 bg-surface-2 border border-teal-500">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-xs font-semibold text-foreground">Prediction Key</div>
-            <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden min-w-[152px]">
-              <span
-                aria-hidden
-                className={[
-                  "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                  compactMode ? "left-[calc(50%+0.125rem)]" : "left-1",
-                ].join(" ")}
-              />
-              <button
-                type="button"
-                onClick={() => setCompactModeValue(false)}
-                className={[
-                  "font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                  compactMode ? "text-foreground" : "text-accent-foreground",
-                ].join(" ")}
-              >
-                Full
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompactModeValue(true)}
-                className={[
-                  "font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                  compactMode ? "text-accent-foreground" : "text-foreground",
-                ].join(" ")}
-              >
-                Compact
-              </button>
-            </div>
+            <SliderSwitch
+              options={[
+                { value: "full", label: "Full" },
+                { value: "compact", label: "Compact" },
+              ]}
+              value={compactMode ? "compact" : "full"}
+              onChange={(v) => setCompactModeValue(v === "compact")}
+              className="relative grid rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden min-w-[152px]"
+              buttonClassName="font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors text-foreground"
+            />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted">
             <div className="font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
@@ -787,7 +650,7 @@ export default function FixturesPage() {
               Golden + Exact
             </div>
           </div>
-        </div>
+        </SectionCard>
 
         {error && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
@@ -796,7 +659,8 @@ export default function FixturesPage() {
         )}
 
         {/* Fixtures */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 items-start">
+        <SpecialBreak />
+        <div className="flex flex-wrap justify-center gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] items-start">
           {isLoading && (
             <div className="col-span-full text-center text-muted">Loading fixtures…</div>
           )}
@@ -810,37 +674,12 @@ export default function FixturesPage() {
           {!isLoading &&
             fixtures.length > 0 &&
             (() => {
-              const leftColumn: Array<{
-                fixture: Fixture;
-                idx: number;
-                showDayHeader: boolean;
-                showDayFooter: boolean;
-                dayLabel: string;
-              }> = [];
-              const rightColumn: Array<{
-                fixture: Fixture;
-                idx: number;
-                showDayHeader: boolean;
-                showDayFooter: boolean;
-                dayLabel: string;
-              }> = [];
               const firstIdxByDay = new Map<string, number>();
               const lastIdxByDay = new Map<string, number>();
               fixtures.forEach((fixture, idx) => {
                 const dayKey = fixtureDayKey(fixture.kickoff);
                 if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
                 lastIdxByDay.set(dayKey, idx);
-              });
-              fixtures.forEach((fixture, idx) => {
-                const dayKey = fixtureDayKey(fixture.kickoff);
-                const showDayHeader = firstIdxByDay.get(dayKey) === idx;
-                const showDayFooter = lastIdxByDay.get(dayKey) === idx;
-                const dayLabel = fixtureDayLabel(fixture.kickoff);
-                if (idx % 2 === 0) {
-                  leftColumn.push({ fixture, idx, showDayHeader, showDayFooter, dayLabel });
-                } else {
-                  rightColumn.push({ fixture, idx, showDayHeader, showDayFooter, dayLabel });
-                }
               });
 
               const renderFixtureCard = (
@@ -851,43 +690,44 @@ export default function FixturesPage() {
                 dayLabel: string,
               ) => {
               const actual = f.result ?? null;
-              const kickoffParts = fmtKickoffParts(f.kickoff);
+              const kickoffParts = formatKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
               const mobileOddPredictions = players.length % 2 !== 0;
               const desktopOddPredictions = players.length % 3 !== 0;
 
               return (
-                <div key={f.fixtureId} className="space-y-2">
-                  <div className="h-5 sm:h-6 flex items-center justify-center">
+                <div
+                  key={f.fixtureId}
+                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                  style={{
+                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                    animationDuration: "520ms",
+                  }}
+                >
+                  <div className="h-4 sm:h-5 flex items-center justify-center">
                     {showDayHeader ? (
                       <div className="w-full flex items-center gap-2">
-                        <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
-                        <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                        <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
+                        <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
                           {dayLabel}
                         </span>
-                        <span
-                          className={[
-                            "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
-                            showDayFooter
-                              ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
-                              : "",
-                          ].join(" ")}
-                        />
+                        <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
                       </div>
                     ) : showDayFooter ? (
-                      <div className="w-full flex items-center justify-end">
-                        <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
+                      <div className="w-full flex items-center justify-center gap-1.5">
+                        <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
+                        <span
+                          className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
+                          aria-hidden
+                        />
+                        <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
                       </div>
                     ) : (
                       <span aria-hidden className="invisible w-full">_</span>
                     )}
                   </div>
                 <div
-                  className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2 page-action-btn cursor-pointer"
-                  style={{
-                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                    animationDuration: "520ms",
-                  }}
+                  className="border border-teal-500 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.58rem,0.92vw,0.95rem)] bg-surface-2 page-action-btn cursor-pointer"
                   role="button"
                   tabIndex={0}
                   onClick={() => toggleFixtureExpanded(f.fixtureId)}
@@ -923,6 +763,7 @@ export default function FixturesPage() {
                           <div className="flex justify-center">
                             <TeamBadge
                               name={f.home.name}
+                              tla={f.home.tla}
                               shortName={f.home.shortName}
                               badge={f.home.badge}
                             />
@@ -933,32 +774,31 @@ export default function FixturesPage() {
                           <div className="flex justify-center">
                             <TeamBadge
                               name={f.away.name}
+                              tla={f.away.tla}
                               shortName={f.away.shortName}
                               badge={f.away.badge}
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 justify-items-center">
-                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                              {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                            </span>
-                            <PendulumName
-                              text={f.home.name}
-                              windowPx={68}
-                              className="font-display w-full text-[9px] text-muted leading-tight"
-                            />
-                          </div>
-                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                              {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                            </span>
-                            <PendulumName
-                              text={f.away.name}
-                              windowPx={68}
-                              className="font-display w-full text-[9px] text-muted leading-tight"
-                            />
-                          </div>
+                          <TeamLabel
+                            name={f.home.name}
+                            tla={f.home.tla}
+                            shortName={f.home.shortName}
+                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                            fullNameWindowPx={68}
+                          />
+                          <TeamLabel
+                            name={f.away.name}
+                            tla={f.away.tla}
+                            shortName={f.away.shortName}
+                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                            fullNameWindowPx={68}
+                          />
                         </div>
                       </div>
 
@@ -966,16 +806,18 @@ export default function FixturesPage() {
                         <div className="flex flex-col items-center text-center min-w-0">
                           <TeamBadge
                             name={f.home.name}
+                            tla={f.home.tla}
                             shortName={f.home.shortName}
                             badge={f.home.badge}
                           />
-                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                            {fixtureAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                          </span>
-                          <PendulumName
-                            text={f.home.name}
-                            windowPx={null}
-                            className="font-display text-[10px] text-muted w-full"
+                          <TeamLabel
+                            name={f.home.name}
+                            tla={f.home.tla}
+                            shortName={f.home.shortName}
+                            wrapperClassName="w-full"
+                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full"
+                            fullNameClassName="font-display text-[10px] text-muted w-full"
+                            fullNameWindowPx={null}
                           />
                         </div>
                         <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
@@ -984,16 +826,18 @@ export default function FixturesPage() {
                         <div className="flex flex-col items-center text-center min-w-0">
                           <TeamBadge
                             name={f.away.name}
+                            tla={f.away.tla}
                             shortName={f.away.shortName}
                             badge={f.away.badge}
                           />
-                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                            {fixtureAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                          </span>
-                          <PendulumName
-                            text={f.away.name}
-                            windowPx={null}
-                            className="font-display text-[10px] text-muted w-full"
+                          <TeamLabel
+                            name={f.away.name}
+                            tla={f.away.tla}
+                            shortName={f.away.shortName}
+                            wrapperClassName="w-full"
+                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full"
+                            fullNameClassName="font-display text-[10px] text-muted w-full"
+                            fullNameWindowPx={null}
                           />
                         </div>
                       </div>
@@ -1117,51 +961,54 @@ export default function FixturesPage() {
               );
               };
 
-              return (
-                <>
-                  <div className="space-y-3 sm:space-y-4">
-                    {leftColumn.map(({ fixture, idx, showDayHeader, showDayFooter, dayLabel }) =>
-                      renderFixtureCard(fixture, idx, showDayHeader, showDayFooter, dayLabel),
-                    )}
-                  </div>
-                  <div className="space-y-3 sm:space-y-4">
-                    {rightColumn.map(({ fixture, idx, showDayHeader, showDayFooter, dayLabel }) =>
-                      renderFixtureCard(fixture, idx, showDayHeader, showDayFooter, dayLabel),
-                    )}
-                  </div>
-                </>
-              );
+              return fixtures.map((fixture, idx) => {
+                const dayKey = fixtureDayKey(fixture.kickoff);
+                const showDayHeader = firstIdxByDay.get(dayKey) === idx;
+                const showDayFooter = lastIdxByDay.get(dayKey) === idx;
+                const dayLabel = fixtureDayLabel(fixture.kickoff);
+                return renderFixtureCard(
+                  fixture,
+                  idx,
+                  showDayHeader,
+                  showDayFooter,
+                  dayLabel,
+                );
+              });
             })()}
         </div>
 
         {(fixturesGeneratedAt || fixturesRefreshedAt) && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
             {fixturesGeneratedAt && (
-              <div>Fixture snapshot time: {fmtDateTime(fixturesGeneratedAt)}</div>
+              <div>Fixture snapshot time: {formatDateTimeLabel(fixturesGeneratedAt)}</div>
             )}
             {fixturesRefreshedAt && (
-              <div>Fixtures page last refreshed: {fmtDateTime(fixturesRefreshedAt)}</div>
+              <div>Fixtures page last refreshed: {formatDateTimeLabel(fixturesRefreshedAt)}</div>
             )}
           </div>
         )}
       </div>
 
-      {tableOpen && (
-        <div className="fixed inset-0 z-40 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl border border-teal-500 bg-surface shadow-card">
-            <div className="flex items-center justify-between border-b border-subtle p-4">
+      <AnimatedModal
+        open={tableOpen}
+        onClose={() => setTableOpen(false)}
+        portal
+        lockBackground
+        zIndexClassName="z-50"
+        overlayClassName="bg-black/50 backdrop-blur-sm"
+        panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
+      >
+            <div className="flex items-center justify-between p-4">
               <div className="text-lg font-semibold text-foreground">
                 Premier League Table • {seasonLabel(seasonKey || "----")}
               </div>
-              <button
+              <ModalExitButton
                 onClick={() => setTableOpen(false)}
-                className={`h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 ${BTN_3D}`}
-                aria-label="Close table"
-              >
-                ×
-              </button>
+                ariaLabel="Exit table"
+                className={`border-[color:rgba(var(--room-accent-rgb),0.65)] ${BTN_3D}`}
+              />
             </div>
-            <div className="max-h-[calc(85vh-128px)] flex flex-col">
+            <div className="max-h-[calc(95vh-176px)] flex flex-col">
               {tableLoading ? (
                 <div className="p-4 text-sm text-muted">Loading table…</div>
               ) : tableError ? (
@@ -1170,68 +1017,46 @@ export default function FixturesPage() {
                 <div className="p-4 text-sm text-muted">No table data available.</div>
               ) : (
                 <>
-                  <div className="px-4 pb-1 bg-surface-2 border-b border-subtle shadow-[0_6px_14px_rgba(0,0,0,0.12)]">
+                  <div className="px-4 pb-1 bg-surface-2 shadow-[0_6px_14px_rgba(0,0,0,0.12)]">
                     <div className="mb-2">
-                      <div className="relative grid grid-cols-3 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
-                        <span
-                          aria-hidden
-                          className={[
-                            "absolute top-1 bottom-1 w-[calc(33.333%-0.28rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                            TABLE_MODE_SLIDER_LEFT[tableMode],
-                          ].join(" ")}
-                        />
-                        {TABLE_MODE_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.key}
-                            onClick={() => setTableMode(opt.key)}
-                            className={[
-                              "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                              tableMode === opt.key
-                                ? "text-accent-foreground"
-                                : "text-foreground",
-                            ].join(" ")}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
+                      <SliderSwitch
+                        options={TABLE_MODE_OPTIONS.map((opt) => ({
+                          value: opt.key,
+                          label: opt.label,
+                        }))}
+                        value={tableMode}
+                        onChange={selectTableMode}
+                        className="relative grid rounded-lg border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-surface-2 p-1 overflow-hidden"
+                        buttonClassName="relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors text-foreground"
+                      />
                     </div>
                     <div className="mb-1">
-                      <div className="relative grid grid-cols-2 rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden">
-                        <span
-                          aria-hidden
-                          className={[
-                            "absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-md bg-accent border border-teal-400 transition-all duration-300",
-                            tableView === "SHORT" ? "left-1" : "left-[calc(50%+0.125rem)]",
-                          ].join(" ")}
-                        />
-                        <button
-                          onClick={() => setTableView("SHORT")}
-                          className={[
-                            "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                            tableView === "SHORT"
-                              ? "text-accent-foreground"
-                              : "text-foreground",
-                          ].join(" ")}
-                        >
-                          Short
-                        </button>
-                        <button
-                          onClick={() => setTableView("FULL")}
-                          className={[
-                            "relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors",
-                            tableView === "FULL"
-                              ? "text-accent-foreground"
-                              : "text-foreground",
-                          ].join(" ")}
-                        >
-                          Full
-                        </button>
-                      </div>
+                      <SliderSwitch
+                        options={[
+                          { value: "SHORT", label: "Short" },
+                          { value: "FULL", label: "Full" },
+                        ]}
+                        value={tableView}
+                        onChange={selectTableView}
+                        className="relative grid rounded-lg border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-surface-2 p-1 overflow-hidden"
+                        buttonClassName="relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors text-foreground"
+                      />
                     </div>
                   </div>
-                  <div className="overflow-auto no-scrollbar min-h-0 px-2">
-                    <table className="w-full table-fixed text-sm">
+                  <div className="px-4 py-2">
+                    <SpecialBreak />
+                  </div>
+                  <div
+                    className={[
+                      "overflow-auto no-scrollbar min-h-0 px-2 transition-all duration-150 ease-out",
+                      tableAnimatingOut ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0",
+                    ].join(" ")}
+                  >
+                    <table
+                      key={`${tableMode}-${tableView}`}
+                      className="w-full table-fixed text-sm fixture-card-enter"
+                      style={{ animationDuration: "240ms" }}
+                    >
                       {tableView === "FULL" ? (
                         <colgroup>
                           <col style={{ width: "8%" }} />
@@ -1276,10 +1101,10 @@ export default function FixturesPage() {
                         {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
                           <tr
                             key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
-                            className="border-b border-subtle last:border-0"
+                            className="border-b border-subtle last:border-0 fixture-card-enter"
                             style={{
                               animationDelay: `${Math.min(idx, 12) * 35}ms`,
-                              animationDuration: "380ms",
+                              animationDuration: "320ms",
                             }}
                           >
                             <td className="py-2 px-1 text-foreground">{r.position}</td>
@@ -1332,7 +1157,9 @@ export default function FixturesPage() {
                 </>
               )}
             </div>
-            <div className="border-t border-subtle py-1 flex items-center justify-center">
+            <div className="px-4 py-1 space-y-2">
+              <SpecialBreak />
+              <div className="flex items-center justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/icons/icon-192.png"
@@ -1340,10 +1167,9 @@ export default function FixturesPage() {
                 className="h-10 w-10 object-contain opacity-95"
                 loading="lazy"
               />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+      </AnimatedModal>
     </div>
   );
 }

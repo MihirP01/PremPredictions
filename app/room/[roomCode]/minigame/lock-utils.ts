@@ -1,4 +1,4 @@
-export const ONE_HOUR_MS = 60 * 60 * 1000;
+export const LOCK_WINDOW_MS = 30 * 60 * 1000;
 export type CountdownParts = {
   days: string;
   hours: string;

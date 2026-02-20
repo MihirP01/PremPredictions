@@ -3,10 +3,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
-import PendulumName from "../../../../../components/PendulumName";
+import PageBackButton from "../../../../../components/PageBackButton";
+import SpecialBreak from "../../../../../components/SpecialBreak";
+import TeamBadge from "../../../../../components/TeamBadge";
+import TeamLabel from "../../../../../components/TeamLabel";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import {
+  fixtureDayKey,
+  fixtureDayLabel,
+  formatKickoffParts,
+  formatUnlockDateParts,
+} from "@/lib/dateDisplay";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
+import { getCountdownParts } from "../lock-utils";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -46,87 +56,6 @@ function fmtScore(s?: string | null) {
   return s.replace("-", "–");
 }
 
-function teamAbbr(team: { name: string; tla?: string | null; shortName?: string }) {
-  const tla = String(team.tla || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(tla)) return tla;
-  const short = String(team.shortName || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
-  const words = String(team.name || "")
-    .trim()
-    .toUpperCase()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (words.length >= 2) {
-    return words
-      .slice(0, 3)
-      .map((w) => w[0])
-      .join("");
-  }
-  return String(team.name || "FC").slice(0, 3).toUpperCase();
-}
-
-function TeamBadge({
-  name,
-  shortName,
-  badge,
-  tla,
-}: {
-  name: string;
-  shortName?: string;
-  badge?: string | null;
-  tla?: string | null;
-}) {
-  const fallback = teamAbbr({ name, shortName, tla });
-  return (
-    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-      {badge ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
-      )}
-    </div>
-  );
-}
-
-function fmtKickoffParts(iso: string) {
-  const dt = new Date(iso);
-  const dayNum = dt.getDate();
-  const suffix =
-    dayNum % 10 === 1 && dayNum % 100 !== 11
-      ? "st"
-      : dayNum % 10 === 2 && dayNum % 100 !== 12
-        ? "nd"
-        : dayNum % 10 === 3 && dayNum % 100 !== 13
-          ? "rd"
-          : "th";
-  const monthYear = dt.toLocaleDateString("en-GB", {
-    month: "short",
-    year: "2-digit",
-  });
-  const time = dt.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return { dayNum, suffix, monthYear, time };
-}
-
-function fixtureDayKey(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function fixtureDayLabel(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-GB", { weekday: "long" });
-}
-
 export default function RevealPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -151,6 +80,7 @@ export default function RevealPage() {
 
   const routedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(0);
 
   // auth guard
   useEffect(() => {
@@ -314,6 +244,11 @@ export default function RevealPage() {
     );
   }, [roomCode]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const players = useMemo(() => {
     // Prefer order if present (nice stable ordering)
     const arr = (game?.order?.length ? game.order : game?.players) ?? [];
@@ -362,6 +297,48 @@ export default function RevealPage() {
   }, [goldensByUid]);
 
   const allLocked = !!game?.forcedReveal || (players.length > 0 && lockedCount >= players.length);
+  const nextGw = gw != null ? gw + 1 : null;
+  const unlockAtMs = useMemo(() => {
+    if (!fixtures?.length) return null;
+    const kickoffTimes = fixtures
+      .map((f) => Date.parse(String(f.kickoff || "")))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+    if (!kickoffTimes.length) return null;
+    const unlock = new Date(kickoffTimes[kickoffTimes.length - 1]);
+    unlock.setDate(unlock.getDate() + 1);
+    unlock.setHours(9, 0, 0, 0);
+    return unlock.getTime();
+  }, [fixtures]);
+  const unlockMsLeft = unlockAtMs != null ? Math.max(unlockAtMs - nowMs, 0) : 0;
+  const unlockCountdown = getCountdownParts(unlockMsLeft);
+  const unlockTotalSec = Math.floor(unlockMsLeft / 1000);
+  const unlockDayValue = Math.floor(unlockTotalSec / 86400);
+  const unlockHourValue = Math.floor((unlockTotalSec % 86400) / 3600);
+  const unlockMinuteValue = Math.floor((unlockTotalSec % 3600) / 60);
+  const unlockSecondValue = unlockTotalSec % 60;
+  const unlockCountdownRings = [
+    {
+      label: "Days",
+      value: unlockCountdown.days,
+      progress: unlockDayValue > 0 ? Math.min((unlockDayValue / 7) * 100, 100) : 0,
+    },
+    {
+      label: "Hours",
+      value: unlockCountdown.hours,
+      progress: (unlockHourValue / 24) * 100,
+    },
+    {
+      label: "Minutes",
+      value: unlockCountdown.minutes,
+      progress: (unlockMinuteValue / 60) * 100,
+    },
+    {
+      label: "Seconds",
+      value: unlockCountdown.seconds,
+      progress: (unlockSecondValue / 60) * 100,
+    },
+  ];
 
   if (loading || !user) return null;
 
@@ -415,13 +392,11 @@ export default function RevealPage() {
           </div>
 
           <div className="ml-auto flex gap-2 page-actions-enter">
-            <button
-              className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn ${BTN_3D}`}
-              data-action="back"
+            <PageBackButton
+              label="Exit"
+              className={BTN_3D}
               onClick={() => router.push(`/room/${roomCode}`)}
-            >
-              Exit
-            </button>
+            />
           </div>
         </div>
 
@@ -430,6 +405,77 @@ export default function RevealPage() {
             {error}
           </div>
         )}
+
+        <div className="border border-teal-500 rounded-xl p-3 bg-surface-2 space-y-1">
+          <div className="text-xs text-muted">
+            Next gameweek:{" "}
+            <span className="font-display text-foreground">GW {nextGw ?? "—"}</span>
+          </div>
+          {unlockAtMs != null && (
+            <>
+              <div className="text-xs text-muted">
+                Unlocks:{" "}
+                <span className="font-display text-foreground">
+                  {(() => {
+                    const p = formatUnlockDateParts(unlockAtMs);
+                    return (
+                      <>
+                        {p.day}
+                        <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                          {p.suffix}
+                        </span>{" "}
+                        {p.monthYear} {p.time}
+                      </>
+                    );
+                  })()}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {unlockCountdownRings.map((unit) => (
+                  <div key={unit.label} className="flex flex-col items-center gap-2">
+                    <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
+                      <svg
+                        className="absolute inset-0 w-full h-full -rotate-90"
+                        viewBox="0 0 80 80"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          cx="40"
+                          cy="40"
+                          r="34"
+                          fill="none"
+                          stroke="rgba(var(--room-accent-rgb), 0.2)"
+                          strokeWidth="4"
+                        />
+                        <circle
+                          cx="40"
+                          cy="40"
+                          r="34"
+                          fill="none"
+                          stroke="rgb(var(--room-accent-rgb))"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeDasharray={213.63}
+                          strokeDashoffset={
+                            213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
+                          }
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
+                          {unit.value}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
+                      {unit.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         {!allLocked && (
           <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
@@ -442,43 +488,49 @@ export default function RevealPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <SpecialBreak />
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
             const actual = f?.result ? fmtScore(f.result) : "TBD";
-            const kickoffParts = f ? fmtKickoffParts(f.kickoff) : null;
+            const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
             const dayBoundary = dayBoundaryByIdx[idx];
             const showDayHeader = !!dayBoundary?.showDayHeader;
             const showDayFooter = !!dayBoundary?.showDayFooter;
             const dayLabel = dayBoundary?.dayLabel || "";
 
             return (
-              <div key={fid} className="space-y-2">
+              <div
+                key={fid}
+                className="fixture-card-enter space-y-2 w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                style={{
+                  animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                  animationDuration: "520ms",
+                }}
+              >
                 <div className="h-5 sm:h-6 flex items-center justify-center">
                   {showDayHeader ? (
                     <div className="w-full flex items-center gap-2">
-                      <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
-                      <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                      <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
+                      <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
                         {dayLabel}
                       </span>
-                      <span
-                        className={[
-                          "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
-                          showDayFooter
-                            ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
-                            : "",
-                        ].join(" ")}
-                      />
+                      <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
                     </div>
                   ) : showDayFooter ? (
-                    <div className="w-full flex items-center justify-end">
-                      <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
+                    <div className="w-full flex items-center justify-center gap-1.5">
+                      <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
+                      <span
+                        className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
+                        aria-hidden
+                      />
+                      <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
                     </div>
                   ) : (
                     <span aria-hidden className="invisible w-full">_</span>
                   )}
                 </div>
-                <div className="border border-teal-500 rounded-xl p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2">
+                <div className="border border-teal-500 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2">
                   <div className="space-y-2">
                   <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
                     {kickoffParts ? (
@@ -522,26 +574,24 @@ export default function RevealPage() {
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 justify-items-center">
-                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                              {teamAbbr(f.home)}
-                            </span>
-                            <PendulumName
-                              text={f.home.name}
-                              windowPx={68}
-                              className="font-display w-full text-[9px] text-muted leading-tight"
-                            />
-                          </div>
-                          <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                            <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                              {teamAbbr(f.away)}
-                            </span>
-                            <PendulumName
-                              text={f.away.name}
-                              windowPx={68}
-                              className="font-display w-full text-[9px] text-muted leading-tight"
-                            />
-                          </div>
+                          <TeamLabel
+                            name={f.home.name}
+                            tla={f.home.tla}
+                            shortName={f.home.shortName}
+                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                            fullNameWindowPx={68}
+                          />
+                          <TeamLabel
+                            name={f.away.name}
+                            tla={f.away.tla}
+                            shortName={f.away.shortName}
+                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                            fullNameWindowPx={68}
+                          />
                         </div>
                       </div>
 
@@ -553,16 +603,17 @@ export default function RevealPage() {
                             badge={f.home.badge}
                             tla={f.home.tla}
                           />
-                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                            {teamAbbr(f.home)}
-                          </span>
-                          <PendulumName
-                            text={f.home.name}
-                            windowPx={null}
-                            className="font-display text-[10px] text-muted w-full"
+                          <TeamLabel
+                            name={f.home.name}
+                            tla={f.home.tla}
+                            shortName={f.home.shortName}
+                            wrapperClassName="w-full"
+                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full"
+                            fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
+                            fullNameWindowPx={null}
                           />
                         </div>
-                        <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                        <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
                           vs
                         </span>
                         <div className="flex flex-col items-center text-center min-w-0">
@@ -572,13 +623,14 @@ export default function RevealPage() {
                             badge={f.away.badge}
                             tla={f.away.tla}
                           />
-                          <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                            {teamAbbr(f.away)}
-                          </span>
-                          <PendulumName
-                            text={f.away.name}
-                            windowPx={null}
-                            className="font-display text-[10px] text-muted w-full"
+                          <TeamLabel
+                            name={f.away.name}
+                            tla={f.away.tla}
+                            shortName={f.away.shortName}
+                            wrapperClassName="w-full"
+                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1.08rem)] font-semibold text-foreground w-full"
+                            fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
+                            fullNameWindowPx={null}
                           />
                         </div>
                       </div>

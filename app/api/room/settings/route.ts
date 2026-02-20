@@ -100,8 +100,6 @@ export async function POST(req: Request) {
         : currentSettings.sameResultLock !== false;
     if (nextGameModeStyle === "sprint") {
       nextSameResultLock = false;
-    } else if (nextGameModeStyle === "captain") {
-      nextSameResultLock = true;
     }
 
     const nextSettings: Record<string, unknown> = {

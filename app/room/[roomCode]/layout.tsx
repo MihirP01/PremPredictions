@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
+import ScrollToTopButton from "../../../components/ScrollToTopButton";
 
 type AccentTheme = {
   hex: string;
@@ -173,6 +174,7 @@ export default function RoomScopedLayout({
       }
     >
       {children}
+      <ScrollToTopButton />
     </div>
   );
 }

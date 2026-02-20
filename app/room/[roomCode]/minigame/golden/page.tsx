@@ -3,11 +3,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
-import PendulumName from "../../../../../components/PendulumName";
+import SpecialBreak from "../../../../../components/SpecialBreak";
+import TeamBadge from "../../../../../components/TeamBadge";
+import TeamLabel from "../../../../../components/TeamLabel";
 import { db } from "../../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import {
+  fixtureDayKey,
+  fixtureDayLabel,
+  formatDateWithOrdinal,
+} from "@/lib/dateDisplay";
 import { collection, doc, onSnapshot, query } from "firebase/firestore";
-import { coerceMillis, ONE_HOUR_MS } from "../lock-utils";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -39,82 +45,6 @@ type GoldenDoc = {
 };
 const BTN_3D = "btn-3d-accent";
 
-function TeamBadge({
-  name,
-  tla,
-  shortName,
-  badge,
-}: {
-  name: string;
-  tla?: string | null;
-  shortName?: string;
-  badge?: string | null;
-}) {
-  const fallback = teamAbbr(name, tla, shortName);
-  return (
-    <div className="h-10 w-10 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-      {badge ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={badge} alt={name} className="h-8 w-8 object-contain" loading="lazy" />
-      ) : (
-        <span className="text-[10px] font-bold text-foreground">{fallback}</span>
-      )}
-    </div>
-  );
-}
-
-function teamAbbr(name: string, tla?: string | null, shortName?: string) {
-  const tlaCode = String(tla || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(tlaCode)) return tlaCode;
-
-  const short = String(shortName || "").trim().toUpperCase();
-  if (/^[A-Z0-9]{2,4}$/.test(short)) return short;
-
-  const clean = String(name || "").trim().toUpperCase();
-  if (!clean) return "FC";
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return words
-      .slice(0, 3)
-      .map((w) => w[0])
-      .join("");
-  }
-  return clean.slice(0, 3);
-}
-
-function formatFixtureDateParts(iso: string) {
-  const dt = new Date(iso);
-  const day = dt.getDate();
-  const suffix =
-    day % 10 === 1 && day % 100 !== 11
-      ? "st"
-      : day % 10 === 2 && day % 100 !== 12
-        ? "nd"
-        : day % 10 === 3 && day % 100 !== 13
-          ? "rd"
-          : "th";
-  const monthYear = dt.toLocaleDateString("en-GB", {
-    month: "short",
-    year: "2-digit",
-  });
-  return { day, suffix, monthYear };
-}
-
-function fixtureDayKey(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function fixtureDayLabel(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-GB", { weekday: "long" });
-}
-
 export default function GoldenPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -144,7 +74,6 @@ export default function GoldenPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState<number>(Date.now());
   const [compactOtherPicks, setCompactOtherPicks] = useState(false);
 
   const routedRef = useRef(false);
@@ -178,11 +107,6 @@ export default function GoldenPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -356,10 +280,6 @@ export default function GoldenPage() {
   async function lockGolden() {
     if (!user) return;
     if (gw == null) return;
-    if (isLocked) {
-      setError("Mini-game is locked (deadline passed).");
-      return;
-    }
 
     if (selectedFixtureId == null) {
       setError("Select a fixture to make golden.");
@@ -422,7 +342,7 @@ export default function GoldenPage() {
     return (
       <div className="min-h-[100dvh] p-6 bg-app">
 
-        <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-subtle">
+        <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
           <div className="text-lg font-semibold text-foreground">
             Not in Golden phase
           </div>
@@ -456,46 +376,36 @@ export default function GoldenPage() {
       };
     });
   })();
-  const gameLockAtMs = coerceMillis(game?.lockAt);
-  const fallbackLockAtMs = fixtures.length
-    ? fixtures
-        .map((f) => Date.parse(String(f.kickoff || "")))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)[0] - ONE_HOUR_MS
-    : null;
-  const lockAtMs =
-    gameLockAtMs ??
-    (Number.isFinite(fallbackLockAtMs ?? NaN) ? fallbackLockAtMs : null);
-  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const isLocked = false;
 
   return (
     <div className="min-h-[100dvh] p-6 bg-app">
 
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle">
+      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
-              Golden (Golden Pick)
+              Golden Pick Selection
             </h1>
             <div className="font-display text-sm text-muted">
-              Room {roomCode} • GW {gw} Golden Picks
+              {roomCode} • GW {gw}
             </div>
             <div className="text-xs text-muted">
-              Locked: {lockedCount}/{playersCount}
+              Locked: {lockedCount} / {playersCount}
             </div>
           </div>
 
         </div>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-subtle text-danger">
+          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
             {error}
           </div>
         )}
 
         {/* If locked, show waiting room */}
         {myGoldenLocked ? (
-          <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
             <div className="font-semibold text-foreground">
               You’re locked in ✅
             </div>
@@ -507,7 +417,7 @@ export default function GoldenPage() {
               </span>
             </div>
 
-            <div className="mt-4 w-full h-2 bg-surface border border-subtle rounded">
+            <div className="mt-4 w-full h-2 bg-surface border border-teal-500 rounded">
               <div
                 className="h-2 bg-accent rounded"
                 style={{
@@ -524,7 +434,7 @@ export default function GoldenPage() {
           </div>
         ) : (
           <>
-            <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
               <div className="font-semibold mb-2 text-foreground">
                 Choose your Golden fixture
               </div>
@@ -544,7 +454,8 @@ export default function GoldenPage() {
               </div>
             </div>
 
-	            <div className="border border-subtle rounded-xl p-4 bg-surface-2">
+	            <div>
+              <SpecialBreak />
 	              <div className="mb-3 flex items-center justify-end">
 	                <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
 	                  <span>Compact Other Picks</span>
@@ -569,12 +480,12 @@ export default function GoldenPage() {
 	                  </button>
 	                </label>
 	              </div>
-	              <div className="grid grid-cols-2 gap-3">
+	              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 items-start">
 	              {orderedFixtureIds.map((fid, idx) => {
 	                const f = fixtureMap.get(fid);
 	                const myScore = myPicksByFixture[fid];
 	                const kickoff = f ? new Date(f.kickoff) : null;
-	                const kickoffDate = f ? formatFixtureDateParts(f.kickoff) : null;
+	                const kickoffDate = f ? formatDateWithOrdinal(f.kickoff) : null;
 	                const kickoffTime = kickoff
 	                  ? kickoff.toLocaleTimeString("en-GB", {
 	                      hour: "2-digit",
@@ -594,26 +505,31 @@ export default function GoldenPage() {
                 const isSelected = selectedFixtureId === fid;
 
                 return (
-                  <div key={fid} className="space-y-2">
+                  <div
+                    key={fid}
+                    className="fixture-card-enter space-y-2 w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                    style={{
+                      animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                      animationDuration: "520ms",
+                    }}
+                  >
                     <div className="h-5 sm:h-6 flex items-center justify-center">
                       {showDayHeader ? (
                         <div className="w-full flex items-center gap-2">
-                          <span className="h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)]" />
-                          <span className="font-display text-[10px] sm:text-xs font-semibold text-muted uppercase tracking-wide">
+                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
+                          <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
                             {dayLabel}
                           </span>
-                          <span
-                            className={[
-                              "h-px flex-1 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative",
-                              showDayFooter
-                                ? "after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]"
-                                : "",
-                            ].join(" ")}
-                          />
+                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
                         </div>
                       ) : showDayFooter ? (
-                        <div className="w-full flex items-center justify-end">
-                          <span className="h-px w-12 sm:w-16 bg-[color:rgba(var(--room-accent-rgb),0.35)] relative after:content-[''] after:absolute after:right-0 after:top-1/2 after:-translate-y-1/2 after:h-3 after:w-px after:bg-[color:rgba(var(--room-accent-rgb),0.75)]" />
+                        <div className="w-full flex items-center justify-center gap-1.5">
+                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
+                          <span
+                            className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
+                            aria-hidden
+                          />
+                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
                         </div>
                       ) : (
                         <span aria-hidden className="invisible w-full">_</span>
@@ -624,32 +540,34 @@ export default function GoldenPage() {
 	                    onClick={() => setSelectedFixtureId(fid)}
 	                    disabled={!myScore}
 	                    className={[
-	                      "w-full h-full text-left rounded-xl p-3 border transition-all duration-200",
+	                      "no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
 	                      isSelected
-	                        ? "border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)]"
-	                        : "border-subtle",
+	                        ? "golden-selected border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)] scale-[1.02] origin-center"
+	                        : "border-teal-500 bg-surface-2",
 	                      !myScore
 	                        ? "opacity-60 cursor-not-allowed"
-	                        : "hover:bg-surface hover:border-subtle",
+	                        : "hover:bg-surface",
 	                    ].join(" ")}
 	                  >
 	                    <div className="space-y-2">
-	                      <div className="flex flex-col items-center text-xs text-muted">
-	                        <div className="font-display font-semibold">
-	                          {kickoffDate ? (
-	                            <>
-	                              {kickoffDate.day}
-	                              <span
-	                                className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold"
-	                                aria-hidden="true"
-	                              >
-	                                {kickoffDate.suffix}
-	                              </span>{" "}
-	                              {kickoffDate.monthYear}
-	                            </>
-	                          ) : null}
+	                      <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
+	                        <div className="flex items-center justify-between gap-2">
+	                          <span className="font-display font-semibold">
+	                            {kickoffDate ? (
+	                              <>
+	                                {kickoffDate.day}
+	                                <span
+	                                  className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold"
+	                                  aria-hidden="true"
+	                                >
+	                                  {kickoffDate.suffix}
+	                                </span>{" "}
+	                                {kickoffDate.monthYear}
+	                              </>
+	                            ) : null}
+	                          </span>
+	                          <span className="font-display font-semibold tabular-nums">{kickoffTime}</span>
 	                        </div>
-	                        <div className="font-display font-semibold tabular-nums mt-0.5">{kickoffTime}</div>
 	                      </div>
 	                      <div>
 	                        {f ? (
@@ -664,7 +582,7 @@ export default function GoldenPage() {
                                       badge={f.home.badge}
                                     />
                                   </div>
-                                  <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                                  <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
                                     vs
                                   </span>
                                   <div className="flex justify-center">
@@ -677,26 +595,24 @@ export default function GoldenPage() {
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 justify-items-center">
-                                  <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                                    <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                                      {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                                    </span>
-                                    <PendulumName
-                                      text={f.home.name}
-                                      windowPx={68}
-                                      className="font-display w-full text-[9px] text-muted leading-tight"
-                                    />
-                                  </div>
-                                  <div className="flex w-[78px] flex-col items-center gap-1 text-center">
-                                    <span className="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center">
-                                      {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                                    </span>
-                                    <PendulumName
-                                      text={f.away.name}
-                                      windowPx={68}
-                                      className="font-display w-full text-[9px] text-muted leading-tight"
-                                    />
-                                  </div>
+                                  <TeamLabel
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
+                                  <TeamLabel
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
                                 </div>
                               </div>
 
@@ -708,16 +624,17 @@ export default function GoldenPage() {
                                     shortName={f.home.shortName}
                                     badge={f.home.badge}
                                   />
-                                  <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                                    {teamAbbr(f.home.name, f.home.tla, f.home.shortName)}
-                                  </span>
-                                  <PendulumName
-                                    text={f.home.name}
-                                    windowPx={null}
-                                    className="font-display text-[10px] text-muted w-full"
+                                  <TeamLabel
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    wrapperClassName="w-full"
+                                    abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1.08rem)] font-semibold text-foreground w-full"
+                                    fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
+                                    fullNameWindowPx={null}
                                   />
                                 </div>
-                                <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                                <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
                                   vs
                                 </span>
                                 <div className="flex flex-col items-center text-center min-w-0">
@@ -727,13 +644,14 @@ export default function GoldenPage() {
                                     shortName={f.away.shortName}
                                     badge={f.away.badge}
                                   />
-                                  <span className="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full">
-                                    {teamAbbr(f.away.name, f.away.tla, f.away.shortName)}
-                                  </span>
-                                  <PendulumName
-                                    text={f.away.name}
-                                    windowPx={null}
-                                    className="font-display text-[10px] text-muted w-full"
+                                  <TeamLabel
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    wrapperClassName="w-full"
+                                    abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1.08rem)] font-semibold text-foreground w-full"
+                                    fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
+                                    fullNameWindowPx={null}
                                   />
                                 </div>
                               </div>

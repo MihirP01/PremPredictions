@@ -3,9 +3,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
+import PageBackButton from "../../../../components/PageBackButton";
+import PageShell from "../../../../components/PageShell";
+import SectionCard from "../../../../components/SectionCard";
+import SpecialBreak from "../../../../components/SpecialBreak";
+import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { triggerTapHaptic } from "@/lib/haptics";
 import { collection, doc, getDoc, getDocs, onSnapshot, query } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
@@ -31,17 +35,31 @@ function seasonLabel(seasonKey: string) {
 
 type PlayerStats = {
   totalPoints: number;
-  weeksScored: number;
   exactCount: number;
   resultOnlyCount: number;
   totalGradedPicks: number;
   goldenBonusPoints: number;
   goldenPickCount: number;
+  goalDisparity: number;
   outcomeAttempts: { H: number; D: number; A: number };
   outcomeHits: { H: number; D: number; A: number };
   bestGw: number | null;
   bestGwPoints: number;
   byGw: Record<number, number>;
+  byGwBreakdown: Record<
+    number,
+    {
+      points: number;
+      exactCount: number;
+      resultOnlyCount: number;
+      totalGradedPicks: number;
+      goldenBonusPoints: number;
+      goldenPickCount: number;
+      goalDisparity: number;
+      outcomeAttempts: { H: number; D: number; A: number };
+      outcomeHits: { H: number; D: number; A: number };
+    }
+  >;
 };
 
 function parseGwId(id: string): number | null {
@@ -93,6 +111,15 @@ function outcome(score: string) {
   return "D" as const;
 }
 
+function totalGoals(score: string) {
+  const m = String(score).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const a = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(a)) return null;
+  return h + a;
+}
+
 export default function RoomStatsPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
@@ -101,6 +128,7 @@ export default function RoomStatsPage() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedUid, setSelectedUid] = useState<string>("");
+  const [selectedGwFilter, setSelectedGwFilter] = useState<string>("all");
   const [currentGw, setCurrentGw] = useState<number>(1);
   const [seasonKey, setSeasonKey] = useState<string>("");
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
@@ -236,17 +264,18 @@ export default function RoomStatsPage() {
     for (const p of players) {
       baseStats[p.uid] = {
         totalPoints: 0,
-        weeksScored: 0,
         exactCount: 0,
         resultOnlyCount: 0,
         totalGradedPicks: 0,
         goldenBonusPoints: 0,
         goldenPickCount: 0,
+        goalDisparity: 0,
         outcomeAttempts: { H: 0, D: 0, A: 0 },
         outcomeHits: { H: 0, D: 0, A: 0 },
         bestGw: null,
         bestGwPoints: 0,
         byGw: {},
+        byGwBreakdown: {},
       };
     }
 
@@ -298,8 +327,22 @@ export default function RoomStatsPage() {
           if (!s) continue;
 
           s.totalPoints += Number.isFinite(points) ? points : 0;
-          s.weeksScored += 1;
           s.byGw[gw] = Number.isFinite(points) ? points : 0;
+          if (!s.byGwBreakdown[gw]) {
+            s.byGwBreakdown[gw] = {
+              points: 0,
+              exactCount: 0,
+              resultOnlyCount: 0,
+              totalGradedPicks: 0,
+              goldenBonusPoints: 0,
+              goldenPickCount: 0,
+              goalDisparity: 0,
+              outcomeAttempts: { H: 0, D: 0, A: 0 },
+              outcomeHits: { H: 0, D: 0, A: 0 },
+            };
+          }
+          const gwStats = s.byGwBreakdown[gw];
+          gwStats.points = Number.isFinite(points) ? points : 0;
 
           if (s.bestGw == null || points > s.bestGwPoints) {
             s.bestGw = gw;
@@ -310,15 +353,23 @@ export default function RoomStatsPage() {
           for (const item of Object.values(breakdown)) {
             if (item.pred != null && String(item.pred).trim() !== "") {
               s.totalGradedPicks += 1;
+              gwStats.totalGradedPicks += 1;
             }
-            if (item.base === 2) s.exactCount += 1;
-            else if (item.base === 1) s.resultOnlyCount += 1;
+            if (item.base === 2) {
+              s.exactCount += 1;
+              gwStats.exactCount += 1;
+            } else if (item.base === 1) {
+              s.resultOnlyCount += 1;
+              gwStats.resultOnlyCount += 1;
+            }
             if (item.golden) {
               s.goldenPickCount += 1;
+              gwStats.goldenPickCount += 1;
               const base = Number(item.base ?? 0);
               if (Number.isFinite(base) && base > 0) {
                 // Golden doubles fixture points; bonus = added copy of base points.
                 s.goldenBonusPoints += base;
+                gwStats.goldenBonusPoints += base;
               }
             }
 
@@ -326,9 +377,18 @@ export default function RoomStatsPage() {
             const actualOutcome = item.actual ? outcome(String(item.actual)) : null;
             if (predOutcome && actualOutcome) {
               s.outcomeAttempts[predOutcome] += 1;
+              gwStats.outcomeAttempts[predOutcome] += 1;
               if (predOutcome === actualOutcome) {
                 s.outcomeHits[predOutcome] += 1;
+                gwStats.outcomeHits[predOutcome] += 1;
               }
+            }
+
+            const predGoals = item.pred ? totalGoals(item.pred) : null;
+            const actualGoals = item.actual ? totalGoals(String(item.actual)) : null;
+            if (predGoals != null && actualGoals != null) {
+              s.goalDisparity += predGoals - actualGoals;
+              gwStats.goalDisparity += predGoals - actualGoals;
             }
           }
         }
@@ -353,113 +413,164 @@ export default function RoomStatsPage() {
     };
   }, [players, roomCode, currentGw, seasonKey]);
 
-  if (loading || !user) return null;
-
   const selectedPlayer = players.find((p) => p.uid === effectiveSelectedUid) ?? null;
   const stats = effectiveSelectedUid ? statsByUid[effectiveSelectedUid] : null;
-  const recentGws = Array.from({ length: Math.min(5, currentGw) }, (_, i) => currentGw - i);
+  const allScoredGws = useMemo(() => {
+    const set = new Set<number>();
+    Object.values(statsByUid).forEach((s) => {
+      Object.keys(s.byGw).forEach((k) => {
+        const n = Number(k);
+        if (Number.isFinite(n)) set.add(n);
+      });
+    });
+    return [...set].sort((a, b) => b - a);
+  }, [statsByUid]);
+  const effectiveGwFilter =
+    selectedGwFilter === "all" || allScoredGws.includes(Number(selectedGwFilter))
+      ? selectedGwFilter
+      : "all";
+  const selectedGwNumber =
+    effectiveGwFilter === "all"
+      ? null
+      : Number.isFinite(Number(effectiveGwFilter))
+        ? Number(effectiveGwFilter)
+        : null;
+  const displayStats = useMemo(() => {
+    if (!stats) return null;
+    if (selectedGwNumber == null) return stats;
+    const gwStats = stats.byGwBreakdown[selectedGwNumber];
+    const gwPoints = stats.byGw[selectedGwNumber] ?? 0;
+    return {
+      ...stats,
+      totalPoints: gwPoints,
+      exactCount: gwStats?.exactCount ?? 0,
+      resultOnlyCount: gwStats?.resultOnlyCount ?? 0,
+      totalGradedPicks: gwStats?.totalGradedPicks ?? 0,
+      goldenBonusPoints: gwStats?.goldenBonusPoints ?? 0,
+      goldenPickCount: gwStats?.goldenPickCount ?? 0,
+      goalDisparity: gwStats?.goalDisparity ?? 0,
+      outcomeAttempts: gwStats?.outcomeAttempts ?? { H: 0, D: 0, A: 0 },
+      outcomeHits: gwStats?.outcomeHits ?? { H: 0, D: 0, A: 0 },
+      bestGw: gwStats ? selectedGwNumber : null,
+      bestGwPoints: gwStats ? gwPoints : 0,
+    } satisfies PlayerStats;
+  }, [stats, selectedGwNumber]);
+  const recentGws =
+    Array.from({ length: Math.min(5, currentGw) }, (_, i) => currentGw - i);
+  if (loading || !user) return null;
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+    <PageShell>
         <div className="space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground">Player Stats</h1>
-              <div className="font-display text-sm text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")}
+          <TopActionRow
+            title="Player Stats"
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
+          />
+        </div>
+
+        <SectionCard>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[180px_260px_1fr] gap-3 items-end">
+            {!!seasonOptions.length && (
+              <div className="relative">
+                <label className="text-sm text-muted block mb-1" htmlFor="stats-season-select">
+                  Season
+                </label>
+                <select
+                  id="stats-season-select"
+                  value={seasonKey}
+                  onChange={(e) => setSeasonKey(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {seasonOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {seasonLabel(s)}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
+                  ▼
+                </span>
               </div>
-            </div>
-            <div className="ml-auto flex gap-2 page-actions-enter">
-              <button
-                onClick={() => {
-                  triggerTapHaptic();
-                  router.push(`/room/${roomCode}`);
-                }}
-                className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
-                data-action="back"
-              >
-                Back
-              </button>
-            </div>
-          </div>
-          {!!seasonOptions.length && (
-            <div className="w-[132px] sm:w-[140px] relative">
-              <label className="sr-only" htmlFor="stats-season-select">
-                Select season
-              </label>
+            )}
+            <div className="relative">
+              <label className="text-sm text-muted block mb-1">Select player</label>
               <select
-                id="stats-season-select"
-                value={seasonKey}
-                onChange={(e) => setSeasonKey(e.target.value)}
-                className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                value={effectiveSelectedUid}
+                onChange={(e) => setSelectedUid(e.target.value)}
+                className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
-                {seasonOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {seasonLabel(s)}
+                {players.map((p) => (
+                  <option className="font-display" key={p.uid} value={p.uid}>
+                    {p.displayName}
                   </option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+              <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
                 ▼
               </span>
             </div>
-          )}
-        </div>
-
-        <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 space-y-3">
-          <label className="text-sm text-muted block">Select player</label>
-          <div className="relative">
-            <select
-              value={effectiveSelectedUid}
-              onChange={(e) => setSelectedUid(e.target.value)}
-              className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              {players.map((p) => (
-                <option className="font-display" key={p.uid} value={p.uid}>
-                  {p.displayName}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-              ▼
-            </span>
+            <div className="relative">
+              <label className="text-sm text-muted block mb-1" htmlFor="stats-gw-filter-select">
+                Gameweek
+              </label>
+              <select
+                id="stats-gw-filter-select"
+                value={effectiveGwFilter}
+                onChange={(e) => setSelectedGwFilter(e.target.value)}
+                className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="all">All GWs</option>
+                {allScoredGws.map((gw) => (
+                  <option key={`gw-filter-${gw}`} value={String(gw)}>
+                    GW {gw}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
+                ▼
+              </span>
+            </div>
           </div>
-        </div>
+        </SectionCard>
+
+        <SpecialBreak />
 
         {error && <div className="text-sm text-danger">{error}</div>}
 
         {busy ? (
           <div className="text-sm text-muted">Loading stats…</div>
-        ) : !selectedPlayer || !stats ? (
+        ) : !selectedPlayer || !displayStats ? (
           <div className="text-sm text-muted">No player stats available yet.</div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Total Points</div>
-                <div className="font-display text-xl font-semibold text-foreground">{stats.totalPoints}</div>
+                <div className="font-display text-xl font-semibold text-foreground">{displayStats.totalPoints}</div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
-                <div className="text-xs text-muted">Weeks Scored</div>
-                <div className="font-display text-xl font-semibold text-foreground">{stats.weeksScored}</div>
+                <div className="text-xs text-muted">Goal Disparity (+/-)</div>
+                <div className="font-display text-xl font-semibold text-foreground">
+                  {displayStats.goalDisparity > 0 ? `+${displayStats.goalDisparity}` : displayStats.goalDisparity}
+                </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Exact Scores</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {stats.exactCount} ({pct(stats.exactCount, stats.totalGradedPicks)})
+                  {displayStats.exactCount} ({pct(displayStats.exactCount, displayStats.totalGradedPicks)})
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Correct Results</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {stats.resultOnlyCount} ({pct(stats.resultOnlyCount, stats.totalGradedPicks)})
+                  {displayStats.resultOnlyCount} ({pct(displayStats.resultOnlyCount, displayStats.totalGradedPicks)})
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Golden Bonus Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {stats.goldenBonusPoints}
+                  {displayStats.goldenBonusPoints}
                 </div>
               </div>
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
@@ -470,41 +581,44 @@ export default function RoomStatsPage() {
               </div>
             </div>
 
-            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-              <div className="font-semibold text-foreground mb-2">Recent Weeks</div>
-              <div className="space-y-2">
-                {recentGws.map((gw) => (
-                  <div
-                    key={gw}
-                    className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
-                  >
-                    <span className="font-display text-sm text-muted">GW {gw}</span>
-                    <span className="font-display font-semibold text-foreground">{stats.byGw[gw] ?? 0}</span>
-                  </div>
-                ))}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+                <div className="font-semibold text-foreground mb-2">Recent Weeks</div>
+                <div className="space-y-2">
+                  {recentGws.map((gw) => (
+                    <div
+                      key={gw}
+                      className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
+                    >
+                      <span className="font-display text-sm text-muted">GW {gw}</span>
+                      <span className="font-display font-semibold text-foreground">{stats.byGw[gw] ?? 0}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-              <div className="font-semibold text-foreground mb-2">Hit Rate by Type</div>
-              <div className="space-y-2">
-                {[
-                  { key: "H" as const, label: "Home Win" },
-                  { key: "D" as const, label: "Draw" },
-                  { key: "A" as const, label: "Away Win" },
-                ].map((t) => (
-                  <div
-                    key={t.key}
-                    className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
-                  >
-                    <span className="text-sm text-muted">{t.label}</span>
-                    <span className="font-display font-semibold text-foreground">
-                      {stats.outcomeHits[t.key]}/{stats.outcomeAttempts[t.key]} (
-                      {pct(stats.outcomeHits[t.key], stats.outcomeAttempts[t.key])})
-                    </span>
-                  </div>
-                ))}
+              <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+                <div className="font-semibold text-foreground mb-2">Hit Rate by Type</div>
+                <div className="space-y-2">
+                  {[
+                    { key: "H" as const, label: "Home Win" },
+                    { key: "D" as const, label: "Draw" },
+                    { key: "A" as const, label: "Away Win" },
+                  ].map((t) => (
+                    <div
+                      key={t.key}
+                      className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
+                    >
+                      <span className="text-sm text-muted">{t.label}</span>
+                      <span className="font-display font-semibold text-foreground">
+                        {displayStats.outcomeHits[t.key]}/{displayStats.outcomeAttempts[t.key]} (
+                        {pct(displayStats.outcomeHits[t.key], displayStats.outcomeAttempts[t.key])})
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
+
             </div>
 
           </>
@@ -513,7 +627,6 @@ export default function RoomStatsPage() {
         <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
           Last updated: {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }

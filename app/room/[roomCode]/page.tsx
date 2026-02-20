@@ -1,10 +1,17 @@
 "use client";
 
 import LogoutButton from "../../../components/LogoutButton"; // adjust relative path
+import PageShell from "../../../components/PageShell";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Settings, Trophy } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Trophy } from "lucide-react";
+import SectionCard from "../../../components/SectionCard";
+import StatusPill from "../../../components/StatusPill";
+import { ConfirmDialog, ModalHeader, ThemedModal } from "../../../components/RoomModal";
+import TopActionRow from "../../../components/TopActionRow";
 import { useAuth } from "../../../components/AuthProvider";
+import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../components/RoomSettingsMenu";
+import SpecialBreak from "../../../components/SpecialBreak";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -80,8 +87,10 @@ export default function RoomPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [kickBusy, setKickBusy] = useState(false);
   const [kickTarget, setKickTarget] = useState<Player | null>(null);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [showKickControls, setShowKickControls] = useState(false);
-  const [sameResultLock, setSameResultLock] = useState(true);
+  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
   const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
     "round_robin",
   );
@@ -96,7 +105,6 @@ export default function RoomPage() {
   const [newPasswordDraft, setNewPasswordDraft] = useState("");
   const [confirmPasswordDraft, setConfirmPasswordDraft] = useState("");
   const [nicknameExpanded, setNicknameExpanded] = useState(false);
-  const [leaderToolsExpanded, setLeaderToolsExpanded] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [createCode, setCreateCode] = useState("");
   const [nickNameDraft, setNickNameDraft] = useState("");
@@ -126,8 +134,8 @@ export default function RoomPage() {
         roomData?.settings?.gameModeStyle ??
         (sameResultLockValue ? "round_robin" : "sprint");
       setGameModeStyle(style);
-      setSameResultLock(
-        style === "sprint" ? false : style === "captain" ? true : sameResultLockValue,
+      setAllowIdenticalPicks(
+        style === "sprint" ? true : !sameResultLockValue,
       );
       setThemeAccent(String(roomData?.settings?.themeAccent || "teal"));
       setHasPassword(Boolean(roomData?.settings?.hasPassword));
@@ -183,7 +191,6 @@ export default function RoomPage() {
   useEffect(() => {
     if (settingsOpen) return;
     setNicknameExpanded(false);
-    setLeaderToolsExpanded(false);
     setRoomRulesOpen(false);
   }, [settingsOpen]);
 
@@ -359,11 +366,12 @@ export default function RoomPage() {
   }
 
   async function leaveCurrentRoom() {
+    setLeaveConfirmOpen(true);
+  }
+
+  async function confirmLeaveCurrentRoom() {
     if (!user) return;
-    const ok = window.confirm(
-      `Are you sure you want to leave room ${roomCode}?`,
-    );
-    if (!ok) return;
+    setLeaveConfirmOpen(false);
 
     setSwitcherBusy(true);
     setSwitcherError(null);
@@ -397,11 +405,12 @@ export default function RoomPage() {
   }
 
   async function deleteRoomAsLeader() {
+    setDeleteConfirmOpen(true);
+  }
+
+  async function confirmDeleteRoomAsLeader() {
     if (!user || !isLeader) return;
-    const confirmDelete = window.confirm(
-      `Delete room ${roomCode} for everyone? This cannot be undone.`,
-    );
-    if (!confirmDelete) return;
+    setDeleteConfirmOpen(false);
 
     setDeleteBusy(true);
     setError(null);
@@ -479,8 +488,8 @@ export default function RoomPage() {
   }
 
   async function toggleSameResultLock() {
-    if (!user || !isLeader || roomSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain") return;
-    const nextValue = !sameResultLock;
+    if (!user || !isLeader || roomSettingsBusy || gameModeStyle === "sprint") return;
+    const nextAllowIdentical = !allowIdenticalPicks;
     setRoomSettingsBusy(true);
     setError(null);
     try {
@@ -490,12 +499,14 @@ export default function RoomPage() {
         body: JSON.stringify({
           roomCode,
           leaderUid: user.uid,
-          sameResultLock: nextValue,
+          // server flag keeps legacy meaning: true => duplicates blocked
+          sameResultLock: !nextAllowIdentical,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
-      setSameResultLock(nextValue);
+      const storedSameResultLock = data?.sameResultLock !== false;
+      setAllowIdenticalPicks(gameModeStyle === "sprint" ? true : !storedSameResultLock);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update settings.");
     } finally {
@@ -520,8 +531,8 @@ export default function RoomPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
       setGameModeStyle(nextStyle);
-      setSameResultLock(
-        nextStyle === "sprint" ? false : nextStyle === "captain" ? true : data?.sameResultLock !== false,
+      setAllowIdenticalPicks(
+        nextStyle === "sprint" ? true : !(data?.sameResultLock !== false),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update settings.");
@@ -580,19 +591,7 @@ export default function RoomPage() {
   }
 
   function toggleNicknameSection() {
-    setNicknameExpanded((prev) => {
-      const next = !prev;
-      if (next) setLeaderToolsExpanded(false);
-      return next;
-    });
-  }
-
-  function toggleLeaderToolsSection() {
-    setLeaderToolsExpanded((prev) => {
-      const next = !prev;
-      if (next) setNicknameExpanded(false);
-      return next;
-    });
+    setNicknameExpanded((prev) => !prev);
   }
 
   const sortedPlayers = [...players].sort((a, b) => {
@@ -600,121 +599,92 @@ export default function RoomPage() {
     if (b.role === "leader") return 1;
     return a.displayName.localeCompare(b.displayName);
   });
+  const resultLockSubtext =
+    gameModeStyle === "sprint"
+      ? "Sprint • Allow Identical Picks OFF"
+      : gameModeStyle === "captain"
+        ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
+        : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <div className="relative z-30 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Hub</h1>
-            <div className="font-display text-sm text-muted">{roomCode}</div>
-          </div>
-          <div ref={settingsWrapRef} className="relative page-actions-enter">
-            <button
-              onClick={() => setSettingsOpen((v) => !v)}
-              className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn"
-              data-action="settings"
-              aria-label="Open settings"
-            >
-              <Settings size={16} />
-            </button>
-              {settingsOpen && (
-                <div className="absolute top-full right-0 mt-2 sm:top-0 sm:right-[calc(100%+12px)] sm:mt-0 w-60 sm:w-72 rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-2 shadow-card z-20 settings-panel-enter">
-                  <div className="font-semibold text-foreground">Settings</div>
-                <div className="rounded-lg border border-teal-500 p-2 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                      Change Nickname
+    <>
+      <PageShell innerClassName="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+        <div className="relative z-30">
+          <TopActionRow
+            title="Hub"
+            subtitle={roomCode}
+            actions={
+              <div ref={settingsWrapRef} className="relative">
+            <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+            <SettingsDropdownPanel open={settingsOpen}>
+                <div className="font-semibold text-foreground">Settings</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
+                    Change Nickname
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleNicknameSection}
+                    className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
+                  >
+                    {nicknameExpanded ? "Collapse" : "Expand"}
+                    {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+                {nicknameExpanded && (
+                  <div className="rounded-lg border border-teal-500 p-2 space-y-2">
+                    <div>
+                      <input
+                        value={nickNameDraft}
+                        onChange={(e) => setNickNameDraft(e.target.value)}
+                        maxLength={20}
+                        placeholder="Nickname"
+                        className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+                      />
                     </div>
                     <button
-                      type="button"
-                      onClick={toggleNicknameSection}
-                      className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
+                      onClick={saveNickName}
+                      disabled={nickNameBusy}
+                      className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
                     >
-                      {nicknameExpanded ? "Collapse" : "Expand"}
-                      {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {nickNameBusy ? "Saving..." : "Save"}
                     </button>
-                  </div>
-                  {nicknameExpanded && (
-                    <>
-                      <div>
-                        <input
-                          value={nickNameDraft}
-                          onChange={(e) => setNickNameDraft(e.target.value)}
-                          maxLength={20}
-                          placeholder="Nickname"
-                          className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
-                        />
-                      </div>
-                      <button
-                        onClick={saveNickName}
-                        disabled={nickNameBusy}
-                        className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                      >
-                        {nickNameBusy ? "Saving..." : "Save"}
-                      </button>
-                      <div className="text-xs text-muted">
-                        Nickname shows across the room. Leave blank to use your name.
-                      </div>
-                    </>
-                  )}
-                </div>
-                {isLeader ? (
-                  <div className="rounded-lg border border-teal-500 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                        Leader Tools
-                      </div>
-                      <button
-                        type="button"
-                        onClick={toggleLeaderToolsSection}
-                        className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
-                      >
-                        {leaderToolsExpanded ? "Collapse" : "Expand"}
-                        {leaderToolsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
+                    <div className="text-xs text-muted">
+                      Nickname shows across the room. Leave blank to use your name.
                     </div>
-                    {leaderToolsExpanded && (
-                      <>
-                        <div className="rounded-lg border border-teal-500 p-2 space-y-2">
-                          <button
-                            onClick={() => setRoomRulesOpen(true)}
-                            className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                          >
-                            Room Settings
-                          </button>
-                        </div>
-                        <button
-                          onClick={deleteRoomAsLeader}
-                          disabled={deleteBusy}
-                          className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-                        >
-                          {deleteBusy ? "Deleting room…" : "Delete Room"}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted">
-                    No room settings available for your role.
                   </div>
                 )}
-                <div className="pt-1 border-t border-subtle space-y-2">
-                  <button
-                    onClick={async () => {
-                      setSettingsOpen(false);
-                      setRoomSwitcherOpen(true);
-                      await loadMemberRooms();
-                    }}
-                    className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-                  >
-                    Switch Rooms
-                  </button>
-                  <LogoutButton />
-                </div>
               </div>
-            )}
-          </div>
+              <div className="space-y-2">
+                <SpecialBreak />
+                <button
+                  onClick={async () => {
+                    setSettingsOpen(false);
+                    setRoomSwitcherOpen(true);
+                    await loadMemberRooms();
+                  }}
+                  className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                >
+                  Switch Rooms
+                </button>
+                <LogoutButton />
+                {isLeader && (
+                  <div className="space-y-2">
+                    <SpecialBreak />
+                    <button
+                      onClick={() => setRoomRulesOpen(true)}
+                      className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                    >
+                      Room Settings
+                    </button>
+                  </div>
+                )}
+              </div>
+            </SettingsDropdownPanel>
+              </div>
+            }
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -765,7 +735,7 @@ export default function RoomPage() {
 
         {error && <div className="text-sm text-danger">{error}</div>}
 
-        <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+        <SectionCard>
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="font-semibold text-foreground">Players</div>
             {isLeader && (
@@ -784,76 +754,56 @@ export default function RoomPage() {
                 className="min-h-10 flex items-center justify-between border-b border-subtle last:border-0 py-2"
               >
                 <div className="min-w-0 flex-1 font-medium text-foreground">
-                  <span className="font-display block truncate">
-                    {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                  <span className="font-display flex items-center gap-2">
+                    <span className="block truncate">
+                      {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                    </span>
+                    {p.uid === user?.uid && (
+                      <StatusPill label="You" tone="you" className="shrink-0 text-[10px] py-0.5" />
+                    )}
                   </span>
                 </div>
                 <div className="ml-2 w-[84px] h-6 flex items-center justify-end">
                   {p.role === "leader" ? (
-                    <span className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
-                      Leader
-                    </span>
+                    <StatusPill label="Leader" tone="neutral" />
                   ) : isLeader && showKickControls && p.uid !== user?.uid ? (
-                    <button
-                      onClick={() => setKickTarget(p)}
-                      className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-danger hover:bg-surface-2"
-                    >
-                      Kick
-                    </button>
+                    <StatusPill label="Kick" tone="danger" onClick={() => setKickTarget(p)} />
                   ) : (
-                    <span
-                      aria-hidden="true"
-                      className="invisible font-display text-xs px-2 py-1 rounded-full border"
-                    >
-                      Kick
-                    </span>
+                    <StatusPill label="Kick" invisible />
                   )}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
-      {kickTarget && (
-        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
-            <div className="text-lg font-semibold text-foreground">Remove Player</div>
-            <div className="text-sm text-muted">
-              Remove{" "}
-              <span className="font-display text-foreground">
-                {kickTarget.nickName
-                  ? `(${kickTarget.nickName}) ${kickTarget.displayName}`
-                  : kickTarget.displayName}
-              </span>{" "}
-              from room{" "}
-              <span className="font-display text-foreground">{roomCode}</span>?
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setKickTarget(null)}
-                disabled={kickBusy}
-                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmKickPlayer}
-                disabled={kickBusy}
-                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-              >
-                {kickBusy ? "Removing..." : "Confirm Remove"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {roomSwitcherOpen && (
-        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-foreground">
-                Switch Rooms
-              </div>
+        </SectionCard>
+      </PageShell>
+      <ConfirmDialog
+        open={!!kickTarget}
+        onClose={() => (kickBusy ? null : setKickTarget(null))}
+        onConfirm={confirmKickPlayer}
+        title="Remove Player"
+        body={
+          <>
+            Remove{" "}
+            <span className="font-display text-foreground">
+              {kickTarget?.nickName
+                ? `(${kickTarget.nickName}) ${kickTarget.displayName}`
+                : kickTarget?.displayName}
+            </span>{" "}
+            from room <span className="font-display text-foreground">{roomCode}</span>?
+          </>
+        }
+        confirmLabel="Confirm Remove"
+        confirming={kickBusy}
+        danger
+      />
+      <ThemedModal
+        open={roomSwitcherOpen}
+        onClose={() => setRoomSwitcherOpen(false)}
+        maxWidthClassName="max-w-lg"
+      >
+            <ModalHeader title="Switch Rooms" onClose={() => setRoomSwitcherOpen(false)} />
+            <div className="flex items-center justify-end">
               <button
                 onClick={() => setRoomSwitcherOpen(false)}
                 className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
@@ -887,6 +837,7 @@ export default function RoomPage() {
                 ))
               )}
             </div>
+            <SpecialBreak />
 
             <div className="space-y-2">
               <div className="text-sm font-semibold text-foreground">
@@ -930,7 +881,8 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-subtle">
+            <div className="space-y-2">
+              <SpecialBreak />
               <button
                 onClick={leaveCurrentRoom}
                 disabled={switcherBusy}
@@ -939,26 +891,43 @@ export default function RoomPage() {
                 Leave Current Room
               </button>
             </div>
-          </div>
-        </div>
-      )}
-      {roomRulesOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4"
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-foreground">Room Settings</div>
-              <button
-                onClick={() => setRoomRulesOpen(false)}
-                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
-                aria-label="Close room settings"
-              >
-                ×
-              </button>
-            </div>
+      </ThemedModal>
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        onClose={() => setLeaveConfirmOpen(false)}
+        onConfirm={confirmLeaveCurrentRoom}
+        title="Leave Room"
+        body={
+          <>
+            Are you sure you want to leave{" "}
+            <span className="font-display text-foreground">{roomCode}</span>?
+          </>
+        }
+        confirmLabel="Confirm Leave"
+        confirming={switcherBusy}
+        danger
+      />
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteRoomAsLeader}
+        title="Delete Room"
+        body={
+          <>
+            Delete room <span className="font-display text-foreground">{roomCode}</span> for
+            everyone? This cannot be undone.
+          </>
+        }
+        confirmLabel="Confirm Delete"
+        confirming={deleteBusy}
+        danger
+      />
+      <ThemedModal open={roomRulesOpen} onClose={() => setRoomRulesOpen(false)}>
+            <ModalHeader
+              title="Room Settings"
+              onClose={() => setRoomRulesOpen(false)}
+              ariaLabel="Exit room settings"
+            />
             <button
               onClick={openPasswordModal}
               disabled={roomSettingsBusy}
@@ -973,7 +942,7 @@ export default function RoomPage() {
                   value={themeAccent}
                   onChange={(e) => updateThemeAccent(e.target.value)}
                   disabled={roomSettingsBusy}
-                  className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60"
+                  className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-[color:rgba(var(--room-accent-rgb),0.65)] disabled:opacity-60"
                 >
                   {THEME_ACCENT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -995,7 +964,7 @@ export default function RoomPage() {
                   className={[
                     "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
                     gameModeStyle === "round_robin"
-                      ? "bg-accent text-accent-foreground border-teal-400"
+                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
                       : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                   ].join(" ")}
                 >
@@ -1007,7 +976,7 @@ export default function RoomPage() {
                   className={[
                     "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
                     gameModeStyle === "captain"
-                      ? "bg-accent text-accent-foreground border-teal-400"
+                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
                       : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                   ].join(" ")}
                 >
@@ -1019,14 +988,14 @@ export default function RoomPage() {
                   className={[
                     "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
                     gameModeStyle === "sprint"
-                      ? "bg-accent text-accent-foreground border-teal-400"
+                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
                       : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                   ].join(" ")}
                 >
                   Sprint
                 </button>
               </div>
-              <div className="text-xs text-muted">
+              <div className="text-xs text-muted text-center">
                 {gameModeStyle === "sprint"
                   ? "Sprint is the quickest mode for larger rooms."
                   : "Recommended for 5 or fewer players."}
@@ -1034,10 +1003,10 @@ export default function RoomPage() {
             </div>
             <button
               onClick={toggleSameResultLock}
-              disabled={roomSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain"}
+              disabled={roomSettingsBusy || gameModeStyle === "sprint"}
               className={[
                 "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
-                gameModeStyle === "sprint" || gameModeStyle === "captain"
+                gameModeStyle === "sprint"
                   ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
                   : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
               ].join(" ")}
@@ -1045,34 +1014,31 @@ export default function RoomPage() {
               {roomSettingsBusy
                 ? "Saving..."
                 : gameModeStyle === "sprint"
-                  ? "Result Lock: OFF (Sprint)"
-                : gameModeStyle === "captain"
-                  ? "Result Lock: ON (Captain)"
-                : sameResultLock
-                  ? "Result Lock: ON"
-                  : "Result Lock: OFF"}
+                  ? "Allow Identical Picks: ON (Sprint)"
+                  : allowIdenticalPicks
+                    ? "Allow Identical Picks: ON"
+                    : "Allow Identical Picks: OFF"}
             </button>
-            <div className="text-xs text-muted">
-              Round-Robin: toggle Result Lock as needed. Sprint: Result Lock is forced OFF. Captain: Result Lock is forced ON.
+            <div className="text-xs text-muted text-center">
+              {resultLockSubtext}
             </div>
-          </div>
-        </div>
-      )}
-      {passwordModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-foreground">
-                {hasPassword ? "Change Room Password" : "Set Room Password"}
-              </div>
+            <div className="space-y-3">
+              <SpecialBreak />
               <button
-                onClick={() => setPasswordModalOpen(false)}
-                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
-                aria-label="Close password settings"
+                onClick={deleteRoomAsLeader}
+                disabled={deleteBusy}
+                className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
               >
-                ×
+                {deleteBusy ? "Deleting room…" : "Delete Room"}
               </button>
             </div>
+      </ThemedModal>
+      <ThemedModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)}>
+            <ModalHeader
+              title={hasPassword ? "Change Room Password" : "Set Room Password"}
+              onClose={() => setPasswordModalOpen(false)}
+              ariaLabel="Close password settings"
+            />
             {hasPassword && (
               <div className="space-y-1">
                 <label className="text-xs text-muted">Current Password</label>
@@ -1112,9 +1078,7 @@ export default function RoomPage() {
             >
               {passwordBusy ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
             </button>
-          </div>
-        </div>
-      )}
-    </div>
+      </ThemedModal>
+    </>
   );
 }

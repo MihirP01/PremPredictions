@@ -8,7 +8,7 @@ type FixturesApiResponse = {
   fixtures?: FixtureApiItem[];
 };
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+const LOCK_WINDOW_MS = 30 * 60 * 1000;
 const INELIGIBLE_DRAFT_STATUSES = new Set([
   "FINISHED",
   "IN_PLAY",
@@ -118,7 +118,7 @@ export async function loadGwFixturesWithLockWindow(
   if (kickoffTimes.length === 0) throw new Error("Fixtures missing kickoff");
 
   const firstKickoffMs = kickoffTimes[0];
-  const lockAtMs = firstKickoffMs - ONE_HOUR_MS;
+  const lockAtMs = firstKickoffMs - LOCK_WINDOW_MS;
 
   return {
     fixtureIds,

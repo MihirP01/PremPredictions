@@ -2,11 +2,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
-import {
-  coerceMillis,
-  getBaseUrl,
-  loadGwFixturesWithLockWindow,
-} from "../lock-window";
 import { resolveSeasonKey } from "../../season";
 
 type GoldenBody = {
@@ -60,29 +55,6 @@ export async function POST(req: Request) {
     if (!preGameSnap.exists) {
       return NextResponse.json({ error: "Game missing" }, { status: 400 });
     }
-    const preGame = preGameSnap.data() as GameDoc;
-    let lockAtMs = coerceMillis(preGame.lockAt);
-    if (lockAtMs == null) {
-      const baseUrl = getBaseUrl(req);
-      const { firstKickoffAt, lockAt } = await loadGwFixturesWithLockWindow(
-        baseUrl,
-        gwn,
-        sk,
-      );
-      await gameRef.set({ firstKickoffAt, lockAt }, { merge: true });
-      lockAtMs = lockAt.getTime();
-    }
-
-    if (lockAtMs != null && Date.now() >= lockAtMs) {
-      return NextResponse.json(
-        {
-          error:
-            "Mini-game is locked (deadline is 1 hour before first kickoff).",
-        },
-        { status: 409 },
-      );
-    }
-
     await adminDb.runTransaction(async (tx) => {
       // -------- READS FIRST --------
       const gameSnap = await tx.get(gameRef);
@@ -90,13 +62,6 @@ export async function POST(req: Request) {
 
       const game = gameSnap.data() as GameDoc;
       if (game.state !== "GOLDEN") throw new Error("Not in GOLDEN phase");
-
-      const txLockAtMs = coerceMillis(game.lockAt) ?? lockAtMs;
-      if (txLockAtMs != null && Date.now() >= txLockAtMs) {
-        throw new Error(
-          "Mini-game is locked (deadline is 1 hour before first kickoff).",
-        );
-      }
 
       const players: string[] = Array.isArray(game.players) ? game.players : [];
       if (players.length === 0) throw new Error("No players in game");

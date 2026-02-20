@@ -4,9 +4,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
+import AnimatedModal from "../../../../components/AnimatedModal";
+import ModalExitButton from "../../../../components/ModalExitButton";
+import PageBackButton from "../../../../components/PageBackButton";
+import PageShell from "../../../../components/PageShell";
+import SectionCard from "../../../../components/SectionCard";
+import StatusPill from "../../../../components/StatusPill";
+import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { triggerTapHaptic } from "@/lib/haptics";
 import {
   collection,
   deleteDoc,
@@ -17,7 +23,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { getCountdownParts, ONE_HOUR_MS } from "./lock-utils";
+import { getCountdownParts, LOCK_WINDOW_MS } from "./lock-utils";
 
 type LobbyPlayer = { uid: string; displayName: string };
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
@@ -32,6 +38,29 @@ type RoomDoc = {
   };
 };
 type Fixture = { kickoff?: string };
+
+function formatUnlockDateParts(ms: number) {
+  const dt = new Date(ms);
+  const day = dt.getDate();
+  const suffix =
+    day % 10 === 1 && day % 100 !== 11
+      ? "st"
+      : day % 10 === 2 && day % 100 !== 12
+        ? "nd"
+        : day % 10 === 3 && day % 100 !== 13
+          ? "rd"
+          : "th";
+  const monthYear = dt.toLocaleDateString("en-GB", {
+    month: "short",
+    year: "2-digit",
+  });
+  const time = dt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return { day, suffix, monthYear, time };
+}
 
 export default function MiniGameLobbyPage() {
   const params = useParams<{ roomCode: string }>();
@@ -57,13 +86,31 @@ export default function MiniGameLobbyPage() {
   const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
     "round_robin",
   );
-  const [sameResultLock, setSameResultLock] = useState<boolean>(true);
+  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState<boolean>(true);
   const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
+  const [modeGuideOpen, setModeGuideOpen] = useState(false);
   const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
+  const [unlockAtMs, setUnlockAtMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
 
   const isLeader = !!user && leaderUid === user.uid;
+  const modeLabel =
+    gameModeStyle === "round_robin"
+      ? "Round-Robin"
+      : gameModeStyle === "captain"
+        ? "Captain"
+        : "Sprint";
+  const currentModeSummary =
+    gameModeStyle === "sprint"
+      ? "Everyone submits at once each fixture. Fastest flow for larger rooms."
+      : gameModeStyle === "captain"
+        ? allowIdenticalPicks
+          ? "Captain picks the fixture order, then everyone submits together."
+          : "Captain picks the fixture order, then players submit one-by-one."
+        : allowIdenticalPicks
+          ? "Classic turn flow with duplicate score picks allowed."
+          : "Classic turn flow with unique score picks per fixture.";
 
   // Track current lobby doc ref so we can reliably remove it on back/logout/unmount
   const lobbyRefRef = useRef<ReturnType<typeof doc> | null>(null);
@@ -92,7 +139,12 @@ export default function MiniGameLobbyPage() {
           roomData?.settings?.gameModeStyle ??
             (sameResultLock ? "round_robin" : "sprint"),
         );
-        setSameResultLock(sameResultLock);
+        setAllowIdenticalPicks(
+          (roomData?.settings?.gameModeStyle ?? (sameResultLock ? "round_robin" : "sprint")) ===
+            "sprint"
+            ? true
+            : !sameResultLock,
+        );
       }
     })().catch(() => setError("Failed to load room."));
 
@@ -190,14 +242,30 @@ export default function MiniGameLobbyPage() {
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => a - b)[0];
+      const kickoffTimes = fixtures
+        .map((f) => Date.parse(String(f.kickoff || "")))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
+      const lastKickoff = kickoffTimes.length ? kickoffTimes[kickoffTimes.length - 1] : null;
 
       if (!cancelled) {
         setLockAtMs(
-          Number.isFinite(firstKickoff) ? firstKickoff - ONE_HOUR_MS : null,
+          Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null,
         );
+        if (Number.isFinite(lastKickoff ?? NaN)) {
+          const unlock = new Date(lastKickoff as number);
+          unlock.setDate(unlock.getDate() + 1);
+          unlock.setHours(9, 0, 0, 0);
+          setUnlockAtMs(unlock.getTime());
+        } else {
+          setUnlockAtMs(null);
+        }
       }
     })().catch(() => {
-      if (!cancelled) setLockAtMs(null);
+      if (!cancelled) {
+        setLockAtMs(null);
+        setUnlockAtMs(null);
+      }
     });
 
     return () => {
@@ -382,7 +450,6 @@ export default function MiniGameLobbyPage() {
   }
 
   async function onBack() {
-    triggerTapHaptic();
     await safeLeaveLobby();
     router.push(`/room/${roomCode}`);
   }
@@ -391,6 +458,25 @@ export default function MiniGameLobbyPage() {
     if (!user) return;
     if (gameweek == null || !seasonKey) {
       setError("Season/gameweek not loaded yet.");
+      return;
+    }
+    if (roomPlayers.length < 2) {
+      setError("Need at least 2 players to play the mini-game.");
+      return;
+    }
+    if (lockAtMs != null && nowMs >= lockAtMs) {
+      setError("Deadline missed for this gameweek. Mini-game is locked.");
+      return;
+    }
+    const lobbyUidSet = new Set(players.map((p) => p.uid));
+    const everyoneReady =
+      roomPlayers.length > 0 &&
+      roomPlayers.every((p) => lobbyUidSet.has(p.uid)) &&
+      players.length === roomPlayers.length;
+    if (!everyoneReady) {
+      setError(
+        `All room players must be Ready before starting (${players.length}/${roomPlayers.length}).`,
+      );
       return;
     }
 
@@ -438,7 +524,7 @@ export default function MiniGameLobbyPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update mode.");
       setGameModeStyle(nextStyle);
-      setSameResultLock(data?.sameResultLock !== false);
+      setAllowIdenticalPicks(nextStyle === "sprint" ? true : !(data?.sameResultLock !== false));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update mode.");
     } finally {
@@ -448,8 +534,8 @@ export default function MiniGameLobbyPage() {
 
   async function toggleSameResultLock() {
     if (!user || !isLeader || modeSettingsBusy) return;
-    if (gameModeStyle === "sprint" || gameModeStyle === "captain") return;
-    const nextValue = !sameResultLock;
+    if (gameModeStyle === "sprint") return;
+    const nextAllowIdentical = !allowIdenticalPicks;
     setModeSettingsBusy(true);
     setError(null);
     try {
@@ -459,12 +545,14 @@ export default function MiniGameLobbyPage() {
         body: JSON.stringify({
           roomCode,
           leaderUid: user.uid,
-          sameResultLock: nextValue,
+          // server flag keeps legacy meaning: true => duplicates blocked
+          sameResultLock: !nextAllowIdentical,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update lock.");
-      setSameResultLock(data?.sameResultLock !== false);
+      const storedSameResultLock = data?.sameResultLock !== false;
+      setAllowIdenticalPicks(gameModeStyle === "sprint" ? true : !storedSameResultLock);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update lock.");
     } finally {
@@ -475,10 +563,14 @@ export default function MiniGameLobbyPage() {
   // Simple loading guard
   if (loading) return null;
 
-  const allPlayersInLobby = roomPlayersCount > 0 && players.length === roomPlayersCount;
   const lobbyUidSet = new Set(players.map((p) => p.uid));
-  const missingPlayers = roomPlayers.filter((p) => !lobbyUidSet.has(p.uid));
+  const allPlayersReady =
+    roomPlayersCount > 0 &&
+    roomPlayers.every((p) => lobbyUidSet.has(p.uid)) &&
+    players.length === roomPlayersCount;
   const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const unlockMsLeft = unlockAtMs != null ? Math.max(unlockAtMs - nowMs, 0) : 0;
+  const unlockCountdown = getCountdownParts(unlockMsLeft);
   const countdownParts = getCountdownParts(
     lockAtMs != null ? lockAtMs - nowMs : 0,
   );
@@ -512,61 +604,50 @@ export default function MiniGameLobbyPage() {
   ];
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              Mini-Game Lobby
-            </h1>
-            <div className="font-display text-sm text-muted">
-              {roomCode} {gameweek != null ? `• GW ${gameweek}` : ""}
-            </div>
-          </div>
-
-          <div className="ml-auto flex gap-2 page-actions-enter">
-            <button
-              onClick={onBack}
-              className="h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex items-center justify-center page-action-btn"
-              data-action="back"
-            >
-              Back
-            </button>
-          </div>
-        </div>
+    <>
+      <PageShell innerClassName="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+        <TopActionRow
+          title="Mini-Game Lobby"
+          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
+          actions={<PageBackButton onClick={onBack} />}
+        />
 
         {error && <div className="text-sm text-danger">{error}</div>}
 
-        <div className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
+        <SectionCard className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
           <div className="font-semibold text-foreground">
             Mini-game Controls
           </div>
           <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-sm font-semibold text-foreground">Mini-game Style</div>
-              {isLeader && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setModeSettingsOpen(true)}
+                  onClick={() => setModeGuideOpen(true)}
                   className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
                 >
-                  Mode
+                  Guide
                 </button>
-              )}
+                {isLeader && (
+                  <button
+                    onClick={() => setModeSettingsOpen(true)}
+                    className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                  >
+                    Mode
+                  </button>
+                )}
+              </div>
             </div>
             <div className="text-sm text-muted">
               Style:{" "}
               <span className="font-display text-foreground font-semibold">
-                {gameModeStyle === "round_robin"
-                  ? "Round-Robin"
-                  : gameModeStyle === "captain"
-                    ? "Captain"
-                    : "Sprint"}
+                {modeLabel}
               </span>
             </div>
             <div className="text-xs text-muted">
-              Result Lock:{" "}
+              Allow Identical Picks:{" "}
               <span className="font-display text-foreground">
-                {sameResultLock ? "ON" : "OFF"}
+                {allowIdenticalPicks ? "ON" : "OFF"}
               </span>
             </div>
           </div>
@@ -586,7 +667,7 @@ export default function MiniGameLobbyPage() {
                         cy="40"
                         r="34"
                         fill="none"
-                        stroke="rgba(45, 212, 191, 0.2)"
+                        stroke="rgba(var(--room-accent-rgb), 0.2)"
                         strokeWidth="4"
                       />
                       <circle
@@ -594,7 +675,7 @@ export default function MiniGameLobbyPage() {
                         cy="40"
                         r="34"
                         fill="none"
-                        stroke="#2dd4bf"
+                        stroke="rgb(var(--room-accent-rgb))"
                         strokeWidth="4"
                         strokeLinecap="round"
                         strokeDasharray={213.63}
@@ -624,8 +705,8 @@ export default function MiniGameLobbyPage() {
                 disabled={
                   starting ||
                   gameweek == null ||
-                  players.length < 1 ||
-                  !allPlayersInLobby ||
+                  roomPlayersCount < 2 ||
+                  !allPlayersReady ||
                   isLocked
                 }
                 onClick={startMiniGame}
@@ -633,17 +714,45 @@ export default function MiniGameLobbyPage() {
                 {starting ? "Starting…" : "Start Mini-game"}
               </button>
 
-              {players.length >= 2 && !allPlayersInLobby && (
-                <>
-                  <div className="text-xs text-muted">
-                    Waiting for all room players to join lobby ({players.length}/{roomPlayersCount}).
+              {roomPlayersCount < 2 && (
+                <div className="text-xs text-muted">
+                  Need at least 2 players to play the mini-game.
+                </div>
+              )}
+              {isLocked && (
+                <div className="text-xs text-muted space-y-1">
+                  <div>Deadline missed for this GW. Mini-game is locked.</div>
+                  <div>
+                    Next gameweek:{" "}
+                    <span className="font-display text-foreground">
+                      GW {gw != null ? gw + 1 : "—"}
+                    </span>
                   </div>
-                  {missingPlayers.length > 0 && (
-                    <div className="text-xs text-muted">
-                      Missing: {missingPlayers.map((p) => p.displayName).join(", ")}
-                    </div>
+                  {unlockAtMs != null && (
+                    <>
+                      <div>
+                        Next gameweek unlock:{" "}
+                        <span className="font-display text-foreground">
+                          {(() => {
+                            const p = formatUnlockDateParts(unlockAtMs);
+                            return (
+                              <>
+                                {p.day}
+                                <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                                  {p.suffix}
+                                </span>{" "}
+                                {p.monthYear} {p.time}
+                              </>
+                            );
+                          })()}
+                        </span>
+                      </div>
+                      <div className="font-display text-foreground">
+                        [{unlockCountdown.days}d] [{unlockCountdown.hours}h] [{unlockCountdown.minutes}m] [{unlockCountdown.seconds}s]
+                      </div>
+                    </>
                   )}
-                </>
+                </div>
               )}
             </>
           ) : (
@@ -651,9 +760,9 @@ export default function MiniGameLobbyPage() {
               Waiting for the leader to start once everyone is ready…
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
+        <SectionCard>
           <div className="font-semibold mb-2 text-foreground">
             Room Player Status
           </div>
@@ -673,40 +782,90 @@ export default function MiniGameLobbyPage() {
                     <div className="font-display font-medium text-foreground">{p.displayName}</div>
                     <div className="flex items-center gap-2">
                       {p.uid === leaderUid && (
-                        <span className="font-display text-xs px-2 py-1 rounded-full bg-surface border border-teal-500 text-muted">
-                          Leader
-                        </span>
+                        <StatusPill label="Leader" tone="neutral" />
                       )}
-                      <span
-                        className={[
-                          "font-display text-xs px-2 py-1 rounded-full border",
-                          inLobby
-                            ? "bg-emerald-400/15 border-emerald-400 text-emerald-300"
-                            : "bg-amber-400/15 border-amber-400 text-amber-300",
-                        ].join(" ")}
-                      >
-                        {inLobby ? "Ready" : "Waiting"}
-                      </span>
+                      <StatusPill label={inLobby ? "Ready" : "Waiting"} tone={inLobby ? "ready" : "waiting"} />
                     </div>
                   </div>
                 );
               })
             )}
           </div>
+        </SectionCard>
+      </PageShell>
+      <AnimatedModal
+        open={modeGuideOpen}
+        onClose={() => setModeGuideOpen(false)}
+        portal
+        lockBackground
+        zIndexClassName="z-50"
+        overlayClassName="bg-black/50 backdrop-blur-sm"
+        panelClassName="w-full max-w-lg rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-semibold text-foreground">Mini-game Guide</div>
+          <ModalExitButton
+            onClick={() => setModeGuideOpen(false)}
+            ariaLabel="Exit game guide"
+          />
         </div>
-      </div>
-      {modeSettingsOpen && isLeader && (
-        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border border-teal-500 bg-surface p-4 space-y-4">
+        <div className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-1">
+          <div className="text-xs text-muted">Current Setup</div>
+          <div className="font-display font-semibold text-foreground">
+            {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
+          </div>
+          <div className="text-sm text-muted">{currentModeSummary}</div>
+          {allowIdenticalPicks && (
+            <div className="text-xs text-muted">ON = Hidden until reveal, same picks allowed.</div>
+          )}
+        </div>
+        <div className="w-full flex items-center justify-center gap-1.5">
+          <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
+          <span
+            className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
+            aria-hidden
+          />
+          <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
+        </div>
+        <div className="grid gap-2">
+          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
+            <div className="font-display font-semibold text-foreground">Round-Robin</div>
+            <div className="text-sm text-muted">
+              Traditional turn-by-turn mode. Players rotate through fixtures in order.
+              ON allows duplicate picks (hidden until reveal); OFF enforces unique picks per fixture.
+            </div>
+          </div>
+          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
+            <div className="font-display font-semibold text-foreground">Captain</div>
+            <div className="text-sm text-muted">
+              The captain rotates each round and selects which fixture to play next.
+              ON lets everyone submit together (hidden until reveal); OFF uses turn-based unique picks.
+            </div>
+          </div>
+          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
+            <div className="font-display font-semibold text-foreground">Sprint</div>
+            <div className="text-sm text-muted">
+              Fastest mode. Everyone submits at the same time for each fixture.
+              Picks stay hidden until reveal.
+            </div>
+          </div>
+        </div>
+      </AnimatedModal>
+      <AnimatedModal
+        open={modeSettingsOpen && isLeader}
+        onClose={() => setModeSettingsOpen(false)}
+        portal
+        lockBackground
+        zIndexClassName="z-50"
+        overlayClassName="bg-black/50 backdrop-blur-sm"
+        panelClassName="w-full max-w-md rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
+      >
             <div className="flex items-center justify-between">
               <div className="text-lg font-semibold text-foreground">Mini-game Mode</div>
-              <button
+              <ModalExitButton
                 onClick={() => setModeSettingsOpen(false)}
-                className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground hover:bg-surface-2 inline-flex items-center justify-center"
-                aria-label="Close mode settings"
-              >
-                ×
-              </button>
+                ariaLabel="Exit mode settings"
+              />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -715,8 +874,8 @@ export default function MiniGameLobbyPage() {
                 className={[
                   "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
                   gameModeStyle === "round_robin"
-                    ? "bg-accent text-accent-foreground border-teal-400"
-                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
+                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
                 ].join(" ")}
               >
                 Round-Robin
@@ -727,8 +886,8 @@ export default function MiniGameLobbyPage() {
                 className={[
                   "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
                   gameModeStyle === "captain"
-                    ? "bg-accent text-accent-foreground border-teal-400"
-                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
+                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
                 ].join(" ")}
               >
                 Captain
@@ -739,8 +898,8 @@ export default function MiniGameLobbyPage() {
                 className={[
                   "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
                   gameModeStyle === "sprint"
-                    ? "bg-accent text-accent-foreground border-teal-400"
-                    : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
+                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
                 ].join(" ")}
               >
                 Sprint
@@ -748,10 +907,10 @@ export default function MiniGameLobbyPage() {
             </div>
             <button
               onClick={toggleSameResultLock}
-              disabled={modeSettingsBusy || gameModeStyle === "sprint" || gameModeStyle === "captain"}
+              disabled={modeSettingsBusy || gameModeStyle === "sprint"}
               className={[
                 "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
-                gameModeStyle === "sprint" || gameModeStyle === "captain"
+                gameModeStyle === "sprint"
                   ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
                   : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
               ].join(" ")}
@@ -759,16 +918,12 @@ export default function MiniGameLobbyPage() {
               {modeSettingsBusy
                 ? "Saving..."
                 : gameModeStyle === "sprint"
-                  ? "Result Lock: OFF (Sprint)"
-                  : gameModeStyle === "captain"
-                    ? "Result Lock: ON (Captain)"
-                    : sameResultLock
-                      ? "Result Lock: ON"
-                      : "Result Lock: OFF"}
+                  ? "Allow Identical Picks: ON (Sprint)"
+                  : allowIdenticalPicks
+                    ? "Allow Identical Picks: ON"
+                    : "Allow Identical Picks: OFF"}
             </button>
-          </div>
-        </div>
-      )}
-    </div>
+      </AnimatedModal>
+    </>
   );
 }

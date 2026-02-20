@@ -60,14 +60,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
     const style: "round_robin" | "sprint" | "captain" =
       room.settings?.gameModeStyle ?? "round_robin";
-    const draftMode: "turn" | "parallel" =
-      style === "sprint" ? "parallel" : "turn";
     const sameResultLock =
       style === "sprint"
         ? false
-        : style === "captain"
-          ? true
-          : room.settings?.sameResultLock !== false;
+        : room.settings?.sameResultLock !== false;
+    const draftMode: "turn" | "parallel" =
+      style === "sprint" || (style === "captain" && !sameResultLock)
+        ? "parallel"
+        : "turn";
 
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
 
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       .get();
     const players = lobbySnap.docs.map((d) => d.id);
 
-    if (players.length < 1)
+    if (players.length < 2)
       return NextResponse.json(
         { error: "Need at least 2 players in lobby" },
         { status: 400 },
@@ -93,6 +93,13 @@ export async function POST(req: Request) {
       roomPlayers.length > 0 &&
       roomPlayers.every((uid) => lobbySet.has(uid)) &&
       players.length === roomPlayers.length;
+
+    if (roomPlayers.length < 2) {
+      return NextResponse.json(
+        { error: "Need at least 2 room players to start" },
+        { status: 400 },
+      );
+    }
 
     if (!allMembersPresent) {
       return NextResponse.json(
@@ -127,7 +134,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Mini-game is locked (deadline is 1 hour before first kickoff).",
+            "Mini-game is locked (deadline is 30 minutes before first kickoff).",
         },
         { status: 409 },
       );

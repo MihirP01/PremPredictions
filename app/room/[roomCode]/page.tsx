@@ -506,7 +506,7 @@ export default function RoomPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
       const storedSameResultLock = data?.sameResultLock !== false;
-      setAllowIdenticalPicks(gameModeStyle === "sprint" ? true : !storedSameResultLock);
+      setAllowIdenticalPicks(!storedSameResultLock);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update settings.");
     } finally {

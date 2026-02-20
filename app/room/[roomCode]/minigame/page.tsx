@@ -552,7 +552,7 @@ export default function MiniGameLobbyPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update lock.");
       const storedSameResultLock = data?.sameResultLock !== false;
-      setAllowIdenticalPicks(gameModeStyle === "sprint" ? true : !storedSameResultLock);
+      setAllowIdenticalPicks(!storedSameResultLock);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update lock.");
     } finally {
@@ -725,7 +725,7 @@ export default function MiniGameLobbyPage() {
                   <div>
                     Next gameweek:{" "}
                     <span className="font-display text-foreground">
-                      GW {gw != null ? gw + 1 : "—"}
+                      GW {gameweek != null ? gameweek + 1 : "—"}
                     </span>
                   </div>
                   {unlockAtMs != null && (

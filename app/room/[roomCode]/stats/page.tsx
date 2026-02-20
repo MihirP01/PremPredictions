@@ -576,7 +576,7 @@ export default function RoomStatsPage() {
               <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
                 <div className="text-xs text-muted">Best GW</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {stats.bestGw ? `GW${stats.bestGw} (${stats.bestGwPoints})` : "-"}
+                  {stats?.bestGw ? `GW${stats.bestGw} (${stats.bestGwPoints})` : "-"}
                 </div>
               </div>
             </div>
@@ -591,7 +591,9 @@ export default function RoomStatsPage() {
                       className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
                     >
                       <span className="font-display text-sm text-muted">GW {gw}</span>
-                      <span className="font-display font-semibold text-foreground">{stats.byGw[gw] ?? 0}</span>
+                      <span className="font-display font-semibold text-foreground">
+                        {stats?.byGw[gw] ?? 0}
+                      </span>
                     </div>
                   ))}
                 </div>

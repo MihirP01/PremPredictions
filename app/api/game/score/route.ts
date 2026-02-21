@@ -221,10 +221,11 @@ async function scoreSingleGw(
 // POST { roomCode, gw }
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, seasonKey } = (await req.json()) as {
+    const { roomCode, gw, seasonKey, currentOnly } = (await req.json()) as {
       roomCode?: string;
       gw?: number;
       seasonKey?: string;
+      currentOnly?: boolean;
     };
 
     const rc = String(roomCode || "").toUpperCase();
@@ -239,7 +240,7 @@ export async function POST(req: Request) {
     const proto = host?.includes("localhost") ? "http" : "https";
     const baseUrl = host ? `${proto}://${host}` : "http://localhost:3000";
 
-    const targetGws = [gwn, gwn - 1, gwn - 2].filter((n) => n >= 1);
+    const targetGws = currentOnly ? [gwn] : [gwn, gwn - 1, gwn - 2].filter((n) => n >= 1);
     const results: GwRunResult[] = [];
 
     for (const targetGw of targetGws) {

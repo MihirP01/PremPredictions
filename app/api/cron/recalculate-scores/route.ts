@@ -21,7 +21,7 @@ type RecalcResult = {
   error?: string;
 };
 
-async function runRecalcForRoom(
+async function runCurrentGwRecalcForRoom(
   origin: string,
   roomCode: string,
   gw: number,
@@ -32,7 +32,7 @@ async function runRecalcForRoom(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ roomCode, gw, seasonKey }),
+      body: JSON.stringify({ roomCode, gw, seasonKey, currentOnly: true }),
     });
     const payload = await res.json().catch(() => ({}));
     return {
@@ -83,7 +83,7 @@ export async function GET(req: Request) {
     const results: RecalcResult[] = [];
     for (const roomCode of roomCodes) {
       // Run one-by-one to avoid burst limits on upstream fixtures API.
-      results.push(await runRecalcForRoom(origin, roomCode, gw, seasonKey));
+      results.push(await runCurrentGwRecalcForRoom(origin, roomCode, gw, seasonKey));
     }
 
     const okCount = results.filter((r) => r.ok).length;
@@ -104,4 +104,3 @@ export async function GET(req: Request) {
     );
   }
 }
-

@@ -74,15 +74,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let stage = "init";
   try {
+    stage = "parse-url";
     const url = new URL(req.url);
     const origin = url.origin;
     const seasonKey = resolveSeasonKey(url.searchParams.get("seasonKey"));
+    stage = "current-gw";
     const gw = await getCurrentGw(origin, seasonKey);
 
+    stage = "load-rooms";
     const roomsSnap = await adminDb.collection("rooms").get();
     const roomCodes = roomsSnap.docs.map((d) => d.id).filter(Boolean);
 
+    stage = "recalculate";
     const results: RecalcResult[] = [];
     for (const roomCode of roomCodes) {
       // Run one-by-one to avoid burst limits on upstream fixtures API.
@@ -102,7 +107,10 @@ export async function GET(req: Request) {
     });
   } catch (e: unknown) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Cron recalc failed" },
+      {
+        error: e instanceof Error ? e.message : "Cron recalc failed",
+        stage,
+      },
       { status: 500 },
     );
   }

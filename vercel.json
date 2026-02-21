@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/recalculate-scores",
-      "schedule": "0 * * * *"
+      "schedule": "0 22 * * *"
     }
   ]
 }

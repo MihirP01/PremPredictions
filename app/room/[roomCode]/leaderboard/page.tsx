@@ -514,11 +514,8 @@ export default function LeaderboardMatrixPage() {
                 <div ref={settingsWrapRef} className="relative">
                   <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
                   <SettingsDropdownPanel open={settingsOpen}>
-                    <div className="font-semibold text-foreground">Leader Tools</div>
+                    <div className="font-display font-semibold text-foreground">Leader Tools</div>
                     <div className="space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                        Leader Tools
-                      </div>
                       <div className="text-xs text-muted">
                         Recalculate score docs, then reload leaderboard data.
                       </div>

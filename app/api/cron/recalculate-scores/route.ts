@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
-import { resolveSeasonKey } from "../../season";
+import { resolveSeasonKey, seasonStartYear } from "../../season";
 
 function isAuthorized(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -52,17 +52,76 @@ async function runCurrentGwRecalcForRoom(
   }
 }
 
-async function getCurrentGw(origin: string, seasonKey: string) {
-  const res = await fetch(
-    `${origin}/api/current-gameweek?seasonKey=${encodeURIComponent(seasonKey)}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) throw new Error("Failed to resolve current gameweek");
+const EXPECTED_MATCHES_PER_GW = 10;
+
+function fmtYmdUtc(d: Date) {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function clampGw(gw: number) {
+  return Math.min(38, Math.max(1, gw));
+}
+
+async function getCurrentGw(seasonKey: string) {
+  const apiKey = process.env.FOOTBALLDATA_KEY;
+  if (!apiKey) throw new Error("Missing env var: FOOTBALLDATA_KEY");
+
+  const season = seasonStartYear(seasonKey);
+  const now = new Date();
+  const from = new Date(now);
+  from.setUTCDate(from.getUTCDate() - 21);
+  const to = new Date(now);
+  to.setUTCDate(to.getUTCDate() + 35);
+
+  const url =
+    `https://api.football-data.org/v4/competitions/PL/matches` +
+    `?season=${season}&dateFrom=${fmtYmdUtc(from)}&dateTo=${fmtYmdUtc(to)}`;
+
+  const res = await fetch(url, {
+    headers: { "X-Auth-Token": apiKey },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Football API error: ${res.status}`);
   const data = (await res.json().catch(() => ({}))) as {
-    gameweek?: number;
-    currentGameweek?: number;
+    matches?: Array<{ matchday?: number; status?: string }>;
   };
-  const gw = Number(data?.currentGameweek ?? data?.gameweek);
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+
+  const byMd = new Map<number, { total: number; finished: number }>();
+  for (const m of matches) {
+    const md = Number(m?.matchday);
+    if (!Number.isFinite(md)) continue;
+    const row = byMd.get(md) ?? { total: 0, finished: 0 };
+    row.total += 1;
+    if (m?.status === "FINISHED") row.finished += 1;
+    byMd.set(md, row);
+  }
+
+  const matchdays = [...byMd.keys()].sort((a, b) => a - b);
+  let nextOpen: number | null = null;
+  for (const md of matchdays) {
+    const row = byMd.get(md);
+    if (!row) continue;
+    if (row.finished < row.total) {
+      nextOpen = md;
+      break;
+    }
+    if (row.total >= EXPECTED_MATCHES_PER_GW && row.finished >= EXPECTED_MATCHES_PER_GW) {
+      continue;
+    }
+    nextOpen = md;
+    break;
+  }
+
+  if (!Number.isFinite(nextOpen as number)) {
+    const maxMd = matchdays.length ? Math.max(...matchdays) : 1;
+    nextOpen = maxMd + 1;
+  }
+
+  const gw = clampGw(Number(nextOpen));
   if (!Number.isFinite(gw) || gw < 1 || gw > 38) {
     throw new Error("Invalid gameweek");
   }
@@ -81,7 +140,7 @@ export async function GET(req: Request) {
     const origin = url.origin;
     const seasonKey = resolveSeasonKey(url.searchParams.get("seasonKey"));
     stage = "current-gw";
-    const gw = await getCurrentGw(origin, seasonKey);
+    const gw = await getCurrentGw(seasonKey);
 
     stage = "load-rooms";
     const roomsSnap = await adminDb.collection("rooms").get();

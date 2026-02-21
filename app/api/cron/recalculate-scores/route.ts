@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey, seasonStartYear } from "../../season";
+import { FieldValue } from "firebase-admin/firestore";
 
 function isAuthorized(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -21,33 +22,235 @@ type RecalcResult = {
   error?: string;
 };
 
-async function runCurrentGwRecalcForRoom(
-  origin: string,
-  roomCode: string,
-  gw: number,
-  seasonKey: string,
-): Promise<RecalcResult> {
+type GameDoc = {
+  players?: string[];
+  fixtureIds?: number[];
+};
+
+type PickDoc = {
+  uid?: string;
+  fixtureId?: number;
+  score?: string;
+};
+
+type GoldenDoc = {
+  fixtureId?: number;
+  locked?: boolean;
+};
+
+function parseScore(s: string | null | undefined) {
+  if (!s) return null;
+  const m = String(s)
+    .trim()
+    .match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!m) return null;
+  return { h: Number(m[1]), a: Number(m[2]) };
+}
+
+function outcome(h: number, a: number) {
+  if (h > a) return "H";
+  if (h < a) return "A";
+  return "D";
+}
+
+function basePoints(pred: string, actual: string) {
+  const p = parseScore(pred);
+  const r = parseScore(actual);
+  if (!p || !r) return 0;
+  if (p.h === r.h && p.a === r.a) return 2;
+  if (outcome(p.h, p.a) === outcome(r.h, r.a)) return 1;
+  return 0;
+}
+
+async function fetchActualResultsForGw(gw: number, seasonKey: string) {
+  const apiKey = process.env.FOOTBALLDATA_KEY;
+  if (!apiKey) throw new Error("Missing env var: FOOTBALLDATA_KEY");
+
+  const season = seasonStartYear(seasonKey);
+  const url = `https://api.football-data.org/v4/competitions/PL/matches?season=${season}&matchday=${gw}`;
+  const res = await fetch(url, {
+    headers: { "X-Auth-Token": apiKey },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Football API fixtures error: ${res.status}`);
+
+  const data = (await res.json().catch(() => ({}))) as {
+    matches?: Array<{
+      id?: number;
+      status?: string;
+      score?: { fullTime?: { home?: number; away?: number } };
+    }>;
+  };
+
+  const actualByFixture = new Map<number, string>();
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+  for (const m of matches) {
+    const id = Number(m?.id);
+    const h = m?.score?.fullTime?.home;
+    const a = m?.score?.fullTime?.away;
+    const isFinished = m?.status === "FINISHED";
+    if (!Number.isFinite(id) || !Number.isFinite(h) || !Number.isFinite(a) || !isFinished) continue;
+    actualByFixture.set(id, `${h}-${a}`);
+  }
+  return actualByFixture;
+}
+
+async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey: string): Promise<RecalcResult> {
   try {
-    const res = await fetch(`${origin}/api/game/score`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({ roomCode, gw, seasonKey, currentOnly: true }),
-    });
-    const payload = await res.json().catch(() => ({}));
+    const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
+    const gameBase = `${seasonBase}/games/gw-${gw}`;
+
+    const gameSnap = await adminDb.doc(gameBase).get();
+    if (!gameSnap.exists) {
+      return {
+        roomCode,
+        ok: true,
+        status: 200,
+        payload: {
+          ok: true,
+          scored: 0,
+          scoredGameweeks: 0,
+          targetGws: [gw],
+          seasonKey,
+          results: [{ gw, status: "skipped", scoredUsers: 0, message: "Game not found" }],
+        },
+      };
+    }
+
+    const game = gameSnap.data() as GameDoc;
+    const players = Array.isArray(game.players) ? game.players : [];
+    const fixtureIds = Array.isArray(game.fixtureIds) ? game.fixtureIds : [];
+
+    if (players.length === 0 || fixtureIds.length === 0) {
+      return {
+        roomCode,
+        ok: true,
+        status: 200,
+        payload: {
+          ok: true,
+          scored: 0,
+          scoredGameweeks: 0,
+          targetGws: [gw],
+          seasonKey,
+          results: [{ gw, status: "skipped", scoredUsers: 0, message: "Missing players/fixtures" }],
+        },
+      };
+    }
+
+    const actualByFixture = await fetchActualResultsForGw(gw, seasonKey);
+    if (actualByFixture.size === 0) {
+      return {
+        roomCode,
+        ok: true,
+        status: 200,
+        payload: {
+          ok: true,
+          scored: 0,
+          scoredGameweeks: 0,
+          targetGws: [gw],
+          seasonKey,
+          results: [{ gw, status: "skipped", scoredUsers: 0, message: "No finished results yet" }],
+        },
+      };
+    }
+
+    const picksSnap = await adminDb.collection(`${gameBase}/picks`).get();
+    const picks = picksSnap.docs.map((d) => d.data() as PickDoc);
+    const pickMap = new Map<string, string>();
+    for (const p of picks) {
+      const uid = String(p.uid || "");
+      const fid = Number(p.fixtureId);
+      const score = String(p.score || "").trim();
+      if (!uid || !Number.isFinite(fid) || !score) continue;
+      pickMap.set(`${uid}|${fid}`, score);
+    }
+
+    const goldenSnap = await adminDb.collection(`${gameBase}/golden`).get();
+    const goldenByUid = new Map<string, { fixtureId: number; locked: boolean }>();
+    for (const d of goldenSnap.docs) {
+      const data = d.data() as GoldenDoc;
+      goldenByUid.set(d.id, {
+        fixtureId: Number(data.fixtureId),
+        locked: !!data.locked,
+      });
+    }
+
+    const batch = adminDb.batch();
+    let scoredUsers = 0;
+
+    for (const uid of players) {
+      let total = 0;
+      const breakdown: Record<
+        string,
+        { pred: string | null; actual: string; base: number; golden: boolean; total: number }
+      > = {};
+      const g = goldenByUid.get(uid);
+      const goldenFixtureId = g?.locked ? g.fixtureId : null;
+
+      for (const fid of fixtureIds) {
+        const actual = actualByFixture.get(fid);
+        if (!actual) continue;
+        const pred = pickMap.get(`${uid}|${fid}`) || "";
+        const base = pred ? basePoints(pred, actual) : 0;
+        const golden = goldenFixtureId === fid;
+        const pts = base * (golden ? 2 : 1);
+        total += pts;
+        breakdown[String(fid)] = {
+          pred: pred || null,
+          actual,
+          base,
+          golden,
+          total: pts,
+        };
+      }
+
+      batch.set(
+        adminDb.doc(`${seasonBase}/scores/gw-${gw}/users/${uid}`),
+        {
+          uid,
+          gw,
+          points: total,
+          breakdown,
+          computedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      scoredUsers += 1;
+    }
+
+    batch.set(
+      adminDb.doc(`${seasonBase}/scores/gw-${gw}`),
+      {
+        gw,
+        roomCode,
+        scoredUsers,
+        fixturesWithResults: actualByFixture.size,
+        computedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    await batch.commit();
+
     return {
       roomCode,
-      ok: res.ok,
-      status: res.status,
-      payload,
-      error: res.ok ? undefined : String((payload as { error?: string })?.error || "Failed"),
+      ok: true,
+      status: 200,
+      payload: {
+        ok: true,
+        scored: scoredUsers,
+        scoredGameweeks: 1,
+        targetGws: [gw],
+        seasonKey,
+        results: [{ gw, status: "scored", scoredUsers }],
+      },
     };
   } catch (e: unknown) {
     return {
       roomCode,
       ok: false,
       status: 500,
-      error: e instanceof Error ? e.message : "Request failed",
+      error: e instanceof Error ? e.message : "Recalc failed",
     };
   }
 }
@@ -137,7 +340,6 @@ export async function GET(req: Request) {
   try {
     stage = "parse-url";
     const url = new URL(req.url);
-    const origin = url.origin;
     const seasonKey = resolveSeasonKey(url.searchParams.get("seasonKey"));
     stage = "current-gw";
     const gw = await getCurrentGw(seasonKey);
@@ -149,8 +351,7 @@ export async function GET(req: Request) {
     stage = "recalculate";
     const results: RecalcResult[] = [];
     for (const roomCode of roomCodes) {
-      // Run one-by-one to avoid burst limits on upstream fixtures API.
-      results.push(await runCurrentGwRecalcForRoom(origin, roomCode, gw, seasonKey));
+      results.push(await runCurrentGwRecalcForRoom(roomCode, gw, seasonKey));
     }
 
     const okCount = results.filter((r) => r.ok).length;

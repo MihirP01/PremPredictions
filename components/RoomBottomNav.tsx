@@ -118,16 +118,12 @@ export default function RoomBottomNav() {
               <span className="nav-icon-wrap relative inline-flex h-4 w-4 items-center justify-center">
                 <Icon
                   size={14}
-                  style={
-                    item.key === "home" && item.active
-                      ? { color: "rgb(var(--room-accent-rgb))" }
-                      : undefined
-                  }
                   className={[
                     item.active ? "text-foreground" : "text-muted",
                     item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
                     item.key === "predictions" ? "nav-icon-predictions-fix" : "",
                     item.key === "home" ? "nav-icon-home-fix" : "",
+                    item.key === "home" && item.active ? "hub-icon-active-theme" : "",
                     item.key === "stats" ? "nav-icon-stats-fix" : "",
                     (item.key === "fixtures" ||
                       item.key === "predictions" ||

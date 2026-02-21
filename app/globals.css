@@ -717,6 +717,10 @@ option {
   left: -0.5px;
 }
 
+.room-bottom-nav .hub-icon-active-theme {
+  color: rgb(var(--room-accent-rgb)) !important;
+}
+
 .room-bottom-nav .nav-icon-fixtures-fix {
   position: relative;
   left: 0.5px;

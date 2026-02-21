@@ -58,8 +58,11 @@ async function getCurrentGw(origin: string, seasonKey: string) {
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error("Failed to resolve current gameweek");
-  const data = (await res.json().catch(() => ({}))) as { gameweek?: number };
-  const gw = Number(data?.gameweek);
+  const data = (await res.json().catch(() => ({}))) as {
+    gameweek?: number;
+    currentGameweek?: number;
+  };
+  const gw = Number(data?.currentGameweek ?? data?.gameweek);
   if (!Number.isFinite(gw) || gw < 1 || gw > 38) {
     throw new Error("Invalid gameweek");
   }

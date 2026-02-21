@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../components/AuthProvider";
+import AuthEntryForm from "../components/AuthEntryForm";
 
 export default function Page() {
   const { user, loading } = useAuth();
@@ -10,12 +11,24 @@ export default function Page() {
 
   useEffect(() => {
     if (loading) return;
-    router.replace(user ? "/room-gate" : "/login");
+    if (user) router.replace("/room-gate");
   }, [loading, user, router]);
 
-  return (
-    <div className="min-h-screen bg-app flex items-center justify-center">
-      <div className="text-sm text-muted">Loading…</div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-app flex items-center justify-center">
+        <div className="text-sm text-muted">Loading…</div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return (
+      <div className="min-h-screen bg-app flex items-center justify-center">
+        <div className="text-sm text-muted">Loading…</div>
+      </div>
+    );
+  }
+
+  return <AuthEntryForm />;
 }

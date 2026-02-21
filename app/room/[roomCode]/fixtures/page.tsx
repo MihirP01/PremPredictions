@@ -243,7 +243,7 @@ export default function FixturesPage() {
   // Auth guard
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
+    if (!user) router.replace("/");
   }, [loading, user, router]);
 
   useEffect(() => {
@@ -530,14 +530,14 @@ export default function FixturesPage() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
       <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         {/* Header */}
         <div className="relative z-30 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h1 className="text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">Fixtures</h1>
+              <h1 className="font-display text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">Fixtures</h1>
               <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
                 {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} 
               </div>
@@ -698,7 +698,7 @@ export default function FixturesPage() {
               return (
                 <div
                   key={f.fixtureId}
-                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full min-[430px]:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
                   style={{
                     animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                     animationDuration: "520ms",
@@ -999,8 +999,8 @@ export default function FixturesPage() {
         panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
       >
             <div className="flex items-center justify-between p-4">
-              <div className="text-lg font-semibold text-foreground">
-                Premier League Table • {seasonLabel(seasonKey || "----")}
+              <div className="font-display text-lg font-semibold text-foreground">
+                PL Table • {seasonLabel(seasonKey || "----")}
               </div>
               <ModalExitButton
                 onClick={() => setTableOpen(false)}

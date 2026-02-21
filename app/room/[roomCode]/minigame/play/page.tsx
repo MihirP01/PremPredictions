@@ -83,7 +83,7 @@ export default function MiniGamePlayPage() {
   // auth guard
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
+    if (!user) router.replace("/");
   }, [loading, user, router]);
 
   // current GW
@@ -343,7 +343,7 @@ export default function MiniGamePlayPage() {
 
   if (gw == null || fixtures == null) {
     return (
-      <div className="min-h-[100dvh] p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
         <div className="text-sm text-muted">Loading…</div>
       </div>
@@ -351,7 +351,7 @@ export default function MiniGamePlayPage() {
   }
   if (!game) {
     return (
-      <div className="min-h-[100dvh] p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
         <div className="text-sm text-muted">Game not started yet.</div>
       </div>
@@ -492,12 +492,12 @@ export default function MiniGamePlayPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-ui text-2xl font-semibold text-foreground">
+            <h1 className="font-display text-2xl font-semibold text-foreground">
               {game.gameModeStyle === "captain"
                 ? "Captain"
                 : isParallelDraft
@@ -585,7 +585,7 @@ export default function MiniGamePlayPage() {
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "w-[calc(50%-0.25rem)] lg:w-[calc(33.333%-0.45rem)] xl:w-[calc(25%-0.5rem)] rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
+                        "w-full min-[430px]:w-[calc(50%-0.25rem)] lg:w-[calc(33.333%-0.45rem)] xl:w-[calc(25%-0.5rem)] rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
                         isSelected
                           ? "bg-accent text-accent-foreground border-teal-400"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",

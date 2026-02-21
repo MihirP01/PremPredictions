@@ -114,7 +114,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/login");
+      router.replace("/");
       return;
     }
 
@@ -617,7 +617,7 @@ export default function RoomPage() {
               <div ref={settingsWrapRef} className="relative">
             <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
             <SettingsDropdownPanel open={settingsOpen}>
-                <div className="font-semibold text-foreground">Settings</div>
+                <div className="font-display font-semibold text-foreground">Settings</div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
@@ -687,7 +687,7 @@ export default function RoomPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="hidden sm:grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             {
               label: "Fixtures",
@@ -803,14 +803,6 @@ export default function RoomPage() {
         maxWidthClassName="max-w-lg"
       >
             <ModalHeader title="Switch Rooms" onClose={() => setRoomSwitcherOpen(false)} />
-            <div className="flex items-center justify-end">
-              <button
-                onClick={() => setRoomSwitcherOpen(false)}
-                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-              >
-                Stay in <span className="font-display">{roomCode}</span>
-              </button>
-            </div>
 
             {switcherError && (
               <div className="text-sm text-danger">{switcherError}</div>

@@ -1,6 +1,7 @@
 import "./globals.css";
 import { AuthProvider } from "../components/AuthProvider";
 import PWARegister from "../components/PWARegister";
+import PWAEntryGuard from "../components/PWAEntryGuard";
 import { Orbitron } from "next/font/google";
 
 const displayFont = Orbitron({
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className={`min-h-[100dvh] ${displayFont.variable}`}>
         <AuthProvider>
           <PWARegister />
+          <PWAEntryGuard />
           {children}
         </AuthProvider>
       </body>

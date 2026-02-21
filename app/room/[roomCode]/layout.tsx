@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
+import RoomBottomNav from "../../../components/RoomBottomNav";
 
 type AccentTheme = {
   hex: string;
@@ -87,6 +88,7 @@ export default function RoomScopedLayout({
   children: React.ReactNode;
 }) {
   const params = useParams<{ roomCode: string }>();
+  const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
   const roomCode = useMemo(
@@ -95,6 +97,7 @@ export default function RoomScopedLayout({
   );
   const [accentKey, setAccentKey] = useState<string>("teal");
   const redirectedRef = useRef(false);
+  const initialVarsRef = useRef<{ bg: string; solid: string } | null>(null);
 
   useEffect(() => {
     if (loading || !user || !roomCode) return;
@@ -138,32 +141,47 @@ export default function RoomScopedLayout({
   }, [roomCode]);
 
   const accent = ACCENT_THEME[accentKey] || ACCENT_THEME.teal;
+  const hideBottomNav =
+    pathname === `/room/${roomCode}/minigame/play` ||
+    pathname === `/room/${roomCode}/minigame/golden`;
 
+  // Capture default app vars once, restore only when leaving room scope.
+  useEffect(() => {
+    const root = document.documentElement;
+    initialVarsRef.current = {
+      bg: root.style.getPropertyValue("--app-bg"),
+      solid: root.style.getPropertyValue("--app-solid"),
+    };
+    return () => {
+      const initial = initialVarsRef.current;
+      if (!initial) return;
+      if (initial.bg) root.style.setProperty("--app-bg", initial.bg);
+      else root.style.removeProperty("--app-bg");
+      if (initial.solid) root.style.setProperty("--app-solid", initial.solid);
+      else root.style.removeProperty("--app-solid");
+    };
+  }, []);
+
+  // Update vars on room/theme changes without resetting between room switches.
   useEffect(() => {
     const root = document.documentElement;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
-    const prevBg = root.style.getPropertyValue("--app-bg");
-    const prevSolid = root.style.getPropertyValue("--app-solid");
 
     const applyBg = () => {
       root.style.setProperty("--app-bg", prefersDark.matches ? accent.bgDark : accent.bgLight);
       root.style.setProperty("--app-solid", prefersDark.matches ? accent.solidDark : accent.solidLight);
     };
+
     applyBg();
     prefersDark.addEventListener("change", applyBg);
-
     return () => {
       prefersDark.removeEventListener("change", applyBg);
-      if (prevBg) root.style.setProperty("--app-bg", prevBg);
-      else root.style.removeProperty("--app-bg");
-      if (prevSolid) root.style.setProperty("--app-solid", prevSolid);
-      else root.style.removeProperty("--app-solid");
     };
   }, [accent.bgDark, accent.bgLight, accent.solidDark, accent.solidLight]);
 
   return (
     <div
-      className="room-theme"
+      className={hideBottomNav ? "room-theme" : "room-theme room-has-bottom-nav"}
       style={
         {
           "--room-accent": accent.hex,
@@ -174,6 +192,7 @@ export default function RoomScopedLayout({
       }
     >
       {children}
+      <RoomBottomNav />
       <ScrollToTopButton />
     </div>
   );

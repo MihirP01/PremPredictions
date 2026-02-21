@@ -85,7 +85,7 @@ export default function RevealPage() {
   // auth guard
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
+    if (!user) router.replace("/");
   }, [loading, user, router]);
 
   // current GW
@@ -344,11 +344,11 @@ export default function RevealPage() {
 
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-[100dvh] p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
         <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">Final Overview</h1>
+              <h1 className="font-display text-2xl font-semibold text-foreground">Final Overview</h1>
               <div className="font-display text-sm text-muted">
                 {roomCode} • GW {gw ?? "—"}
               </div>
@@ -365,7 +365,7 @@ export default function RevealPage() {
   const state = String(game.state ?? "").toUpperCase();
   if (state !== "REVEAL") {
     return (
-      <div className="min-h-[100dvh] p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
         <div className="w-full max-w-[900px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-3 border border-teal-500">
           <div className="text-xl font-semibold text-foreground">
@@ -378,12 +378,12 @@ export default function RevealPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
 
       <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">
+            <h1 className="font-display text-2xl font-semibold text-foreground">
               Final Overview
             </h1>
             <div className="font-display text-sm text-muted">
@@ -502,7 +502,7 @@ export default function RevealPage() {
             return (
               <div
                 key={fid}
-                className="fixture-card-enter space-y-2 w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                className="fixture-card-enter space-y-2 w-full min-[430px]:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
                 style={{
                   animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                   animationDuration: "520ms",

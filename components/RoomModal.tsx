@@ -43,7 +43,7 @@ type ModalHeaderProps = {
 export function ModalHeader({ title, onClose, ariaLabel }: ModalHeaderProps) {
   return (
     <div className="flex items-center justify-between">
-      <div className="text-lg font-semibold text-foreground">{title}</div>
+      <div className="font-display text-lg font-semibold text-foreground">{title}</div>
       <ModalExitButton onClick={onClose} ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`} />
     </div>
   );
@@ -74,7 +74,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <ThemedModal open={open} onClose={onClose} maxWidthClassName="max-w-sm">
-      <div className="font-semibold text-foreground">{title}</div>
+      <div className="font-display font-semibold text-foreground">{title}</div>
       <div className="text-sm text-muted">{body}</div>
       <div className="flex justify-end gap-2">
         <button

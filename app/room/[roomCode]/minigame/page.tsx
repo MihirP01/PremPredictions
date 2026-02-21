@@ -119,7 +119,7 @@ export default function MiniGameLobbyPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/login");
+      router.replace("/");
       return;
     }
 
@@ -616,11 +616,11 @@ export default function MiniGameLobbyPage() {
 
         <SectionCard className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
           <div className="font-semibold text-foreground">
-            Mini-game Controls
+            Game Controls
           </div>
           <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-foreground">Mini-game Style</div>
+              <div className="text-sm font-semibold text-foreground">Game Style</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setModeGuideOpen(true)}
@@ -803,7 +803,7 @@ export default function MiniGameLobbyPage() {
         panelClassName="w-full max-w-lg rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
       >
         <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold text-foreground">Mini-game Guide</div>
+          <div className="font-display text-lg font-semibold text-foreground">Game Guide</div>
           <ModalExitButton
             onClick={() => setModeGuideOpen(false)}
             ariaLabel="Exit game guide"
@@ -861,7 +861,7 @@ export default function MiniGameLobbyPage() {
         panelClassName="w-full max-w-md rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
       >
             <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-foreground">Mini-game Mode</div>
+              <div className="font-display text-lg font-semibold text-foreground">Game Mode</div>
               <ModalExitButton
                 onClick={() => setModeSettingsOpen(false)}
                 ariaLabel="Exit mode settings"

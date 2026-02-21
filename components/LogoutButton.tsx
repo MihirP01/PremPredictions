@@ -16,7 +16,7 @@ export default function LogoutButton() {
     setBusy(true);
     try {
       await signOut(auth);
-      router.replace("/login");
+      router.replace("/");
     } finally {
       setBusy(false);
     }

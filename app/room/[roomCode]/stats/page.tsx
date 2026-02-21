@@ -139,7 +139,7 @@ export default function RoomStatsPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
+    if (!user) router.replace("/");
   }, [loading, user, router]);
 
   useEffect(() => {

@@ -22,7 +22,7 @@ export default function PageBackButton({
       }}
       className={[
         "h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500",
-        "text-foreground hover:bg-surface-2 whitespace-nowrap inline-flex",
+        "text-foreground hover:bg-surface-2 whitespace-nowrap hidden sm:inline-flex",
         "items-center justify-center page-action-btn",
         className,
       ].join(" ")}

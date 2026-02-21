@@ -1,20 +1,24 @@
-const CACHE_VERSION = "pl-predictions-v5";
+const CACHE_VERSION = "pl-predictions-v6";
+const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
+const STATIC_CACHE = `${CACHE_VERSION}-static`;
+const API_CACHE = `${CACHE_VERSION}-api`;
 const APP_SHELL = [
   "/",
+  "/offline",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",
 ];
 const STATIC_EXT_RE = /\.(?:png|jpg|jpeg|svg|webp|gif|ico|json|txt)$/i;
+const API_CACHEABLE_PATHS = ["/api/current-gameweek", "/api/fixtures", "/api/table"];
 
 function isBypassRequest(request, url) {
   if (request.method !== "GET") return true;
   if (url.origin !== self.location.origin) return true;
 
-  // Never cache Next.js runtime/build assets or API responses.
+  // Never cache Next.js runtime/build assets here (handled separately below).
   if (url.pathname.startsWith("/_next/")) return true;
-  if (url.pathname.startsWith("/api/")) return true;
 
   // Never cache RSC/data transport requests.
   if (url.searchParams.has("_rsc")) return true;
@@ -27,7 +31,7 @@ function isBypassRequest(request, url) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)),
+    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL)),
   );
   self.skipWaiting();
 });
@@ -45,7 +49,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_VERSION)
+            .filter((key) => !key.startsWith(CACHE_VERSION))
             .map((key) => caches.delete(key)),
         ),
       ),
@@ -53,14 +57,44 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  const networkPromise = fetch(request)
+    .then((response) => {
+      if (response && response.status === 200) {
+        cache.put(request, response.clone()).catch(() => {});
+      }
+      return response;
+    })
+    .catch(() => null);
+  return cached || networkPromise || Response.error();
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // Lightweight cache for high-frequency readonly API calls.
+  if (
+    event.request.method === "GET" &&
+    url.origin === self.location.origin &&
+    API_CACHEABLE_PATHS.some((path) => url.pathname.startsWith(path))
+  ) {
+    event.respondWith(staleWhileRevalidate(event.request, API_CACHE));
+    return;
+  }
+
   if (isBypassRequest(event.request, url)) return;
 
   // Navigation/doc requests should be network-first to avoid stale UI.
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("/") || Response.error()),
+      fetch(event.request).catch(
+        () =>
+          caches.match("/offline", { cacheName: APP_SHELL_CACHE }) ||
+          caches.match("/") ||
+          Response.error(),
+      ),
     );
     return;
   }
@@ -68,25 +102,9 @@ self.addEventListener("fetch", (event) => {
   // Cache only safe static files; everything else uses network-first.
   const isStatic = APP_SHELL.includes(url.pathname) || STATIC_EXT_RE.test(url.pathname);
   if (!isStatic) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request) || Response.error()),
-    );
+    event.respondWith(fetch(event.request).catch(() => Response.error()));
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response;
-          }
-          const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(() => caches.match("/"));
-    }),
-  );
+  event.respondWith(staleWhileRevalidate(event.request, STATIC_CACHE));
 });

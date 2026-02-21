@@ -130,7 +130,7 @@ export default function LeaderboardMatrixPage() {
   // auth guard
   useEffect(() => {
     if (loading) return;
-    if (!user) router.replace("/login");
+    if (!user) router.replace("/");
   }, [loading, user, router]);
 
   // load default season + gameweek

@@ -1,5 +1,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  type Auth,
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  inMemoryPersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // TODO: Add SDKs for Firebase products that you want to use
@@ -20,5 +27,20 @@ const firebaseConfig = {
 // IMPORTANT: do NOT initialize Analytics in Next App Router (window not defined)
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
+let authInstance: Auth;
+try {
+  // PWA/iOS: explicit persistence order improves standalone session stability.
+  authInstance = initializeAuth(app, {
+    persistence: [
+      indexedDBLocalPersistence,
+      browserLocalPersistence,
+      inMemoryPersistence,
+    ],
+  });
+} catch {
+  // If auth is already initialized (HMR/re-entry), reuse existing instance.
+  authInstance = getAuth(app);
+}
+
+export const auth = authInstance;
 export const db = getFirestore(app);

@@ -54,8 +54,8 @@ export default function ScrollToTopButton() {
       onClick={scrollToTop}
       aria-label="Return to top"
       className={[
-        "scroll-top-fab fixed right-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-full",
-        "border bg-surface text-foreground backdrop-blur-sm",
+        "scroll-top-fab liquid-glass-fab fixed right-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-full",
+        "border text-foreground",
         "will-change-transform",
         visible ? "hover:scale-[1.02] active:scale-[0.98]" : "",
         visible
@@ -64,9 +64,6 @@ export default function ScrollToTopButton() {
       ].join(" ")}
       style={{
         bottom: "calc(env(safe-area-inset-bottom) + 1rem)",
-        borderColor: "rgba(var(--room-accent-rgb, 14,165,164), 1)",
-        boxShadow:
-          "0 8px 22px rgba(var(--room-accent-rgb, 14,165,164), 0.28)",
       }}
     >
       <svg

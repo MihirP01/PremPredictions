@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
+import { resolveDisplayName } from "@/lib/displayNameResolver";
 
 function normalize(code: string) {
   return code.trim().toUpperCase();
@@ -52,10 +53,11 @@ export default function RoomGatePage() {
     (async () => {
       const snap = await getDoc(doc(db, "users", user.uid));
       const data = snap.data();
-
-      setDisplayName(
-        data?.displayName || user.email?.split("@")[0] || "Player",
-      );
+      const resolvedDisplayName = await resolveDisplayName({
+        uid: user.uid,
+        email: user.email,
+      });
+      setDisplayName(resolvedDisplayName);
 
       const existing = String(data?.currentRoomCode || "").toUpperCase();
       setCurrentRoomCode(existing);

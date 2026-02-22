@@ -15,6 +15,11 @@ import TeamBadge from "../../../../components/TeamBadge";
 import TeamLabel from "../../../../components/TeamLabel";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
+import { getTableCached, type TableRow } from "@/lib/tableClient";
+import { getGameDataCached } from "@/lib/gameDataClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import {
   fixtureDayKey,
   fixtureDayLabel,
@@ -24,7 +29,6 @@ import {
 import { teamAbbr } from "@/lib/teamDisplay";
 import {
   collection,
-  getDocs,
   onSnapshot,
   query,
 } from "firebase/firestore";
@@ -47,30 +51,8 @@ type PicksByFixture = Record<number, Record<string, string>>;
 // goldenByUid[uid] = { fixtureId, score }
 type GoldenByUid = Record<string, { fixtureId: number; score: string }>;
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
-type PickDoc = { fixtureId?: number; uid?: string; score?: string };
-type GoldenDoc = { fixtureId?: number; score?: string };
-type FixturesResponse = { fixtures?: Fixture[]; generatedAt?: string };
-type TableRow = {
-  position: number;
-  team: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
-  playedGames: number;
-  won: number;
-  draw: number;
-  lost: number;
-  goalsScored: number;
-  goalsAgainst: number;
-  goalDifference: number;
-  points: number;
-};
 type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
-type TableResponse = {
-  standingsTotal?: TableRow[];
-  standingsHome?: TableRow[];
-  standingsAway?: TableRow[];
-  seasonKey?: string;
-  error?: string;
-};
 
 const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
   { key: "HOME", label: "Home" },
@@ -212,11 +194,20 @@ export default function FixturesPage() {
 
     (async () => {
       try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const current = Number(data.currentGameweek ?? 1);
+        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const season = String(data.seasonKey || "");
         if (!cancelled) {
           setGw(Number.isFinite(current) ? current : 1);
-          setSeasonKey(String(data.seasonKey || ""));
+          setSeasonKey(season);
+          setSeasonOptions(
+            options.length
+              ? options
+              : season
+                ? [season]
+                : [],
+          );
         }
       } catch {
         if (!cancelled) {
@@ -231,27 +222,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "rooms", roomCode, "seasons"));
-        const keys = snap.docs
-          .map((d) => d.id)
-          .filter((id) => /^\d{4}$/.test(id))
-          .sort((a, b) => b.localeCompare(a));
-        if (seasonKey && !keys.includes(seasonKey)) keys.unshift(seasonKey);
-        if (!cancelled) setSeasonOptions(keys);
-      } catch {
-        if (!cancelled && seasonKey) setSeasonOptions([seasonKey]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roomCode, seasonKey]);
+  }, [roomCode]);
 
   // Auth guard
   useEffect(() => {
@@ -306,7 +277,21 @@ export default function FixturesPage() {
 
   // Load room players (names)
   useEffect(() => {
+    let cancelled = false;
     const q = query(collection(db, "rooms", roomCode, "players"));
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        const seeded: Player[] = cached.map((p) => ({
+          uid: p.uid,
+          displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+        }));
+        setPlayers(seeded);
+      } catch {
+        // ignore
+      }
+    })();
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -329,7 +314,10 @@ export default function FixturesPage() {
           `Failed to load players: ${e?.message ?? "permission denied"}`,
         ),
     );
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [roomCode]);
 
   const loadFixtures = useCallback(
@@ -341,15 +329,16 @@ export default function FixturesPage() {
       setFixturesLoading(true);
       setError(null);
 
-      const nonce = force ? `&t=${Date.now()}` : "";
-      const seasonParam = seasonKey ? `&seasonKey=${encodeURIComponent(seasonKey)}` : "";
+      if (!seasonKey) {
+        setFixtures([]);
+        setFixturesGeneratedAt(null);
+        setFixturesRefreshedAt(new Date());
+        return;
+      }
       try {
-        const res = await fetch(`/api/fixtures?gameweek=${gw}${seasonParam}${nonce}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`fixtures ${res.status}`);
-
-        const data = (await res.json()) as FixturesResponse;
+        const data = force
+          ? await refreshFixturesCached(gw, seasonKey)
+          : await getFixturesCached(gw, seasonKey);
         const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
         setFixtures(fx);
         setFixturesGeneratedAt(asDate(data.generatedAt));
@@ -398,22 +387,10 @@ export default function FixturesPage() {
       setGoldenByUid({});
 
       if (!seasonKey) return;
-      const picksSnap = await getDocs(
-        collection(
-          db,
-          "rooms",
-          roomCode,
-          "seasons",
-          seasonKey,
-          "games",
-          `gw-${gw}`,
-          "picks",
-        ),
-      );
+      const gameData = await getGameDataCached(roomCode, seasonKey, gw);
 
       const byFx: PicksByFixture = {};
-      for (const d of picksSnap.docs) {
-        const data = d.data() as PickDoc;
+      for (const data of gameData.picks) {
         const fixtureId = Number(data.fixtureId);
         const uid = String(data.uid);
         const score = String(data.score);
@@ -421,23 +398,9 @@ export default function FixturesPage() {
         byFx[fixtureId][uid] = score;
       }
 
-      const goldenSnap = await getDocs(
-        collection(
-          db,
-          "rooms",
-          roomCode,
-          "seasons",
-          seasonKey,
-          "games",
-          `gw-${gw}`,
-          "golden",
-        ),
-      );
-
       const gByUid: GoldenByUid = {};
-      for (const d of goldenSnap.docs) {
-        const data = d.data() as GoldenDoc;
-        gByUid[d.id] = {
+      for (const data of gameData.goldens) {
+        gByUid[data.uid] = {
           fixtureId: Number(data.fixtureId),
           score: String(data.score),
         };
@@ -523,10 +486,7 @@ export default function FixturesPage() {
     setTableMode("TOTAL");
     setTableView("FULL");
     try {
-      const seasonParam = seasonKey ? `?seasonKey=${encodeURIComponent(seasonKey)}` : "";
-      const res = await fetch(`/api/table${seasonParam}`, { cache: "no-store" });
-      const data = (await res.json().catch(() => ({}))) as TableResponse;
-      if (!res.ok) throw new Error(data?.error || "Failed to load table.");
+      const data = await getTableCached(seasonKey);
       setTableRowsByMode({
         TOTAL: Array.isArray(data.standingsTotal) ? data.standingsTotal : [],
         HOME: Array.isArray(data.standingsHome) ? data.standingsHome : [],
@@ -545,6 +505,11 @@ export default function FixturesPage() {
       if (tableSwapTimerRef.current) clearTimeout(tableSwapTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!seasonKey) return;
+    void getTableCached(seasonKey).catch(() => {});
+  }, [seasonKey]);
 
   return (
     <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
@@ -991,7 +956,7 @@ export default function FixturesPage() {
         onClose={() => setTableOpen(false)}
         portal
         lockBackground
-        zIndexClassName="z-50"
+        zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
         panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
       >

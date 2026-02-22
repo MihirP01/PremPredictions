@@ -7,15 +7,23 @@ import PageBackButton from "../../../../../components/PageBackButton";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { db } from "../../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getGameDataCached } from "@/lib/gameDataClient";
+import { getRoomGameStateCached } from "@/lib/gameStateClient";
+import {
+  subscribeRoomGameDoc,
+  subscribeRoomGoldens,
+  subscribeRoomPicks,
+  subscribeRoomPlayers,
+} from "@/lib/liveGameBus";
 import {
   fixtureDayKey,
   fixtureDayLabel,
   formatKickoffParts,
   formatUnlockDateParts,
 } from "@/lib/dateDisplay";
-import { collection, doc, getDocs, onSnapshot, query } from "firebase/firestore";
 import { getCountdownParts } from "../lock-utils";
 
 type GameDoc = {
@@ -48,7 +56,6 @@ type GoldenDoc = {
   locked: boolean;
 };
 
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
 const BTN_3D = "btn-3d-accent";
 
 function fmtScore(s?: string | null) {
@@ -104,41 +111,10 @@ export default function RevealPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
         const sk = String(data.seasonKey || "");
-        let resolvedGw = Number.isFinite(n) ? n : 1;
-
-        // Prefer the active reveal gameweek for this room/season if present.
-        if (sk) {
-          const gamesSnap = await getDocs(
-            collection(db, "rooms", roomCode, "seasons", sk, "games"),
-          );
-          const parseGwFromId = (id: string) => {
-            const m = /^gw-(\d+)$/i.exec(id);
-            if (!m) return null;
-            const v = Number(m[1]);
-            return Number.isFinite(v) ? v : null;
-          };
-          const revealGws: number[] = [];
-          const activeGws: number[] = [];
-          gamesSnap.docs.forEach((d) => {
-            const gwId = parseGwFromId(d.id);
-            if (gwId == null) return;
-            const state = String((d.data() as { state?: string })?.state || "")
-              .trim()
-              .toUpperCase();
-            if (state === "REVEAL") revealGws.push(gwId);
-            if (state === "DRAFT" || state === "GOLDEN" || state === "REVEAL") {
-              activeGws.push(gwId);
-            }
-          });
-          if (revealGws.length > 0) {
-            resolvedGw = Math.max(...revealGws);
-          } else if (activeGws.length > 0) {
-            resolvedGw = Math.max(...activeGws);
-          }
-        }
+        const resolvedGw = Number.isFinite(n) ? n : 1;
 
         if (!cancelled) {
           setGw(resolvedGw);
@@ -158,24 +134,29 @@ export default function RevealPage() {
 
   // listen to game doc (for routing + player list + fixtureIds)
   useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      const cached = await getRoomGameStateCached(roomCode, seasonKey, gw);
+      if (!cancelled && cached) setGame(cached as GameDoc);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, gw, seasonKey]);
+
+  // listen to game doc (for routing + player list + fixtureIds)
+  useEffect(() => {
     if (!user || gw == null || !seasonKey) return;
-
-    const gameRef = doc(
-      db,
-      "rooms",
+    const unsub = subscribeRoomGameDoc(
       roomCode,
-      "seasons",
       seasonKey,
-      "games",
-      `gw-${gw}`,
-    );
-    const unsub = onSnapshot(
-      gameRef,
-      (snap) => {
-        const data = snap.exists() ? (snap.data() as GameDoc) : null;
-        setGame(data);
+      gw,
+      (data) => {
+        const gameData = (data as GameDoc | null) ?? null;
+        setGame(gameData);
 
-        const st = String(data?.state ?? "")
+        const st = String(gameData?.state ?? "")
           .trim()
           .toUpperCase();
 
@@ -196,7 +177,7 @@ export default function RevealPage() {
       () => setError("Failed to load game state."),
     );
 
-    return () => unsub();
+    return unsub;
   }, [user, roomCode, gw, router, seasonKey]);
 
   // load fixtures
@@ -205,11 +186,8 @@ export default function RevealPage() {
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`, {
-        cache: "no-store",
-      });
-      const d = await r.json().catch(() => ({}));
-      const fx: Fixture[] = Array.isArray(d?.fixtures) ? d.fixtures : [];
+      const d = await getFixturesCached(gw, seasonKey);
+      const fx: Fixture[] = Array.isArray(d.fixtures) ? d.fixtures : [];
       if (!cancelled) setFixtures(fx);
     })().catch(() => !cancelled && setFixtures([]));
 
@@ -221,25 +199,40 @@ export default function RevealPage() {
   // listen picks
   useEffect(() => {
     if (gw == null || !seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      const data = await getGameDataCached(roomCode, seasonKey, gw);
+      if (cancelled) return;
+      const list: PickDoc[] = data.picks.map((p) => ({
+        uid: p.uid,
+        fixtureId: p.fixtureId,
+        score: p.score,
+      }));
+      const map: Record<string, GoldenDoc> = {};
+      for (const g of data.goldens) {
+        map[g.uid] = {
+          uid: g.uid,
+          fixtureId: g.fixtureId,
+          score: g.score,
+          locked: g.locked,
+        };
+      }
+      setPicks(list);
+      setGoldensByUid(map);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gw, roomCode, seasonKey]);
 
-    const qPicks = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        `gw-${gw}`,
-        "picks",
-      ),
-    );
-    return onSnapshot(
-      qPicks,
-      (snap) => {
-        const list: PickDoc[] = snap.docs.map((d) => d.data() as PickDoc);
-        setPicks(list);
-      },
+  // listen picks
+  useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    return subscribeRoomPicks(
+      roomCode,
+      seasonKey,
+      gw,
+      (list) => setPicks(list as PickDoc[]),
       () => setError("Failed to listen for picks."),
     );
   }, [roomCode, gw, seasonKey]);
@@ -247,46 +240,64 @@ export default function RevealPage() {
   // listen golden
   useEffect(() => {
     if (gw == null || !seasonKey) return;
-
-    const qGolden = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        `gw-${gw}`,
-        "golden",
-      ),
-    );
-    return onSnapshot(
-      qGolden,
-      (snap) => {
+    return subscribeRoomGoldens(
+      roomCode,
+      seasonKey,
+      gw,
+      (list) => {
         const map: Record<string, GoldenDoc> = {};
-        for (const d of snap.docs) map[d.id] = d.data() as GoldenDoc;
+        for (const g of list) {
+          map[g.uid] = {
+            uid: g.uid,
+            fixtureId: g.fixtureId,
+            score: g.score,
+            locked: g.locked,
+          };
+        }
         setGoldensByUid(map);
       },
       () => setError("Failed to listen for goldens."),
     );
   }, [roomCode, gw, seasonKey]);
 
-  // listen lobby display names (best-effort) so we can show names instead of UIDs
+  // seed + listen player display names (best-effort) so we can show names instead of UIDs
   useEffect(() => {
-    const qPlayers = query(collection(db, "rooms", roomCode, "players"));
-    return onSnapshot(
-      qPlayers,
-      (snap) => {
-        const map: Record<string, string> = {};
-        for (const d of snap.docs) {
-          const data = d.data() as RoomPlayerDoc;
-          const nick = String(data?.nickName || "").trim();
-          map[d.id] = nick || data?.displayName || "Player";
-        }
-        setDisplayNamesByUid(map);
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        setDisplayNamesByUid((prev) => {
+          const next = { ...prev };
+          for (const player of cached) {
+            const nick = String(player.nickName || "").trim();
+            next[player.uid] = nick || player.displayName || next[player.uid] || "Player";
+          }
+          return next;
+        });
+      } catch {
+        // ignore cache errors; live listener below can still populate
+      }
+    })();
+
+    const unsub = subscribeRoomPlayers(
+      roomCode,
+      (players) => {
+        setDisplayNamesByUid((prev) => {
+          const map: Record<string, string> = { ...prev };
+          for (const player of players) {
+            const nick = String(player.nickName || "").trim();
+            map[player.uid] = nick || player.displayName || map[player.uid] || "Player";
+          }
+          return map;
+        });
       },
       () => {},
     );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [roomCode]);
 
   useEffect(() => {
@@ -363,8 +374,8 @@ export default function RevealPage() {
       .sort((a, b) => a - b);
     if (!kickoffTimes.length) return null;
     const unlock = new Date(kickoffTimes[kickoffTimes.length - 1]);
-    unlock.setDate(unlock.getDate() + 1);
-    unlock.setHours(9, 0, 0, 0);
+    unlock.setUTCDate(unlock.getUTCDate() + 1);
+    unlock.setUTCHours(0, 1, 0, 0);
     return unlock.getTime();
   }, [fixtures]);
   const unlockMsLeft = unlockAtMs != null && clockReady ? Math.max(unlockAtMs - nowMs, 0) : 0;

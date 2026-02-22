@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
@@ -10,7 +10,10 @@ import SpecialBreak from "../../../../components/SpecialBreak";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { collection, doc, getDoc, getDocs, onSnapshot, query } from "firebase/firestore";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { subscribeRoomPlayers } from "@/lib/liveGameBus";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { collection, getDocs } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
 type ScoreDoc = {
@@ -27,7 +30,6 @@ type ScoreDoc = {
   >;
 };
 type ScoreWeekSummary = { computedAt?: unknown };
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
@@ -167,6 +169,7 @@ export default function RoomStatsPage() {
   const [error, setError] = useState<string | null>(null);
   const [statsByUid, setStatsByUid] = useState<Record<string, PlayerStats>>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const seasonGwSyncPrimedRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -177,36 +180,20 @@ export default function RoomStatsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const roomSnap = await getDoc(doc(db, "rooms", roomCode));
-        if (!roomSnap.exists()) {
-          router.replace("/room-gate");
-          return;
-        }
-        const memberSnap = user
-          ? await getDoc(doc(db, "rooms", roomCode, "players", user.uid))
-          : null;
-        if (user && memberSnap && !memberSnap.exists()) {
-          router.replace("/room-gate");
-          return;
-        }
-      } catch {
-        if (!cancelled) setError("Failed to verify room access.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roomCode, router, user]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
+        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const season = String(data.seasonKey || "");
         if (!cancelled) {
           setCurrentGw(Number.isFinite(n) ? n : 1);
-          setSeasonKey(String(data.seasonKey || ""));
+          setSeasonKey(season);
+          setSeasonOptions(
+            options.length
+              ? options
+              : season
+                ? [season]
+                : [],
+          );
         }
       } catch {
         if (!cancelled) {
@@ -218,32 +205,14 @@ export default function RoomStatsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDocs(
-          collection(db, "rooms", roomCode, "seasons"),
-        );
-        const keys = snap.docs
-          .map((d) => d.id)
-          .filter((id) => /^\d{4}$/.test(id))
-          .sort((a, b) => b.localeCompare(a));
-        if (seasonKey && !keys.includes(seasonKey)) keys.unshift(seasonKey);
-        if (!cancelled) setSeasonOptions(keys);
-      } catch {
-        if (!cancelled && seasonKey) setSeasonOptions([seasonKey]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roomCode, seasonKey]);
+  }, [roomCode]);
 
   useEffect(() => {
     if (!seasonKey) return;
+    if (!seasonGwSyncPrimedRef.current) {
+      seasonGwSyncPrimedRef.current = true;
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -260,17 +229,33 @@ export default function RoomStatsPage() {
   }, [seasonKey]);
 
   useEffect(() => {
-    const q = query(collection(db, "rooms", roomCode, "players"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list = snap.docs
-          .map((d) => {
-            const data = d.data() as RoomPlayerDoc;
-            const nick = String(data.nickName || "").trim();
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        const seeded: Player[] = cached
+          .map((p) => ({
+            uid: p.uid,
+            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+          }))
+          .sort((a, b) =>
+            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          );
+        setPlayers(seeded);
+      } catch {
+        // ignore
+      }
+    })();
+    const unsub = subscribeRoomPlayers(
+      roomCode,
+      (livePlayers) => {
+        const list = livePlayers
+          .map((player) => {
+            const nick = String(player.nickName || "").trim();
             return {
-              uid: d.id,
-              displayName: nick || data.displayName || "Player",
+              uid: player.uid,
+              displayName: nick || player.displayName || "Player",
             } satisfies Player;
           })
           .sort((a, b) =>
@@ -280,7 +265,10 @@ export default function RoomStatsPage() {
       },
       () => setError("Failed to load room players."),
     );
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [roomCode]);
 
   const effectiveSelectedUid = useMemo(() => {
@@ -476,7 +464,7 @@ export default function RoomStatsPage() {
       const s = projectStatsForGw(statsByUid[p.uid], selectedGwNumber);
       if (s) displayByUid[p.uid] = s;
     });
-    const denseRank = (
+    const competitionRank = (
       metric: (uid: string) => number,
       asc = false,
     ): Record<string, number> => {
@@ -489,24 +477,24 @@ export default function RoomStatsPage() {
       const out: Record<string, number> = {};
       let prev: number | null = null;
       let rank = 0;
-      ordered.forEach((p) => {
+      ordered.forEach((p, index) => {
         const v = metric(p.uid);
-        if (prev === null || v !== prev) rank += 1;
+        if (prev === null || v !== prev) rank = index + 1;
         out[p.uid] = rank;
         prev = v;
       });
       return out;
     };
     return {
-      totalPoints: denseRank((uid) => displayByUid[uid]?.totalPoints ?? 0),
-      bestGwPoints: denseRank((uid) => displayByUid[uid]?.bestGwPoints ?? 0),
-      exactCount: denseRank((uid) => displayByUid[uid]?.exactCount ?? 0),
-      correctResults: denseRank((uid) => {
+      totalPoints: competitionRank((uid) => displayByUid[uid]?.totalPoints ?? 0),
+      bestGwPoints: competitionRank((uid) => displayByUid[uid]?.bestGwPoints ?? 0),
+      exactCount: competitionRank((uid) => displayByUid[uid]?.exactCount ?? 0),
+      correctResults: competitionRank((uid) => {
         const s = displayByUid[uid];
         return (s?.exactCount ?? 0) + (s?.resultOnlyCount ?? 0);
       }),
-      goalDisparity: denseRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
-      goldenBonus: denseRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
+      goalDisparity: competitionRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
+      goldenBonus: competitionRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
     };
   }, [players, statsByUid, selectedGwNumber]);
   const recentGws =

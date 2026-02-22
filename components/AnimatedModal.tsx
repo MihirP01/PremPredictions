@@ -21,7 +21,7 @@ export default function AnimatedModal({
   closeOnBackdrop = false,
   portal = false,
   lockBackground = false,
-  zIndexClassName = "z-40",
+  zIndexClassName = "z-[90]",
   overlayClassName = "",
   panelClassName = "",
   children,

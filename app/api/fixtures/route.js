@@ -82,6 +82,21 @@ export async function GET(req) {
     );
   }
 
+  if (response.status === 429) {
+    const body = await response.text().catch(() => "");
+    console.error("Football-Data rate limit:", body);
+    return NextResponse.json(
+      { error: "Football API rate limit", status: 429, retryAfterSec: 10 },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": "10",
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      },
+    );
+  }
+
   // Rate limit / auth errors should be visible as errors
   if (!response.ok) {
     const body = await response.text().catch(() => "");

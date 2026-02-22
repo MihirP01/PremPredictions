@@ -7,10 +7,18 @@ import AnimatedModal from "../../../../../components/AnimatedModal";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { db } from "../../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getGameDataCached } from "@/lib/gameDataClient";
+import { getRoomGameStateCached } from "@/lib/gameStateClient";
+import {
+  subscribeRoomGameDoc,
+  subscribeRoomMeta,
+  subscribeRoomPicks,
+  subscribeRoomPlayers,
+} from "@/lib/liveGameBus";
 import { formatDateWithOrdinal, formatTime24 } from "@/lib/dateDisplay";
-import { collection, doc, onSnapshot, query } from "firebase/firestore";
 import {
   CaptainBanner,
   CaptainChooseFixturePanel,
@@ -38,14 +46,12 @@ type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string; shortName?: string; tla?: string; badge?: string | null };
-  away: { name: string; shortName?: string; tla?: string; badge?: string | null };
+  home: { name: string; shortName?: string | null; tla?: string | null; badge?: string | null };
+  away: { name: string; shortName?: string | null; tla?: string | null; badge?: string | null };
   result?: string | null;
 };
 
 type PickDoc = { uid?: string; fixtureId?: number; score?: string };
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
-type RoomDoc = { leaderUid?: string };
 const BTN_3D = "btn-3d-accent";
 
 function onlyDigitsOrEmpty(v: string) {
@@ -91,7 +97,7 @@ export default function MiniGamePlayPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
         if (!cancelled) {
           setGw(Number.isFinite(n) ? n : 1);
@@ -107,7 +113,7 @@ export default function MiniGamePlayPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roomCode]);
 
   // load fixtures for GW
   useEffect(() => {
@@ -115,9 +121,8 @@ export default function MiniGamePlayPage() {
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`);
-      const d = await r.json();
-      if (!cancelled) setFixtures(Array.isArray(d?.fixtures) ? d.fixtures : []);
+      const d = await getFixturesCached(gw, seasonKey);
+      if (!cancelled) setFixtures(Array.isArray(d.fixtures) ? d.fixtures : []);
     })().catch(() => !cancelled && setFixtures([]));
 
     return () => {
@@ -128,29 +133,33 @@ export default function MiniGamePlayPage() {
   // listen to game doc
   useEffect(() => {
     if (gw == null || !seasonKey) return;
-    const gameRef = doc(
-      db,
-      "rooms",
+    let cancelled = false;
+    (async () => {
+      const cached = await getRoomGameStateCached(roomCode, seasonKey, gw);
+      if (!cancelled && cached) setGame(cached as GameDoc);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, gw, seasonKey]);
+
+  // listen to game doc
+  useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    return subscribeRoomGameDoc(
       roomCode,
-      "seasons",
       seasonKey,
-      "games",
-      `gw-${gw}`,
+      gw,
+      (data) => setGame((data as GameDoc | null) ?? null),
+      () => {},
     );
-    return onSnapshot(gameRef, (snap) => {
-      setGame(snap.exists() ? (snap.data() as GameDoc) : null);
-    });
   }, [roomCode, gw, seasonKey]);
 
   // room leader
   useEffect(() => {
-    const roomRef = doc(db, "rooms", roomCode);
-    return onSnapshot(
-      roomRef,
-      (snap) => {
-        const data = snap.data() as RoomDoc | undefined;
-        setLeaderUid(data?.leaderUid ?? null);
-      },
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => setLeaderUid(roomMeta?.leaderUid ?? null),
       () => setLeaderUid(null),
     );
   }, [roomCode]);
@@ -202,42 +211,72 @@ export default function MiniGamePlayPage() {
   // listen to all picks for this GW
   useEffect(() => {
     if (gw == null || !seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      const data = await getGameDataCached(roomCode, seasonKey, gw);
+      if (cancelled) return;
+      const list: PickDoc[] = data.picks.map((p) => ({
+        uid: p.uid,
+        fixtureId: p.fixtureId,
+        score: p.score,
+      }));
+      setAllPicks(list);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gw, roomCode, seasonKey]);
 
-    const picksQ = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        `gw-${gw}`,
-        "picks",
-      ),
+  // listen to all picks for this GW
+  useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    return subscribeRoomPicks(
+      roomCode,
+      seasonKey,
+      gw,
+      (picks) => setAllPicks(picks as PickDoc[]),
+      () => {},
     );
-
-    return onSnapshot(picksQ, (snap) => {
-      const picks = snap.docs.map((d) => d.data() as PickDoc);
-      setAllPicks(picks);
-    });
   }, [roomCode, gw, seasonKey]);
 
-  // player display names (nickname first)
+  // seed + listen player display names (nickname first)
   useEffect(() => {
-    const qPlayers = query(collection(db, "rooms", roomCode, "players"));
-    return onSnapshot(
-      qPlayers,
-      (snap) => {
-        const map: Record<string, string> = {};
-        for (const d of snap.docs) {
-          const data = d.data() as RoomPlayerDoc;
-          const nick = String(data?.nickName || "").trim();
-          map[d.id] = nick || data?.displayName || d.id.slice(0, 6);
-        }
-        setDisplayNamesByUid(map);
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        setDisplayNamesByUid((prev) => {
+          const next = { ...prev };
+          for (const player of cached) {
+            const nick = String(player.nickName || "").trim();
+            next[player.uid] = nick || player.displayName || next[player.uid] || player.uid.slice(0, 6);
+          }
+          return next;
+        });
+      } catch {
+        // ignore cache seed errors; live listener can still populate
+      }
+    })();
+
+    const unsub = subscribeRoomPlayers(
+      roomCode,
+      (players) => {
+        setDisplayNamesByUid((prev) => {
+          const map: Record<string, string> = { ...prev };
+          for (const player of players) {
+            const nick = String(player.nickName || "").trim();
+            map[player.uid] = nick || player.displayName || map[player.uid] || player.uid.slice(0, 6);
+          }
+          return map;
+        });
       },
       () => {},
     );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [roomCode]);
 
   const myPickedFixtureIds = useMemo(() => {
@@ -542,7 +581,7 @@ export default function MiniGamePlayPage() {
         <AnimatedModal
           open={stopConfirmOpen}
           onClose={() => setStopConfirmOpen(false)}
-          zIndexClassName="z-50"
+          zIndexClassName="z-[90]"
           overlayClassName="bg-black/50"
           panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
         >

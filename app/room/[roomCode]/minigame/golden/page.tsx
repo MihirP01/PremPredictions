@@ -6,14 +6,20 @@ import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { db } from "../../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getGameDataCached } from "@/lib/gameDataClient";
+import { getRoomGameStateCached } from "@/lib/gameStateClient";
+import {
+  subscribeRoomGameDoc,
+  subscribeRoomGoldens,
+  subscribeRoomPicks,
+} from "@/lib/liveGameBus";
 import {
   fixtureDayKey,
   fixtureDayLabel,
   formatDateWithOrdinal,
 } from "@/lib/dateDisplay";
-import { collection, doc, onSnapshot, query } from "firebase/firestore";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
@@ -90,7 +96,7 @@ export default function GoldenPage() {
 
     (async () => {
       try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
         if (!cancelled) {
           setGw(Number.isFinite(n) ? n : 1);
@@ -107,7 +113,7 @@ export default function GoldenPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roomCode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -117,25 +123,29 @@ export default function GoldenPage() {
 
   // listen to game doc (for state + players + fixtureIds + auto route)
   useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      const cached = await getRoomGameStateCached(roomCode, seasonKey, gw);
+      if (!cancelled && cached) setGame(cached as GameDoc);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, gw, seasonKey]);
+
+  // listen to game doc (for state + players + fixtureIds + auto route)
+  useEffect(() => {
     if (!user || gw == null || !seasonKey) return;
-
-    const gameRef = doc(
-      db,
-      "rooms",
+    const unsub = subscribeRoomGameDoc(
       roomCode,
-      "seasons",
       seasonKey,
-      "games",
-      `gw-${gw}`,
-    );
+      gw,
+      (data) => {
+        const gameData = (data as GameDoc | null) ?? null;
+        setGame(gameData);
 
-    const unsub = onSnapshot(
-      gameRef,
-      (snap) => {
-        const data = snap.exists() ? (snap.data() as GameDoc) : null;
-        setGame(data);
-
-        const st = String(data?.state ?? "")
+        const st = String(gameData?.state ?? "")
           .trim()
           .toUpperCase();
 
@@ -161,7 +171,7 @@ export default function GoldenPage() {
       () => setError("Failed to load game state."),
     );
 
-    return () => unsub();
+    return unsub;
   }, [user, roomCode, gw, router, seasonKey]);
 
   // load fixtures for GW
@@ -170,11 +180,8 @@ export default function GoldenPage() {
     let cancelled = false;
 
     (async () => {
-      const r = await fetch(`/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`, {
-        cache: "no-store",
-      });
-      const d = await r.json().catch(() => ({}));
-      const fx: Fixture[] = Array.isArray(d?.fixtures) ? d.fixtures : [];
+      const d = await getFixturesCached(gw, seasonKey);
+      const fx: Fixture[] = Array.isArray(d.fixtures) ? d.fixtures : [];
       if (!cancelled) setFixtures(fx);
     })().catch(() => !cancelled && setFixtures([]));
 
@@ -186,29 +193,46 @@ export default function GoldenPage() {
   // listen to ALL picks for this GW
   useEffect(() => {
     if (gw == null || !seasonKey) return;
+    let cancelled = false;
+    (async () => {
+      const data = await getGameDataCached(roomCode, seasonKey, gw);
+      if (cancelled) return;
+      const list: PickDoc[] = data.picks.map((p) => ({
+        uid: p.uid,
+        fixtureId: p.fixtureId,
+        score: p.score,
+      }));
+      const map: Record<string, GoldenDoc> = {};
+      for (const g of data.goldens) {
+        map[g.uid] = {
+          uid: g.uid,
+          fixtureId: g.fixtureId,
+          score: g.score,
+          locked: g.locked,
+        };
+      }
+      setAllPicks(list);
+      setGoldensByUid(map);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gw, roomCode, seasonKey]);
 
-    const picksQ = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        `gw-${gw}`,
-        "picks",
-      ),
-    );
-
-    return onSnapshot(
-      picksQ,
-      (snap) => {
-        const list: PickDoc[] = snap.docs.map((d) => d.data() as PickDoc);
-        setAllPicks(list);
+  // listen to ALL picks for this GW
+  useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    return subscribeRoomPicks(
+      roomCode,
+      seasonKey,
+      gw,
+      (list) => {
+        const picks = list as PickDoc[];
+        setAllPicks(picks);
 
         if (user) {
           const mine: Record<number, string> = {};
-          for (const p of list) {
+          for (const p of picks) {
             if (p.uid === user.uid) mine[p.fixtureId] = p.score;
           }
           setMyPicksByFixture(mine);
@@ -227,26 +251,19 @@ export default function GoldenPage() {
   // listen to golden locks
   useEffect(() => {
     if (gw == null || !seasonKey) return;
-
-    const goldenQ = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        `gw-${gw}`,
-        "golden",
-      ),
-    );
-
-    return onSnapshot(
-      goldenQ,
-      (snap) => {
+    return subscribeRoomGoldens(
+      roomCode,
+      seasonKey,
+      gw,
+      (list) => {
         const map: Record<string, GoldenDoc> = {};
-        for (const d of snap.docs) {
-          map[d.id] = d.data() as GoldenDoc;
+        for (const g of list) {
+          map[g.uid] = {
+            uid: g.uid,
+            fixtureId: g.fixtureId,
+            score: g.score,
+            locked: g.locked,
+          };
         }
         setGoldensByUid(map);
       },

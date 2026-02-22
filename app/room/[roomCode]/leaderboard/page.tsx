@@ -11,26 +11,19 @@ import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
-  onSnapshot,
-  query,
 } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
-
 type ScoreDoc = {
   uid?: string;
   points?: number;
   breakdown?: Record<string, { pred?: string | null }>;
-};
-
-type RoomDoc = {
-  leaderUid?: string;
 };
 
 type ScoreWeekSummaryDoc = {
@@ -106,6 +99,23 @@ function byName(a: Player, b: Player) {
   return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
 }
 
+function assignCompetitionRanks<T>(
+  ordered: T[],
+  scoreOf: (item: T) => number,
+  uidOf: (item: T) => string,
+): Record<string, number> {
+  const ranks: Record<string, number> = {};
+  let prevScore: number | null = null;
+  let rank = 0;
+  ordered.forEach((item, index) => {
+    const score = scoreOf(item);
+    if (prevScore === null || score !== prevScore) rank = index + 1;
+    ranks[uidOf(item)] = rank;
+    prevScore = score;
+  });
+  return ranks;
+}
+
 export default function LeaderboardMatrixPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -136,6 +146,7 @@ export default function LeaderboardMatrixPage() {
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
+  const seasonGwSyncPrimedRef = useRef(false);
 
   // matrix: userUid -> gw -> points (read only from score docs)
   const [pointsByUserByGw, setPointsByUserByGw] = useState<
@@ -157,11 +168,21 @@ export default function LeaderboardMatrixPage() {
 
     (async () => {
       try {
-        const data = await getCurrentGameweekCached();
+        const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
+        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const season = String(data.seasonKey || "");
         if (!cancelled) {
           setCurrentGw(Number.isFinite(n) ? n : 1);
-          setSeasonKey(String(data.seasonKey || ""));
+          setSeasonKey(season);
+          setLeaderUid(data.leaderUid ?? null);
+          setSeasonOptions(
+            options.length
+              ? options
+              : season
+                ? [season]
+                : [],
+          );
         }
       } catch {
         if (!cancelled) {
@@ -174,34 +195,15 @@ export default function LeaderboardMatrixPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // keep season options from room data (historical seasons)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDocs(
-          collection(db, "rooms", roomCode, "seasons"),
-        );
-        const keys = snap.docs
-          .map((d) => d.id)
-          .filter((id) => /^\d{4}$/.test(id))
-          .sort((a, b) => b.localeCompare(a));
-        if (seasonKey && !keys.includes(seasonKey)) keys.unshift(seasonKey);
-        if (!cancelled) setSeasonOptions(keys);
-      } catch {
-        if (!cancelled && seasonKey) setSeasonOptions([seasonKey]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roomCode, seasonKey]);
+  }, [roomCode]);
 
   // whenever selected season changes, refresh season-specific current GW
   useEffect(() => {
     if (!seasonKey) return;
+    if (!seasonGwSyncPrimedRef.current) {
+      seasonGwSyncPrimedRef.current = true;
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -223,15 +225,29 @@ export default function LeaderboardMatrixPage() {
 
   // live players list
   useEffect(() => {
-    const q = query(collection(db, "rooms", roomCode, "players"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: Player[] = snap.docs
-          .map((d) => {
-            const data = d.data() as RoomPlayerDoc;
-            const nick = String(data.nickName || "").trim();
-            return { uid: d.id, displayName: nick || data.displayName || "Player" };
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        const seeded: Player[] = cached
+          .map((p) => ({
+            uid: p.uid,
+            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+          }))
+          .sort(byName);
+        setPlayers(seeded);
+      } catch {
+        // ignore
+      }
+    })();
+    const unsub = subscribeRoomPlayers(
+      roomCode,
+      (livePlayers) => {
+        const list: Player[] = livePlayers
+          .map((player) => {
+            const nick = String(player.nickName || "").trim();
+            return { uid: player.uid, displayName: nick || player.displayName || "Player" };
           })
           .sort(byName);
         setPlayers(list);
@@ -241,7 +257,10 @@ export default function LeaderboardMatrixPage() {
           `Failed to load players: ${e?.message ?? "permission denied"}`,
         ),
     );
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [roomCode]);
 
   useEffect(() => {
@@ -268,19 +287,11 @@ export default function LeaderboardMatrixPage() {
 
   // room leader (for leader-only tools)
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "rooms", roomCode));
-        const data = snap.data() as RoomDoc | undefined;
-        if (!cancelled) setLeaderUid(data?.leaderUid ?? null);
-      } catch {
-        if (!cancelled) setLeaderUid(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => setLeaderUid(roomMeta?.leaderUid ?? null),
+      () => setLeaderUid(null),
+    );
   }, [roomCode]);
 
   const loadSavedScores = useCallback(async () => {
@@ -313,11 +324,9 @@ export default function LeaderboardMatrixPage() {
         }
       }
 
-      const scoredWeeks = new Set<number>(
-        scoreWeeksSnap.docs
-          .map((d) => parseGwId(d.id))
-          .filter((n): n is number => n !== null && n >= 1 && n <= currentGw),
-      );
+      // "Scored" means we actually have per-user score docs for that GW.
+      // Do not infer scored weeks from summary doc ids alone.
+      const scoredWeeks = new Set<number>();
 
       let computedGws = scoreWeeksSnap.docs
         .map((d) => parseGwId(d.id))
@@ -349,6 +358,7 @@ export default function LeaderboardMatrixPage() {
           ),
         );
 
+        let gwHasMeaningfulScore = false;
         for (const d of usersSnap.docs) {
           const data = d.data() as ScoreDoc;
           const uid = String(data.uid ?? d.id);
@@ -362,8 +372,9 @@ export default function LeaderboardMatrixPage() {
 
           matrix[uid][gw] = points;
           predMatrix[uid][gw] = hasPred;
+          if (hasPred || points > 0) gwHasMeaningfulScore = true;
         }
-        if (!usersSnap.empty) scoredWeeks.add(gw);
+        if (gwHasMeaningfulScore) scoredWeeks.add(gw);
       }
 
       const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
@@ -387,6 +398,18 @@ export default function LeaderboardMatrixPage() {
     () => Array.from({ length: currentGw }, (_, i) => currentGw - i),
     [currentGw],
   );
+
+  const mobileGwOptions = useMemo(() => {
+    const played = scoredGameweeks.filter((gw) => gw >= 1 && gw <= currentGw);
+    return Array.from(new Set([currentGw, ...played])).sort((a, b) => b - a);
+  }, [scoredGameweeks, currentGw]);
+
+  useEffect(() => {
+    if (!mobileGwOptions.length) return;
+    if (!mobileGwOptions.includes(selectedTableGw)) {
+      setSelectedTableGw(mobileGwOptions[0]);
+    }
+  }, [mobileGwOptions, selectedTableGw]);
 
   const totalByUser = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -493,30 +516,25 @@ export default function LeaderboardMatrixPage() {
   }, [players, pointsByUserByGw, selectedTableGw, totalByUser]);
 
   const topViewRankByUid = useMemo(() => {
-    const ranks: Record<string, number> = {};
-    let prevScore: number | null = null;
-    let currentRank = 0;
-    rankedByTopView.forEach((p) => {
-      const score = scoreForTopView(p.uid);
-      if (prevScore === null || score !== prevScore) currentRank += 1;
-      ranks[p.uid] = currentRank;
-      prevScore = score;
-    });
-    return ranks;
+    return assignCompetitionRanks(
+      rankedByTopView,
+      (p) => scoreForTopView(p.uid),
+      (p) => p.uid,
+    );
   }, [rankedByTopView, scoreForTopView]);
 
   const mobileGwRankByUid = useMemo(() => {
-    const ranks: Record<string, number> = {};
-    let prevScore: number | null = null;
-    let currentRank = 0;
-    mobileGwSortedPlayers.forEach((p) => {
-      const score = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
-      if (prevScore === null || score !== prevScore) currentRank += 1;
-      ranks[p.uid] = currentRank;
-      prevScore = score;
-    });
-    return ranks;
+    return assignCompetitionRanks(
+      mobileGwSortedPlayers,
+      (p) => pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0,
+      (p) => p.uid,
+    );
   }, [mobileGwSortedPlayers, pointsByUserByGw, selectedTableGw]);
+
+  const mobileSelectedGwIndex = useMemo(
+    () => mobileGwOptions.findIndex((gw) => gw === selectedTableGw),
+    [mobileGwOptions, selectedTableGw],
+  );
 
   const gwRankByUid = useMemo(() => {
     const byGw: Record<number, Record<string, number>> = {};
@@ -530,15 +548,11 @@ export default function LeaderboardMatrixPage() {
         if (byTotal !== 0) return byTotal;
         return a.displayName.localeCompare(b.displayName);
       });
-      byGw[gw] = {};
-      let prevScore: number | null = null;
-      let currentRank = 0;
-      ranked.forEach((p) => {
-        const score = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
-        if (prevScore === null || score !== prevScore) currentRank += 1;
-        byGw[gw][p.uid] = currentRank;
-        prevScore = score;
-      });
+      byGw[gw] = assignCompetitionRanks(
+        ranked,
+        (p) => pointsByUserByGw?.[p.uid]?.[gw] ?? 0,
+        (p) => p.uid,
+      );
     }
     return byGw;
   }, [weeks, players, pointsByUserByGw, totalByUser]);
@@ -768,8 +782,21 @@ export default function LeaderboardMatrixPage() {
         >
           <div className="flex items-center justify-between gap-2">
             <button
-              onClick={() => setSelectedTableGw((g) => Math.max(1, g - 1))}
-              disabled={selectedTableGw <= 1}
+              onClick={() => {
+                if (!mobileGwOptions.length) return;
+                const currentIndex =
+                  mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
+                const nextIndex = Math.min(
+                  mobileGwOptions.length - 1,
+                  currentIndex + 1,
+                );
+                setSelectedTableGw(mobileGwOptions[nextIndex]);
+              }}
+              disabled={
+                !mobileGwOptions.length ||
+                mobileSelectedGwIndex < 0 ||
+                mobileSelectedGwIndex >= mobileGwOptions.length - 1
+              }
               className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
             >
               <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
@@ -784,23 +811,28 @@ export default function LeaderboardMatrixPage() {
                 onChange={(e) => setSelectedTableGw(Number(e.target.value))}
                 className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
-                {Array.from({ length: currentGw }, (_, i) => currentGw - i).map(
-                  (gw) => (
-                    <option key={gw} value={gw}>
-                      GW{gw} Scores
-                    </option>
-                  ),
-                )}
+                {mobileGwOptions.map((gw) => (
+                  <option key={gw} value={gw}>
+                    GW{gw} Scores
+                  </option>
+                ))}
               </select>
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
                 ▼
               </span>
             </div>
             <button
-              onClick={() =>
-                setSelectedTableGw((g) => Math.min(currentGw, g + 1))
+              onClick={() => {
+                if (!mobileGwOptions.length) return;
+                const currentIndex =
+                  mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
+                const nextIndex = Math.max(0, currentIndex - 1);
+                setSelectedTableGw(mobileGwOptions[nextIndex]);
+              }}
+              disabled={
+                !mobileGwOptions.length ||
+                mobileSelectedGwIndex <= 0
               }
-              disabled={selectedTableGw >= currentGw}
               className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
             >
               <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />

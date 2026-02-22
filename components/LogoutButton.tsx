@@ -54,7 +54,7 @@ export default function LogoutButton() {
         onClose={() => (busy ? null : setConfirmOpen(false))}
         portal
         lockBackground
-        zIndexClassName="z-50"
+        zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
         panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
       >

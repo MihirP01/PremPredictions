@@ -130,7 +130,7 @@ export async function GET(req) {
   // Date-based GW rule:
   // - Determine the next upcoming matchday by earliest kickoff > now.
   // - Current GW is the previous matchday until its rollover time:
-  //   09:00 UTC on the day after that GW's last kickoff.
+  //   00:01 UTC on the day after that GW's last kickoff.
   // - This prevents isolated rescheduled fixtures in future GWs from
   //   incorrectly jumping the active GW.
   let nextOpen = null;
@@ -147,7 +147,7 @@ export async function GET(req) {
     } else {
       const rolloverAt = new Date(prev.latestKickoffMs);
       rolloverAt.setUTCDate(rolloverAt.getUTCDate() + 1);
-      rolloverAt.setUTCHours(9, 0, 0, 0);
+      rolloverAt.setUTCHours(0, 1, 0, 0);
       nextOpen = nowMs >= rolloverAt.getTime() ? nextUpcomingMd : prevMd;
     }
   } else if (matchdays.length > 0) {
@@ -158,7 +158,7 @@ export async function GET(req) {
     } else {
       const rolloverAt = new Date(latest.latestKickoffMs);
       rolloverAt.setUTCDate(rolloverAt.getUTCDate() + 1);
-      rolloverAt.setUTCHours(9, 0, 0, 0);
+      rolloverAt.setUTCHours(0, 1, 0, 0);
       nextOpen = nowMs >= rolloverAt.getTime() ? latestMd + 1 : latestMd;
     }
   } else {
@@ -173,7 +173,7 @@ export async function GET(req) {
       debug: {
         window: { dateFrom: fmt(from), dateTo: fmt(to) },
         matchdaysSeen: matchdays.length,
-        selectedBy: "next-upcoming-then-rollover-0900-utc",
+        selectedBy: "next-upcoming-then-rollover-0001-utc",
       },
     },
     { headers: { "Cache-Control": "no-store" } },

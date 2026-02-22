@@ -25,7 +25,7 @@ export function ThemedModal({
       onClose={onClose}
       portal
       lockBackground
-      zIndexClassName="z-50"
+      zIndexClassName="z-[90]"
       overlayClassName="bg-black/50 backdrop-blur-sm"
       panelClassName={`w-full ${maxWidthClassName} rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4 ${panelClassName}`.trim()}
     >

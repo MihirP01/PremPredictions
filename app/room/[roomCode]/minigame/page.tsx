@@ -14,12 +14,15 @@ import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { resolveDisplayName } from "@/lib/displayNameResolver";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -28,17 +31,8 @@ import {
 import { getCountdownParts, LOCK_WINDOW_MS } from "./lock-utils";
 
 type LobbyPlayer = { uid: string; displayName: string };
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
-type UserDoc = { displayName?: string; nickName?: string };
 type LobbyDoc = { displayName?: string };
 type GameStateDoc = { state?: string };
-type RoomDoc = {
-  leaderUid?: string;
-  settings?: {
-    sameResultLock?: boolean;
-    gameModeStyle?: "round_robin" | "sprint" | "captain";
-  };
-};
 type Fixture = { kickoff?: string };
 
 function formatUnlockDateParts(ms: number) {
@@ -117,54 +111,35 @@ export default function MiniGameLobbyPage() {
   // Track current lobby doc ref so we can reliably remove it on back/logout/unmount
   const lobbyRefRef = useRef<ReturnType<typeof doc> | null>(null);
 
-  // 1) Auth guard + load room leader
+  // 1) Auth guard
   useEffect(() => {
     if (loading) return;
     if (!user) {
       router.replace("/");
-      return;
     }
-
-    let cancelled = false;
-
-    (async () => {
-      const roomSnap = await getDoc(doc(db, "rooms", roomCode));
-      if (!roomSnap.exists()) {
-        router.replace("/room-gate");
-        return;
-      }
-      if (!cancelled) {
-        const roomData = roomSnap.data() as RoomDoc | undefined;
-        setLeaderUid(roomData?.leaderUid ?? null);
-        const sameResultLock = roomData?.settings?.sameResultLock !== false;
-        setGameModeStyle(
-          roomData?.settings?.gameModeStyle ??
-            (sameResultLock ? "round_robin" : "sprint"),
-        );
-        setAllowIdenticalPicks(
-          (roomData?.settings?.gameModeStyle ?? (sameResultLock ? "round_robin" : "sprint")) ===
-            "sprint"
-            ? true
-            : !sameResultLock,
-        );
-      }
-    })().catch(() => setError("Failed to load room."));
-
-    return () => {
-      cancelled = true;
-    };
   }, [loading, user, router, roomCode]);
 
-  // 2) Load current gameweek (lobby is tied to GW)
+  // 2) Load current gameweek + initial room mode from bootstrap (lobby is tied to GW)
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const data = await getCurrentGameweekCached();
+      const data = await getRoomBootstrapCached(roomCode);
       const gw = Number(data.currentGameweek ?? 1);
       if (!cancelled) {
         setGameweek(Number.isFinite(gw) ? gw : 1);
         setSeasonKey(String(data.seasonKey || ""));
+        setLeaderUid(data.leaderUid ?? null);
+        const style = data.gameModeStyle ?? "sprint";
+        setGameModeStyle(style);
+        setAllowIdenticalPicks(style === "sprint" ? true : Boolean(data.allowIdenticalPicks));
+        const st = String(data.gameState || "").trim().toUpperCase();
+        if (!routedRef.current && (st === "DRAFT" || st === "GOLDEN" || st === "REVEAL")) {
+          routedRef.current = true;
+          if (st === "DRAFT") router.replace(`/room/${roomCode}/minigame/play`);
+          else if (st === "GOLDEN") router.replace(`/room/${roomCode}/minigame/golden`);
+          else router.replace(`/room/${roomCode}/minigame/reveal`);
+        }
       }
     })().catch(() => {
       if (!cancelled) {
@@ -176,47 +151,36 @@ export default function MiniGameLobbyPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roomCode, router]);
 
-  // 3) Resolve best display name (don’t rely on auth.user.displayName)
-  // Priority:
-  //   a) rooms/{roomCode}/players/{uid}.displayName
-  //   b) users/{uid}.displayName
-  //   c) email prefix
+  // 2b) Live room meta updates (leader + mode + lock setting)
+  useEffect(() => {
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => {
+        if (!roomMeta) return;
+        setLeaderUid(roomMeta.leaderUid);
+        const style = roomMeta.settings.gameModeStyle;
+        setGameModeStyle(style);
+        setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+      },
+      () => {},
+    );
+  }, [roomCode]);
+
+  // 3) Resolve best display name for lobby presence writes.
   useEffect(() => {
     if (!user) return;
 
     let cancelled = false;
 
     (async () => {
-      const emailFallback = user.email?.split("@")[0] || "Player";
-
-      try {
-        const roomPlayerSnap = await getDoc(
-          doc(db, "rooms", roomCode, "players", user.uid),
-        );
-        if (roomPlayerSnap.exists()) {
-          const roomData = roomPlayerSnap.data() as UserDoc;
-          const dn = String(roomData?.nickName || "").trim() || roomData?.displayName;
-          if (!cancelled && dn) {
-            setMyDisplayName(dn);
-            return;
-          }
-        }
-      } catch {}
-
-      try {
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        if (userSnap.exists()) {
-          const dn = (userSnap.data() as UserDoc)?.displayName;
-          if (!cancelled && dn) {
-            setMyDisplayName(dn);
-            return;
-          }
-        }
-      } catch {}
-
-      if (!cancelled) setMyDisplayName(emailFallback);
+      const dn = await resolveDisplayName({
+        uid: user.uid,
+        email: user.email,
+        roomCode,
+      });
+      if (!cancelled) setMyDisplayName(dn);
     })();
 
     return () => {
@@ -229,16 +193,8 @@ export default function MiniGameLobbyPage() {
     let cancelled = false;
 
     (async () => {
-      const res = await fetch(
-        `/api/fixtures?gameweek=${gameweek}&seasonKey=${seasonKey}`,
-        {
-          cache: "no-store",
-        },
-      );
-      const data = await res.json().catch(() => ({}));
-      const fixtures: Fixture[] = Array.isArray(data?.fixtures)
-        ? data.fixtures
-        : [];
+      const data = await getFixturesCached(gameweek, seasonKey);
+      const fixtures: Fixture[] = Array.isArray(data?.fixtures) ? data.fixtures : [];
 
       const firstKickoff = fixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
@@ -256,8 +212,8 @@ export default function MiniGameLobbyPage() {
         );
         if (Number.isFinite(lastKickoff ?? NaN)) {
           const unlock = new Date(lastKickoff as number);
-          unlock.setDate(unlock.getDate() + 1);
-          unlock.setHours(9, 0, 0, 0);
+          unlock.setUTCDate(unlock.getUTCDate() + 1);
+          unlock.setUTCHours(0, 1, 0, 0);
           setUnlockAtMs(unlock.getTime());
         } else {
           setUnlockAtMs(null);
@@ -364,16 +320,33 @@ export default function MiniGameLobbyPage() {
   // 5b) Listen to total room players so start is allowed only when all are in lobby
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, "rooms", roomCode, "players"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: LobbyPlayer[] = snap.docs.map((d) => {
-          const data = d.data() as RoomPlayerDoc;
-          const nick = String(data.nickName || "").trim();
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cancelled || !cached.length) return;
+        const seeded: LobbyPlayer[] = cached
+          .map((p) => ({
+            uid: p.uid,
+            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+          }))
+          .sort((a, b) =>
+            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          );
+        setRoomPlayers(seeded);
+        setRoomPlayersCount(seeded.length);
+      } catch {
+        // ignore cache seed errors
+      }
+    })();
+    const unsub = subscribeRoomPlayers(
+      roomCode,
+      (players) => {
+        const list: LobbyPlayer[] = players.map((player) => {
+          const nick = String(player.nickName || "").trim();
           return {
-            uid: d.id,
-            displayName: nick || data.displayName || "Player",
+            uid: player.uid,
+            displayName: nick || player.displayName || "Player",
           };
         });
         list.sort((a, b) =>
@@ -383,11 +356,13 @@ export default function MiniGameLobbyPage() {
         setRoomPlayersCount(list.length);
       },
       () => {
-        setRoomPlayers([]);
-        setRoomPlayersCount(0);
+        setError("Failed to load room players.");
       },
     );
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [user, roomCode]);
 
   // 6) Auto-redirect everyone when the leader starts the game
@@ -846,7 +821,7 @@ export default function MiniGameLobbyPage() {
         onClose={() => setModeGuideOpen(false)}
         portal
         lockBackground
-        zIndexClassName="z-50"
+        zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
         panelClassName="w-full max-w-lg rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
       >
@@ -904,7 +879,7 @@ export default function MiniGameLobbyPage() {
         onClose={() => setModeSettingsOpen(false)}
         portal
         lockBackground
-        zIndexClassName="z-50"
+        zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
         panelClassName="w-full max-w-md rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
       >

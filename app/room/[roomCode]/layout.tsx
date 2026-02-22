@@ -7,6 +7,15 @@ import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
+import {
+  getRoomBootstrapCached,
+  refreshRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getRoomGameStateCached } from "@/lib/gameStateClient";
+import { getGameDataCached } from "@/lib/gameDataClient";
+import { getTableCached } from "@/lib/tableClient";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 
 type AccentTheme = {
   hex: string;
@@ -96,8 +105,19 @@ export default function RoomScopedLayout({
     [params.roomCode],
   );
   const [accentKey, setAccentKey] = useState<string>("teal");
+  const [showBootOverlay, setShowBootOverlay] = useState(false);
+  const [bootHint, setBootHint] = useState<{
+    seasonKey: string;
+    gw: number;
+    gameState: string;
+  } | null>(null);
   const redirectedRef = useRef(false);
   const initialVarsRef = useRef<{ bg: string; solid: string } | null>(null);
+  const bootedRef = useRef(false);
+  const lastWarmAtRef = useRef(0);
+  const warmInFlightRef = useRef<Promise<void> | null>(null);
+  const prefetchedKeyRef = useRef<string>("");
+  const idleTasksRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (loading || !user || !roomCode) return;
@@ -139,6 +159,128 @@ export default function RoomScopedLayout({
     });
     return () => unsub();
   }, [roomCode]);
+
+  // Phase 1 bootstrap:
+  // warm shared current-GW cache once on room open, and refresh on app resume.
+  useEffect(() => {
+    if (!roomCode) return;
+    let cancelled = false;
+    let overlayTimer: number | null = null;
+
+    const warm = async (force = false) => {
+      if (warmInFlightRef.current) {
+        await warmInFlightRef.current;
+        return;
+      }
+      if (!force && Date.now() - lastWarmAtRef.current < 30_000) return;
+      if (force && Date.now() - lastWarmAtRef.current < 8_000) return;
+      if (!bootedRef.current) {
+        overlayTimer = window.setTimeout(() => {
+          if (!cancelled) setShowBootOverlay(true);
+        }, 150);
+      }
+      const run = (async () => {
+        try {
+          const bootstrap = force
+            ? await refreshRoomBootstrapCached(roomCode)
+            : await getRoomBootstrapCached(roomCode);
+          // Warm current-GW caches for faster navigation between tabs.
+          if (bootstrap?.seasonKey && Number.isFinite(bootstrap?.currentGameweek)) {
+            const gw = bootstrap.currentGameweek;
+            const season = bootstrap.seasonKey;
+            const gameState = String(bootstrap.gameState || "").trim().toUpperCase();
+            if (!cancelled) setBootHint({ seasonKey: season, gw, gameState });
+            // Critical prewarm first (fast first render/nav)
+            void getFixturesCached(gw, season).catch(() => {});
+            void getRoomGameStateCached(
+              roomCode,
+              season,
+              gw,
+            ).catch(() => {});
+
+            const scheduleIdle = (fn: () => void) => {
+              const w = window as Window & {
+                requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+              };
+              if (w.requestIdleCallback) {
+                const id = w.requestIdleCallback(fn, { timeout: 1200 });
+                idleTasksRef.current.push(id);
+                return;
+              }
+              const id = window.setTimeout(fn, 180);
+              idleTasksRef.current.push(id);
+            };
+
+            // Non-critical prewarm on idle to reduce startup jank
+            scheduleIdle(() => {
+              void getGameDataCached(roomCode, season, gw).catch(() => {});
+              void getTableCached(season).catch(() => {});
+              void getRoomPlayersCached(roomCode).catch(() => {});
+            });
+          }
+          lastWarmAtRef.current = Date.now();
+        } catch {
+          // no-op; pages still fetch directly as fallback
+        } finally {
+          bootedRef.current = true;
+          if (overlayTimer != null) window.clearTimeout(overlayTimer);
+          if (!cancelled) setShowBootOverlay(false);
+        }
+      })();
+      warmInFlightRef.current = run;
+      await run;
+      if (warmInFlightRef.current === run) warmInFlightRef.current = null;
+    };
+
+    void warm(false);
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void warm(true);
+    };
+    const onFocus = () => {
+      void warm(true);
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      if (overlayTimer != null) window.clearTimeout(overlayTimer);
+      const w = window as Window & {
+        cancelIdleCallback?: (id: number) => void;
+      };
+      idleTasksRef.current.forEach((id) => {
+        if (w.cancelIdleCallback) w.cancelIdleCallback(id);
+        else window.clearTimeout(id);
+      });
+      idleTasksRef.current = [];
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [roomCode]);
+
+  // Phase 17: route prefetch from bootstrap hint for snappier first nav taps.
+  useEffect(() => {
+    if (!roomCode || !bootHint?.seasonKey || !Number.isFinite(bootHint.gw)) return;
+    const key = `${roomCode}:${bootHint.seasonKey}:${bootHint.gw}:${bootHint.gameState}`;
+    if (prefetchedKeyRef.current === key) return;
+    prefetchedKeyRef.current = key;
+
+    const base = `/room/${roomCode}`;
+    const predictionsHref =
+      bootHint.gameState === "REVEAL" ? `${base}/minigame/reveal` : `${base}/minigame`;
+    const routes = [
+      `${base}`,
+      `${base}/fixtures`,
+      predictionsHref,
+      `${base}/leaderboard`,
+      `${base}/stats`,
+    ];
+    routes.forEach((href) => {
+      void router.prefetch(href);
+    });
+  }, [bootHint, roomCode, router]);
 
   const accent = ACCENT_THEME[accentKey] || ACCENT_THEME.teal;
   const hideBottomNav =
@@ -191,6 +333,13 @@ export default function RoomScopedLayout({
         } as React.CSSProperties
       }
     >
+      {showBootOverlay ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="rounded-xl border border-subtle bg-surface px-4 py-3 text-sm text-foreground shadow-card">
+            Getting app ready...
+          </div>
+        </div>
+      ) : null}
       {children}
       <RoomBottomNav />
       <ScrollToTopButton />

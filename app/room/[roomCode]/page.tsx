@@ -12,6 +12,8 @@ import TopActionRow from "../../../components/TopActionRow";
 import { useAuth } from "../../../components/AuthProvider";
 import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../components/RoomSettingsMenu";
 import SpecialBreak from "../../../components/SpecialBreak";
+import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
+import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -20,8 +22,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
@@ -32,21 +32,7 @@ type Player = {
   nickName?: string;
   role: "leader" | "member";
 };
-type PlayerDoc = {
-  displayName?: string;
-  nickName?: string;
-  role?: "leader" | "member";
-};
 type MemberRoom = { roomCode: string; role: "leader" | "member" };
-type RoomDoc = {
-  leaderUid?: string;
-  settings?: {
-    sameResultLock?: boolean;
-    themeAccent?: string;
-    gameModeStyle?: "round_robin" | "sprint" | "captain";
-    hasPassword?: boolean;
-  };
-};
 
 const THEME_ACCENT_OPTIONS = [
   { value: "teal", label: "Teal" },
@@ -121,48 +107,29 @@ export default function RoomPage() {
     let unsubPlayers: (() => void) | null = null;
 
     (async () => {
-      // ensure room exists
-      const roomSnap = await getDoc(doc(db, "rooms", roomCode));
-      if (!roomSnap.exists()) {
-        router.replace("/room-gate");
-        return;
-      }
-      const roomData = roomSnap.data() as RoomDoc;
-      setLeaderUid(roomData?.leaderUid ?? null);
-      const sameResultLockValue = roomData?.settings?.sameResultLock !== false;
-      const style =
-        roomData?.settings?.gameModeStyle ??
-        (sameResultLockValue ? "round_robin" : "sprint");
-      setGameModeStyle(style);
-      setAllowIdenticalPicks(
-        style === "sprint" ? true : !sameResultLockValue,
-      );
-      setThemeAccent(String(roomData?.settings?.themeAccent || "teal"));
-      setHasPassword(Boolean(roomData?.settings?.hasPassword));
-
-      // Guard: user must already be a room member (set via room-gate flow)
-      const memberSnap = await getDoc(
-        doc(db, "rooms", roomCode, "players", user.uid),
-      );
-      if (!memberSnap.exists()) {
-        setError("You are not a member of this room.");
-        router.replace("/room-gate");
-        return;
-      }
-
       // players listener
-      const q = query(collection(db, "rooms", roomCode, "players"));
-      unsubPlayers = onSnapshot(q, (snap) => {
-        const list: Player[] = snap.docs
-          .map((d) => {
-            const data = d.data() as PlayerDoc;
-            return {
-              uid: d.id,
-              displayName: data.displayName || "Player",
-              nickName: typeof data.nickName === "string" ? data.nickName.trim() : "",
-              role: data.role || "member",
-            };
-          })
+      try {
+        const cached = await getRoomPlayersCached(roomCode);
+        if (cached.length) {
+          const seeded: Player[] = cached.map((p) => ({
+            uid: p.uid,
+            displayName: p.displayName || "Player",
+            nickName: typeof p.nickName === "string" ? p.nickName.trim() : "",
+            role: p.role || "member",
+          }));
+          setPlayers(seeded);
+        }
+      } catch {
+        // no-op
+      }
+      unsubPlayers = subscribeRoomPlayers(roomCode, (livePlayers) => {
+        const list: Player[] = livePlayers
+          .map((player) => ({
+            uid: player.uid,
+            displayName: player.displayName || "Player",
+            nickName: typeof player.nickName === "string" ? player.nickName.trim() : "",
+            role: player.role || "member",
+          }))
           .sort((a, b) =>
             a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
           );
@@ -223,6 +190,22 @@ export default function RoomPage() {
       window.scrollTo(0, scrollY);
     };
   }, [roomRulesOpen]);
+
+  useEffect(() => {
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => {
+        if (!roomMeta) return;
+        setLeaderUid(roomMeta.leaderUid);
+        const style = roomMeta.settings.gameModeStyle;
+        setGameModeStyle(style);
+        setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+        setThemeAccent(roomMeta.settings.themeAccent);
+        setHasPassword(roomMeta.settings.hasPassword);
+      },
+      () => {},
+    );
+  }, [roomCode]);
 
   const isLeader = !!user && leaderUid === user.uid;
   const me = players.find((p) => p.uid === user?.uid) ?? null;

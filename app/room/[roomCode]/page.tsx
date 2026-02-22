@@ -153,15 +153,19 @@ export default function RoomPage() {
       // players listener
       const q = query(collection(db, "rooms", roomCode, "players"));
       unsubPlayers = onSnapshot(q, (snap) => {
-        const list: Player[] = snap.docs.map((d) => {
-          const data = d.data() as PlayerDoc;
-          return {
-            uid: d.id,
-            displayName: data.displayName || "Player",
-            nickName: typeof data.nickName === "string" ? data.nickName.trim() : "",
-            role: data.role || "member",
-          };
-        });
+        const list: Player[] = snap.docs
+          .map((d) => {
+            const data = d.data() as PlayerDoc;
+            return {
+              uid: d.id,
+              displayName: data.displayName || "Player",
+              nickName: typeof data.nickName === "string" ? data.nickName.trim() : "",
+              role: data.role || "member",
+            };
+          })
+          .sort((a, b) =>
+            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          );
         setPlayers(list);
       });
     })().catch(() => setError("Failed to load room."));
@@ -594,11 +598,9 @@ export default function RoomPage() {
     setNicknameExpanded((prev) => !prev);
   }
 
-  const sortedPlayers = [...players].sort((a, b) => {
-    if (a.role === "leader") return -1;
-    if (b.role === "leader") return 1;
-    return a.displayName.localeCompare(b.displayName);
-  });
+  const sortedPlayers = [...players].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+  );
   const resultLockSubtext =
     gameModeStyle === "sprint"
       ? "Sprint • Allow Identical Picks OFF"

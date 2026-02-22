@@ -107,6 +107,19 @@ function parseOutcome(score?: string | null) {
   return "D";
 }
 
+function displayResult(status: string, actual: string | null) {
+  if (actual) return actual.replace("-", " – ");
+  const s = String(status || "").toUpperCase();
+  const inPlay =
+    s.includes("IN_PLAY") ||
+    s.includes("LIVE") ||
+    s.includes("PAUSED") ||
+    s === "1H" ||
+    s === "2H" ||
+    s === "HT";
+  return inPlay ? "LIVE" : "TBD";
+}
+
 function asDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -297,14 +310,18 @@ export default function FixturesPage() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const list: Player[] = snap.docs.map((d) => {
-          const data = d.data() as RoomPlayerDoc;
-          const nick = String(data.nickName || "").trim();
-          return {
-            uid: d.id,
-            displayName: nick || data.displayName || "Player",
-          };
-        });
+        const list: Player[] = snap.docs
+          .map((d) => {
+            const data = d.data() as RoomPlayerDoc;
+            const nick = String(data.nickName || "").trim();
+            return {
+              uid: d.id,
+              displayName: nick || data.displayName || "Player",
+            };
+          })
+          .sort((a, b) =>
+            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          );
         setPlayers(list);
       },
       (e) =>
@@ -530,7 +547,7 @@ export default function FixturesPage() {
   }, []);
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
       <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         {/* Header */}
@@ -637,16 +654,16 @@ export default function FixturesPage() {
             />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted">
-            <div className="font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
+            <div className="key-chip key-chip-result font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
               Correct Result
             </div>
-            <div className="font-display rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
+            <div className="key-chip key-chip-exact font-display rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
               Exact Score
             </div>
-            <div className="font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-2 py-1 text-center">
+            <div className="key-chip key-chip-golden-result font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-2 py-1 text-center">
               Golden + Result
             </div>
-            <div className="font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-2 py-1 text-center">
+            <div className="key-chip key-chip-golden-exact font-display rounded-md border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-2 py-1 text-center">
               Golden + Exact
             </div>
           </div>
@@ -660,7 +677,7 @@ export default function FixturesPage() {
 
         {/* Fixtures */}
         <SpecialBreak />
-        <div className="flex flex-wrap justify-center gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] items-start">
+        <div className="grid items-start gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {isLoading && (
             <div className="col-span-full text-center text-muted">Loading fixtures…</div>
           )}
@@ -692,13 +709,10 @@ export default function FixturesPage() {
               const actual = f.result ?? null;
               const kickoffParts = formatKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
-              const mobileOddPredictions = players.length % 2 !== 0;
-              const desktopOddPredictions = players.length % 3 !== 0;
-
               return (
                 <div
                   key={f.fixtureId}
-                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full min-[430px]:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
                   style={{
                     animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                     animationDuration: "520ms",
@@ -758,47 +772,45 @@ export default function FixturesPage() {
                           <span className="font-display font-semibold">{kickoffParts.time}</span>
                         </div>
                       </div>
-                      <div className="sm:hidden space-y-1">
+                      <div className="sm:hidden">
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                          <div className="flex justify-center">
+                          <div className="flex flex-col items-center text-center min-w-0">
                             <TeamBadge
                               name={f.home.name}
                               tla={f.home.tla}
                               shortName={f.home.shortName}
                               badge={f.home.badge}
                             />
+                            <TeamLabel
+                              name={f.home.name}
+                              tla={f.home.tla}
+                              shortName={f.home.shortName}
+                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                              fullNameWindowPx={68}
+                            />
                           </div>
                           <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
                             vs
                           </span>
-                          <div className="flex justify-center">
+                          <div className="flex flex-col items-center text-center min-w-0">
                             <TeamBadge
                               name={f.away.name}
                               tla={f.away.tla}
                               shortName={f.away.shortName}
                               badge={f.away.badge}
                             />
+                            <TeamLabel
+                              name={f.away.name}
+                              tla={f.away.tla}
+                              shortName={f.away.shortName}
+                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                              fullNameWindowPx={68}
+                            />
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 justify-items-center">
-                          <TeamLabel
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                            fullNameWindowPx={68}
-                          />
-                          <TeamLabel
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                            fullNameWindowPx={68}
-                          />
                         </div>
                       </div>
 
@@ -814,10 +826,10 @@ export default function FixturesPage() {
                             name={f.home.name}
                             tla={f.home.tla}
                             shortName={f.home.shortName}
-                            wrapperClassName="w-full"
-                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full"
-                            fullNameClassName="font-display text-[10px] text-muted w-full"
-                            fullNameWindowPx={null}
+                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                            fullNameWindowPx={88}
                           />
                         </div>
                         <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
@@ -834,10 +846,10 @@ export default function FixturesPage() {
                             name={f.away.name}
                             tla={f.away.tla}
                             shortName={f.away.shortName}
-                            wrapperClassName="w-full"
-                            abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1rem)] font-semibold text-foreground w-full"
-                            fullNameClassName="font-display text-[10px] text-muted w-full"
-                            fullNameWindowPx={null}
+                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                            fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                            fullNameWindowPx={88}
                           />
                         </div>
                       </div>
@@ -845,7 +857,7 @@ export default function FixturesPage() {
                     <div className="text-center">
                       <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Result</div>
                       <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                        {actual ? actual.replace("-", " – ") : "TBD"}
+                        {displayResult(f.status, actual)}
                       </div>
                     </div>
                     <div className="flex items-center justify-center gap-1 text-xs text-muted">
@@ -873,17 +885,7 @@ export default function FixturesPage() {
                         No players found.
                       </div>
                     ) : (
-                      <div
-                        className={[
-                          "gap-2",
-                          mobileOddPredictions
-                            ? "flex flex-wrap justify-center"
-                            : "grid grid-cols-2",
-                          desktopOddPredictions
-                            ? "sm:flex sm:flex-wrap sm:justify-center"
-                            : "sm:grid sm:grid-cols-3",
-                        ].join(" ")}
-                      >
+                      <div className="w-full flex flex-wrap justify-center gap-2">
                         {players.map((p) => {
                           const pred =
                             picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
@@ -904,28 +906,22 @@ export default function FixturesPage() {
                             parseOutcome(predNorm) === parseOutcome(actualNorm);
 
                           const toneClass = isExact
-                            ? "bg-purple-500/20 border-purple-400/70"
+                            ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
                             : isOutcomeOnly
-                              ? "bg-emerald-500/20 border-emerald-400/70"
+                              ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
                               : "bg-surface border-teal-500";
                           const goldenToneClass =
                             isExact || isOutcomeOnly
                               ? isExact
-                                ? "bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
-                                : "bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
+                                ? "key-chip key-chip-golden-exact bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
+                                : "key-chip key-chip-golden-result bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
                               : "bg-yellow-300/10 border-yellow-300/60";
 
                           return (
                             <div
                               key={p.uid}
                               className={[
-                                "rounded-lg px-2 py-2 text-center overflow-hidden border",
-                                mobileOddPredictions
-                                  ? "basis-[calc(50%-0.25rem)]"
-                                  : "",
-                                desktopOddPredictions
-                                  ? "sm:basis-[calc(33.333%-0.5rem)]"
-                                  : "sm:basis-auto",
+                                "rounded-lg px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
                                 isGolden
                                   ? goldenToneClass
                                   : toneClass,
@@ -943,10 +939,11 @@ export default function FixturesPage() {
                               <div
                                 className={[
                                   "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums",
+                                  "whitespace-nowrap",
                                   "text-foreground",
                                 ].join(" ")}
                               >
-                                {fmtScore(pred.replace("-", " - "))}
+                                {fmtScore(pred)}
                               </div>
                             </div>
                           );

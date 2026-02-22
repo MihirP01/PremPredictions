@@ -26,6 +26,7 @@ type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type ScoreDoc = {
   uid?: string;
   points?: number;
+  breakdown?: Record<string, { pred?: string | null }>;
 };
 
 type RoomDoc = {
@@ -79,16 +80,30 @@ function fmtDateTime(d: Date) {
   });
 }
 
-function rankStyle(rank: number) {
-  if (rank === 1) return "bg-yellow-300 text-black";
-  if (rank === 2) return "bg-gray-300 text-black";
-  return "bg-amber-600 text-white";
-}
-
 function rankLabel(rank: number) {
   if (rank === 1) return "🥇";
   if (rank === 2) return "🥈";
   return "🥉";
+}
+
+function youPillClass() {
+  return "ml-1 inline-flex items-center rounded-full border border-subtle bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-muted align-middle";
+}
+
+function podiumLabel(position: number) {
+  if (position === 1) return "1st";
+  if (position === 2) return "2nd";
+  return "3rd";
+}
+
+function podiumTier(rank: number) {
+  if (rank <= 1) return "gold" as const;
+  if (rank === 2) return "silver" as const;
+  return "bronze" as const;
+}
+
+function byName(a: Player, b: Player) {
+  return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
 }
 
 export default function LeaderboardMatrixPage() {
@@ -114,7 +129,7 @@ export default function LeaderboardMatrixPage() {
     useState<Date | null>(null);
   const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [latestScoredGw, setLatestScoredGw] = useState<number | null>(null);
+  const [scoredGameweeks, setScoredGameweeks] = useState<number[]>([]);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
   const [topView, setTopView] = useState<"overall" | "current" | "previous">(
     "overall",
@@ -125,6 +140,9 @@ export default function LeaderboardMatrixPage() {
   // matrix: userUid -> gw -> points (read only from score docs)
   const [pointsByUserByGw, setPointsByUserByGw] = useState<
     Record<string, Record<number, number>>
+  >({});
+  const [hasPredByUserByGw, setHasPredByUserByGw] = useState<
+    Record<string, Record<number, boolean>>
   >({});
 
   // auth guard
@@ -209,11 +227,13 @@ export default function LeaderboardMatrixPage() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const list: Player[] = snap.docs.map((d) => {
-          const data = d.data() as RoomPlayerDoc;
-          const nick = String(data.nickName || "").trim();
-          return { uid: d.id, displayName: nick || data.displayName || "Player" };
-        });
+        const list: Player[] = snap.docs
+          .map((d) => {
+            const data = d.data() as RoomPlayerDoc;
+            const nick = String(data.nickName || "").trim();
+            return { uid: d.id, displayName: nick || data.displayName || "Player" };
+          })
+          .sort(byName);
         setPlayers(list);
       },
       (e) =>
@@ -270,9 +290,12 @@ export default function LeaderboardMatrixPage() {
     setError(null);
 
     const matrix: Record<string, Record<number, number>> = {};
+    const predMatrix: Record<string, Record<number, boolean>> = {};
     for (const p of players) {
       matrix[p.uid] = {};
+      predMatrix[p.uid] = {};
       for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
+      for (let gw = 1; gw <= currentGw; gw++) predMatrix[p.uid][gw] = false;
     }
 
     try {
@@ -289,6 +312,12 @@ export default function LeaderboardMatrixPage() {
           currentGwComputedAt = computedAt;
         }
       }
+
+      const scoredWeeks = new Set<number>(
+        scoreWeeksSnap.docs
+          .map((d) => parseGwId(d.id))
+          .filter((n): n is number => n !== null && n >= 1 && n <= currentGw),
+      );
 
       let computedGws = scoreWeeksSnap.docs
         .map((d) => parseGwId(d.id))
@@ -324,18 +353,25 @@ export default function LeaderboardMatrixPage() {
           const data = d.data() as ScoreDoc;
           const uid = String(data.uid ?? d.id);
           const points = Number(data.points ?? 0);
+          const hasPred = Object.values(data.breakdown ?? {}).some((b) =>
+            Boolean(String(b?.pred ?? "").trim()),
+          );
 
           if (!Number.isFinite(points)) continue;
           if (!matrix[uid]) continue; // only show current room players
 
           matrix[uid][gw] = points;
+          predMatrix[uid][gw] = hasPred;
         }
+        if (!usersSnap.empty) scoredWeeks.add(gw);
       }
 
+      const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
       setPointsByUserByGw(matrix);
+      setHasPredByUserByGw(predMatrix);
       setGwScoreComputedAt(currentGwComputedAt);
       setLeaderboardRefreshedAt(new Date());
-      setLatestScoredGw(computedGws.length ? computedGws[computedGws.length - 1] : null);
+      setScoredGameweeks(scoredList);
     } catch (e) {
       setError(toErrorMessage(e, "Failed to load saved scores."));
     } finally {
@@ -365,29 +401,48 @@ export default function LeaderboardMatrixPage() {
 
   const sortedPlayers = useMemo(() => {
     const list = [...players];
-    list.sort((a, b) => (totalByUser[b.uid] ?? 0) - (totalByUser[a.uid] ?? 0));
+    list.sort((a, b) => {
+      const byPoints = (totalByUser[b.uid] ?? 0) - (totalByUser[a.uid] ?? 0);
+      if (byPoints !== 0) return byPoints;
+      return byName(a, b);
+    });
     return list;
   }, [players, totalByUser]);
 
-  const medalsGw = latestScoredGw ?? currentGw;
+  const lastScoredGw = useMemo(() => {
+    const beforeCurrent = scoredGameweeks.filter((gw) => gw < currentGw);
+    if (beforeCurrent.length) return beforeCurrent[beforeCurrent.length - 1];
+    if (scoredGameweeks.length) return scoredGameweeks[scoredGameweeks.length - 1];
+    return currentGw;
+  }, [scoredGameweeks, currentGw]);
+  const medalsGw = lastScoredGw;
 
   const previousGwSortedPlayers = useMemo(() => {
     const list = [...players];
     list.sort(
       (a, b) =>
-        (pointsByUserByGw?.[b.uid]?.[medalsGw] ?? 0) -
-        (pointsByUserByGw?.[a.uid]?.[medalsGw] ?? 0),
+        (pointsByUserByGw?.[b.uid]?.[lastScoredGw] ?? 0) -
+        (pointsByUserByGw?.[a.uid]?.[lastScoredGw] ?? 0),
     );
+    list.sort((a, b) => {
+      const byPoints =
+        (pointsByUserByGw?.[b.uid]?.[lastScoredGw] ?? 0) -
+        (pointsByUserByGw?.[a.uid]?.[lastScoredGw] ?? 0);
+      if (byPoints !== 0) return byPoints;
+      return byName(a, b);
+    });
     return list;
-  }, [players, pointsByUserByGw, medalsGw]);
+  }, [players, pointsByUserByGw, lastScoredGw]);
 
   const currentGwSortedPlayers = useMemo(() => {
     const list = [...players];
-    list.sort(
-      (a, b) =>
+    list.sort((a, b) => {
+      const byPoints =
         (pointsByUserByGw?.[b.uid]?.[currentGw] ?? 0) -
-        (pointsByUserByGw?.[a.uid]?.[currentGw] ?? 0),
-    );
+        (pointsByUserByGw?.[a.uid]?.[currentGw] ?? 0);
+      if (byPoints !== 0) return byPoints;
+      return byName(a, b);
+    });
     return list;
   }, [players, pointsByUserByGw, currentGw]);
 
@@ -401,14 +456,27 @@ export default function LeaderboardMatrixPage() {
     if (topView === "previous") return previousGwSortedPlayers;
     return sortedPlayers;
   }, [topView, sortedPlayers, currentGwSortedPlayers, previousGwSortedPlayers]);
+  const topThreePlayers = useMemo(() => rankedByTopView.slice(0, 3), [rankedByTopView]);
 
   const scoreForTopView = useCallback(
     (uid: string) => {
       if (topView === "current") return pointsByUserByGw?.[uid]?.[currentGw] ?? 0;
-      if (topView === "previous") return pointsByUserByGw?.[uid]?.[medalsGw] ?? 0;
+      if (topView === "previous") return pointsByUserByGw?.[uid]?.[lastScoredGw] ?? 0;
       return totalByUser[uid] ?? 0;
     },
-    [topView, pointsByUserByGw, currentGw, medalsGw, totalByUser],
+    [topView, pointsByUserByGw, currentGw, lastScoredGw, totalByUser],
+  );
+  const hasPredForTopView = useCallback(
+    (uid: string) => {
+      if (topView === "current") return !!hasPredByUserByGw?.[uid]?.[currentGw];
+      if (topView === "previous") return !!hasPredByUserByGw?.[uid]?.[lastScoredGw];
+      return weeks.some((gw) => !!hasPredByUserByGw?.[uid]?.[gw]);
+    },
+    [topView, hasPredByUserByGw, currentGw, lastScoredGw, weeks],
+  );
+  const scoreLabel = useCallback(
+    (score: number, hasPred: boolean) => (score === 0 && hasPred ? "🦆" : String(score)),
+    [],
   );
   const mobileGwSortedPlayers = useMemo(() => {
     const list = [...players];
@@ -417,10 +485,38 @@ export default function LeaderboardMatrixPage() {
         (pointsByUserByGw?.[b.uid]?.[selectedTableGw] ?? 0) -
         (pointsByUserByGw?.[a.uid]?.[selectedTableGw] ?? 0);
       if (byGw !== 0) return byGw;
-      return (totalByUser[b.uid] ?? 0) - (totalByUser[a.uid] ?? 0);
+      const byTotal = (totalByUser[b.uid] ?? 0) - (totalByUser[a.uid] ?? 0);
+      if (byTotal !== 0) return byTotal;
+      return byName(a, b);
     });
     return list;
   }, [players, pointsByUserByGw, selectedTableGw, totalByUser]);
+
+  const topViewRankByUid = useMemo(() => {
+    const ranks: Record<string, number> = {};
+    let prevScore: number | null = null;
+    let currentRank = 0;
+    rankedByTopView.forEach((p) => {
+      const score = scoreForTopView(p.uid);
+      if (prevScore === null || score !== prevScore) currentRank += 1;
+      ranks[p.uid] = currentRank;
+      prevScore = score;
+    });
+    return ranks;
+  }, [rankedByTopView, scoreForTopView]);
+
+  const mobileGwRankByUid = useMemo(() => {
+    const ranks: Record<string, number> = {};
+    let prevScore: number | null = null;
+    let currentRank = 0;
+    mobileGwSortedPlayers.forEach((p) => {
+      const score = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
+      if (prevScore === null || score !== prevScore) currentRank += 1;
+      ranks[p.uid] = currentRank;
+      prevScore = score;
+    });
+    return ranks;
+  }, [mobileGwSortedPlayers, pointsByUserByGw, selectedTableGw]);
 
   const gwRankByUid = useMemo(() => {
     const byGw: Record<number, Record<string, number>> = {};
@@ -435,12 +531,28 @@ export default function LeaderboardMatrixPage() {
         return a.displayName.localeCompare(b.displayName);
       });
       byGw[gw] = {};
-      ranked.forEach((p, idx) => {
-        byGw[gw][p.uid] = idx + 1;
+      let prevScore: number | null = null;
+      let currentRank = 0;
+      ranked.forEach((p) => {
+        const score = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
+        if (prevScore === null || score !== prevScore) currentRank += 1;
+        byGw[gw][p.uid] = currentRank;
+        prevScore = score;
       });
     }
     return byGw;
   }, [weeks, players, pointsByUserByGw, totalByUser]);
+  const podiumSlots = useMemo(() => {
+    return [0, 1, 2].map((index) => {
+      const player = topThreePlayers[index] ?? null;
+      const rank = player ? (topViewRankByUid[player.uid] ?? index + 1) : index + 1;
+      return {
+        position: rank,
+        player,
+        tier: podiumTier(rank),
+      };
+    });
+  }, [topThreePlayers, topViewRankByUid]);
 
   async function recalcAndRefreshScores() {
     if (!user || !isLeader || !seasonKey) return;
@@ -570,15 +682,45 @@ export default function LeaderboardMatrixPage() {
             className="relative grid rounded-lg border border-teal-500 bg-surface p-1 overflow-hidden"
             buttonClassName="relative z-10 rounded-md px-2 py-2 text-xs font-semibold text-foreground transition-colors"
           />
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
-            {rankedByTopView.slice(0, 3).map((p, i) => {
-              const rank = i + 1;
+          <div className="mt-2 grid grid-cols-3 items-end gap-2">
+            {podiumSlots.map((slot, idx) => {
+              const points = slot.player ? scoreForTopView(slot.player.uid) : 0;
+              const hasPred = slot.player ? hasPredForTopView(slot.player.uid) : false;
+              const barHeight =
+                slot.tier === "gold"
+                  ? "96px"
+                  : slot.tier === "silver"
+                    ? "76px"
+                    : "58px";
+              const barToneClass =
+                slot.tier === "gold"
+                  ? "metal-glow metal-glow-gold border-yellow-400/80 bg-[linear-gradient(90deg,rgba(250,204,21,0.36)_0%,rgba(250,204,21,0.18)_100%)]"
+                  : slot.tier === "silver"
+                    ? "metal-glow metal-glow-silver border-gray-300/80 bg-[linear-gradient(90deg,rgba(209,213,219,0.34)_0%,rgba(209,213,219,0.16)_100%)]"
+                    : "metal-glow metal-glow-bronze border-amber-500/80 bg-[linear-gradient(90deg,rgba(245,158,11,0.34)_0%,rgba(245,158,11,0.16)_100%)]";
               return (
-                <div
-                  key={`${topView}-top-${p.uid}`}
-                  className={`rounded-lg px-3 py-1 text-xs font-semibold ${rankStyle(rank)}`}
-                >
-                  <span className="font-display">{rankLabel(rank)} {p.displayName} - {scoreForTopView(p.uid)}</span>
+                <div key={`podium-slot-${idx}`} className="flex flex-col items-center gap-1">
+                  <div className="w-full text-center text-xs font-semibold min-h-[28px]">
+                    {slot.player ? (
+                      <div className="font-display">
+                        {slot.player.displayName}
+                      </div>
+                    ) : (
+                      <div className="font-display text-muted">—</div>
+                    )}
+                  </div>
+                  <div
+                    className={[
+                      "w-full rounded-t-lg border transition-all duration-500 ease-out font-display text-xs font-semibold text-foreground/90 flex items-center justify-center",
+                      barToneClass,
+                    ].join(" ")}
+                    style={{ height: barHeight }}
+                  >
+                    {podiumLabel(slot.position)}
+                  </div>
+                  <div className="font-display text-sm font-semibold text-foreground min-h-[20px]">
+                    {slot.player ? scoreLabel(points, hasPred) : "—"}
+                  </div>
                 </div>
               );
             })}
@@ -603,9 +745,16 @@ export default function LeaderboardMatrixPage() {
                     className="flex items-center justify-between rounded-md border border-subtle px-2 py-1 text-sm"
                   >
                     <span className="font-display text-foreground">
-                      {i + 1}. {p.displayName}
+                      {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
+                      {user?.uid === p.uid ? (
+                        <span className={youPillClass()}>
+                          You
+                        </span>
+                      ) : null}
                     </span>
-                    <span className="font-display font-semibold text-foreground">{scoreForTopView(p.uid)}</span>
+                    <span className="font-display font-semibold text-foreground">
+                      {scoreLabel(scoreForTopView(p.uid), hasPredForTopView(p.uid))}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -658,28 +807,37 @@ export default function LeaderboardMatrixPage() {
             </button>
           </div>
           <div className="mt-3 space-y-2">
-            {mobileGwSortedPlayers.map((p, i) => {
+            {mobileGwSortedPlayers.map((p) => {
               const pts = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
-              const rankToHighlight = pts > 0 ? i + 1 : 0;
+              const hasPred = !!hasPredByUserByGw?.[p.uid]?.[selectedTableGw];
+              const rank = mobileGwRankByUid[p.uid] ?? 0;
+              const rankToHighlight = pts > 0 ? rank : 0;
               return (
                 <div
                   key={`mobile-gw-${selectedTableGw}-${p.uid}`}
                   className={[
                     "flex items-center justify-between rounded-lg border px-3 py-2",
                     rankToHighlight === 1
-                      ? "border-yellow-400/80 bg-yellow-400/15"
+                      ? "metal-glow metal-glow-gold border-yellow-400/80 bg-yellow-400/15"
                       : rankToHighlight === 2
-                        ? "border-gray-300/80 bg-gray-300/15"
+                        ? "metal-glow metal-glow-silver border-gray-300/80 bg-gray-300/15"
                         : rankToHighlight === 3
-                        ? "border-amber-500/80 bg-amber-500/15"
+                        ? "metal-glow metal-glow-bronze border-amber-500/80 bg-amber-500/15"
                         : "border-teal-500 bg-surface",
                   ].join(" ")}
                 >
                   <div className="font-display text-sm text-foreground">
-                    {i < 3 ? `${rankLabel(i + 1)} ` : ""}
+                    {rankToHighlight > 0 && rankToHighlight <= 3 ? `${rankLabel(rankToHighlight)} ` : ""}
                     {p.displayName}
+                    {user?.uid === p.uid ? (
+                      <span className={youPillClass()}>
+                        You
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="font-display text-sm font-semibold text-foreground">{pts}</div>
+                  <div className="font-display text-sm font-semibold text-foreground">
+                    {scoreLabel(pts, hasPred)}
+                  </div>
                 </div>
               );
             })}
@@ -735,11 +893,11 @@ export default function LeaderboardMatrixPage() {
                         className={[
                           "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
                           rankToHighlight === 1
-                            ? "bg-yellow-400/20 border border-yellow-400/80"
+                            ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
                             : rankToHighlight === 2
-                              ? "bg-gray-300/20 border border-gray-300/80"
+                              ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
                               : rankToHighlight === 3
-                                ? "bg-amber-500/20 border border-amber-500/80"
+                                ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
                                 : "",
                         ].join(" ")}
                       >

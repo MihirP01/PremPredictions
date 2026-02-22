@@ -3,12 +3,14 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Lock } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
+import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
@@ -348,7 +350,9 @@ export default function MiniGameLobbyPage() {
         });
 
         // Sort stable so UI doesn’t jump
-        list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        list.sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+        );
         setPlayers(list);
       },
       () => setError("Failed to listen for lobby players."),
@@ -372,7 +376,9 @@ export default function MiniGameLobbyPage() {
             displayName: nick || data.displayName || "Player",
           };
         });
-        list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        list.sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+        );
         setRoomPlayers(list);
         setRoomPlayersCount(list.length);
       },
@@ -616,89 +622,161 @@ export default function MiniGameLobbyPage() {
 
         <SectionCard className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
           <div className="font-semibold text-foreground">
-            Game Controls
+            Control Panel
           </div>
-          <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold text-foreground">Game Style</div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setModeGuideOpen(true)}
-                  className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-                >
-                  Guide
-                </button>
-                {isLeader && (
+          {!isLocked && (
+            <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-foreground">Game Style</div>
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setModeSettingsOpen(true)}
+                    onClick={() => setModeGuideOpen(true)}
                     className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
                   >
-                    Mode
+                    Guide
                   </button>
-                )}
+                  {isLeader && (
+                    <button
+                      onClick={() => setModeSettingsOpen(true)}
+                      className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                    >
+                      Mode
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="text-sm text-muted">
+                Style:{" "}
+                <span className="font-display text-foreground font-semibold">
+                  {modeLabel}
+                </span>
+              </div>
+              <div className="text-xs text-muted">
+                Allow Identical Picks:{" "}
+                <span className="font-display text-foreground">
+                  {allowIdenticalPicks ? "ON" : "OFF"}
+                </span>
               </div>
             </div>
-            <div className="text-sm text-muted">
-              Style:{" "}
-              <span className="font-display text-foreground font-semibold">
-                {modeLabel}
-              </span>
-            </div>
-            <div className="text-xs text-muted">
-              Allow Identical Picks:{" "}
-              <span className="font-display text-foreground">
-                {allowIdenticalPicks ? "ON" : "OFF"}
-              </span>
-            </div>
-          </div>
+          )}
           <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-3">
-            <div className="text-sm font-semibold text-foreground">Weekend Lock Countdown</div>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {countdownRings.map((unit) => (
-                <div key={unit.label} className="flex flex-col items-center gap-2">
-                  <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
-                    <svg
-                      className="absolute inset-0 w-full h-full -rotate-90"
-                      viewBox="0 0 80 80"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        cx="40"
-                        cy="40"
-                        r="34"
-                        fill="none"
-                        stroke="rgba(var(--room-accent-rgb), 0.2)"
-                        strokeWidth="4"
-                      />
-                      <circle
-                        cx="40"
-                        cy="40"
-                        r="34"
-                        fill="none"
-                        stroke="rgb(var(--room-accent-rgb))"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeDasharray={213.63}
-                        strokeDashoffset={
-                          213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
-                        }
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
-                        {unit.value}
+            {isLocked ? (
+              <>
+                <div className="flex items-center justify-center gap-2 text-sm font-semibold text-foreground">
+                  <Lock size={16} className="animate-pulse text-foreground" aria-hidden="true" />
+                  <span className="font-display">GW{gameweek ?? "—"} Locked</span>
+                  <Lock size={16} className="animate-pulse text-foreground" aria-hidden="true" />
+                </div>
+                <SpecialBreak />
+                <div className="text-sm text-muted text-center">
+                  Next gameweek:{" "}
+                  <span className="font-display text-foreground">
+                    GW {gameweek != null ? gameweek + 1 : "—"}
+                  </span>
+                </div>
+                {unlockAtMs != null && (
+                  <>
+                    <div className="text-sm text-muted text-center">
+                      <span className="font-display text-foreground">
+                        {(() => {
+                          const p = formatUnlockDateParts(unlockAtMs);
+                          return (
+                            <>
+                              {p.day}
+                              <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                                {p.suffix}
+                              </span>{" "}
+                              {p.monthYear} {p.time}
+                            </>
+                          );
+                        })()}
                       </span>
                     </div>
-                  </div>
-                  <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
-                    {unit.label}
-                  </div>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      {[
+                        { label: "Days", value: unlockCountdown.days, progress: Math.min((Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100, 100) },
+                        { label: "Hours", value: unlockCountdown.hours, progress: (Math.floor((unlockMsLeft / 1000 % 86400) / 3600) / 24) * 100 },
+                        { label: "Minutes", value: unlockCountdown.minutes, progress: (Math.floor((unlockMsLeft / 1000 % 3600) / 60) / 60) * 100 },
+                        { label: "Seconds", value: unlockCountdown.seconds, progress: (Math.floor(unlockMsLeft / 1000) % 60 / 60) * 100 },
+                      ].map((unit) => (
+                        <div key={`locked-${unit.label}`} className="flex flex-col items-center gap-2">
+                          <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
+                            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+                              <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(var(--room-accent-rgb), 0.2)" strokeWidth="4" />
+                              <circle
+                                cx="40"
+                                cy="40"
+                                r="34"
+                                fill="none"
+                                stroke="rgb(var(--room-accent-rgb))"
+                                strokeWidth="4"
+                                strokeLinecap="round"
+                                strokeDasharray={213.63}
+                                strokeDashoffset={213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63}
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">{unit.value}</span>
+                            </div>
+                          </div>
+                          <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">{unit.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-semibold text-foreground">Weekend Lock Countdown</div>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  {countdownRings.map((unit) => (
+                    <div key={unit.label} className="flex flex-col items-center gap-2">
+                      <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
+                        <svg
+                          className="absolute inset-0 w-full h-full -rotate-90"
+                          viewBox="0 0 80 80"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="40"
+                            cy="40"
+                            r="34"
+                            fill="none"
+                            stroke="rgba(var(--room-accent-rgb), 0.2)"
+                            strokeWidth="4"
+                          />
+                          <circle
+                            cx="40"
+                            cy="40"
+                            r="34"
+                            fill="none"
+                            stroke="rgb(var(--room-accent-rgb))"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                            strokeDasharray={213.63}
+                            strokeDashoffset={
+                              213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
+                            }
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
+                            {unit.value}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
+                        {unit.label}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
 
-          {isLeader ? (
+          {isLeader && !isLocked ? (
             <>
               <button
                 className="rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
@@ -719,42 +797,9 @@ export default function MiniGameLobbyPage() {
                   Need at least 2 players to play the mini-game.
                 </div>
               )}
-              {isLocked && (
-                <div className="text-xs text-muted space-y-1">
-                  <div>Deadline missed for this GW. Mini-game is locked.</div>
-                  <div>
-                    Next gameweek:{" "}
-                    <span className="font-display text-foreground">
-                      GW {gameweek != null ? gameweek + 1 : "—"}
-                    </span>
-                  </div>
-                  {unlockAtMs != null && (
-                    <>
-                      <div>
-                        Next gameweek unlock:{" "}
-                        <span className="font-display text-foreground">
-                          {(() => {
-                            const p = formatUnlockDateParts(unlockAtMs);
-                            return (
-                              <>
-                                {p.day}
-                                <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                                  {p.suffix}
-                                </span>{" "}
-                                {p.monthYear} {p.time}
-                              </>
-                            );
-                          })()}
-                        </span>
-                      </div>
-                      <div className="font-display text-foreground">
-                        [{unlockCountdown.days}d] [{unlockCountdown.hours}h] [{unlockCountdown.minutes}m] [{unlockCountdown.seconds}s]
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
             </>
+          ) : isLocked ? (
+            <div className="text-sm text-muted text-center">Missed deadline for this gameweek.</div>
           ) : (
             <div className="text-sm text-muted">
               Waiting for the leader to start once everyone is ready…
@@ -784,7 +829,10 @@ export default function MiniGameLobbyPage() {
                       {p.uid === leaderUid && (
                         <StatusPill label="Leader" tone="neutral" />
                       )}
-                      <StatusPill label={inLobby ? "Ready" : "Waiting"} tone={inLobby ? "ready" : "waiting"} />
+                      <StatusPill
+                        label={isLocked ? "Missed" : inLobby ? "Ready" : "Waiting"}
+                        tone={isLocked ? "waiting" : inLobby ? "ready" : "waiting"}
+                      />
                     </div>
                   </div>
                 );

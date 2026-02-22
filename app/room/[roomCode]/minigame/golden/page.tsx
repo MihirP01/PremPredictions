@@ -331,7 +331,7 @@ export default function GoldenPage() {
   if (loading || !user) return null;
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
         <div className="text-sm text-muted">Loading golden…</div>
       </div>
@@ -340,7 +340,7 @@ export default function GoldenPage() {
 
   if (String(game.state).toUpperCase() !== "GOLDEN") {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
         <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
           <div className="text-lg font-semibold text-foreground">
@@ -379,7 +379,7 @@ export default function GoldenPage() {
   const isLocked = false;
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
       <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-start justify-between gap-3">
@@ -480,7 +480,7 @@ export default function GoldenPage() {
 	                  </button>
 	                </label>
 	              </div>
-	              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 items-start">
+	              <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 	              {orderedFixtureIds.map((fid, idx) => {
 	                const f = fixtureMap.get(fid);
 	                const myScore = myPicksByFixture[fid];
@@ -507,7 +507,7 @@ export default function GoldenPage() {
                 return (
                   <div
                     key={fid}
-                    className="fixture-card-enter space-y-2 w-full min-[430px]:w-[calc(50%-0.375rem)] lg:w-[calc(33.333%-0.67rem)] xl:w-[calc(25%-0.75rem)]"
+                    className="fixture-card-enter space-y-2 w-full"
                     style={{
                       animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
                       animationDuration: "520ms",
@@ -572,47 +572,45 @@ export default function GoldenPage() {
 	                      <div>
 	                        {f ? (
                             <>
-                              <div className="sm:hidden space-y-1">
+                              <div className="sm:hidden">
                                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                                  <div className="flex justify-center">
+                                  <div className="flex flex-col items-center text-center min-w-0">
                                     <TeamBadge
                                       name={f.home.name}
                                       tla={f.home.tla}
                                       shortName={f.home.shortName}
                                       badge={f.home.badge}
                                     />
+                                    <TeamLabel
+                                      name={f.home.name}
+                                      tla={f.home.tla}
+                                      shortName={f.home.shortName}
+                                      wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                      abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                      fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                      fullNameWindowPx={68}
+                                    />
                                   </div>
                                   <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
                                     vs
                                   </span>
-                                  <div className="flex justify-center">
+                                  <div className="flex flex-col items-center text-center min-w-0">
                                     <TeamBadge
                                       name={f.away.name}
                                       tla={f.away.tla}
                                       shortName={f.away.shortName}
                                       badge={f.away.badge}
                                     />
+                                    <TeamLabel
+                                      name={f.away.name}
+                                      tla={f.away.tla}
+                                      shortName={f.away.shortName}
+                                      wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                      abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                      fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                      fullNameWindowPx={68}
+                                    />
                                   </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 justify-items-center">
-                                  <TeamLabel
-                                    name={f.home.name}
-                                    tla={f.home.tla}
-                                    shortName={f.home.shortName}
-                                    wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
-                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                    fullNameWindowPx={68}
-                                  />
-                                  <TeamLabel
-                                    name={f.away.name}
-                                    tla={f.away.tla}
-                                    shortName={f.away.shortName}
-                                    wrapperClassName="flex w-[78px] flex-col items-center gap-1 text-center"
-                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                    fullNameWindowPx={68}
-                                  />
                                 </div>
                               </div>
 
@@ -628,10 +626,10 @@ export default function GoldenPage() {
                                     name={f.home.name}
                                     tla={f.home.tla}
                                     shortName={f.home.shortName}
-                                    wrapperClassName="w-full"
-                                    abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1.08rem)] font-semibold text-foreground w-full"
-                                    fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
-                                    fullNameWindowPx={null}
+                                    wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                                    fullNameWindowPx={88}
                                   />
                                 </div>
                                 <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
@@ -648,10 +646,10 @@ export default function GoldenPage() {
                                     name={f.away.name}
                                     tla={f.away.tla}
                                     shortName={f.away.shortName}
-                                    wrapperClassName="w-full"
-                                    abbrClassName="font-display mt-1 text-[clamp(0.82rem,1.05vw,1.08rem)] font-semibold text-foreground w-full"
-                                    fullNameClassName="font-display text-[10px] xl:text-[11px] text-muted w-full"
-                                    fullNameWindowPx={null}
+                                    wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                                    fullNameWindowPx={88}
                                   />
                                 </div>
                               </div>
@@ -691,7 +689,7 @@ export default function GoldenPage() {
 	                          {others.slice(0, 10).map((score, idx) => (
 	                            <span
 	                              key={`${fid}-other-${idx}-${score}`}
-	                              className="font-display rounded-full border border-subtle px-2.5 py-1 text-xs text-foreground tabular-nums"
+	                              className="font-display rounded-full border border-subtle px-2.5 py-1 text-xs text-foreground tabular-nums whitespace-nowrap"
 	                            >
 	                              {String(score).replace("-", " - ")}
 	                            </span>

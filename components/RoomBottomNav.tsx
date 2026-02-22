@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
+import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 
 type NavItem = {
   key: "fixtures" | "predictions" | "home" | "leaderboard" | "stats";
@@ -10,6 +13,7 @@ type NavItem = {
   href: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   active: boolean;
+  disabled?: boolean;
 };
 
 export default function RoomBottomNav() {
@@ -17,6 +21,8 @@ export default function RoomBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
+  const [predictionsHref, setPredictionsHref] = useState(`/room/${roomCode}/minigame`);
+  const [predictionsDisabled, setPredictionsDisabled] = useState(false);
   const sparkSeed = useMemo(() => {
     const source = `${roomCode}:${pathname}`;
     let hash = 0;
@@ -46,7 +52,72 @@ export default function RoomBottomNav() {
       };
     });
   }, [sparkSeed]);
-  if (!roomCode) return null;
+
+  const resolvePredictionsTarget = useCallback(async (nextRoomCode: string) => {
+    try {
+      const gwData = await getCurrentGameweekCached();
+      const gw = Number(gwData.currentGameweek ?? 1);
+      const seasonKey = String(gwData.seasonKey || "");
+      if (!Number.isFinite(gw) || !seasonKey) {
+        return { href: `/room/${nextRoomCode}/minigame`, disabled: false };
+      }
+      const gameRef = doc(
+        db,
+        "rooms",
+        nextRoomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        `gw-${gw}`,
+      );
+      const gameSnap = await getDoc(gameRef);
+      const state = String(gameSnap.data()?.state || "")
+        .trim()
+        .toUpperCase();
+      if (state === "REVEAL") {
+        return { href: `/room/${nextRoomCode}/minigame/reveal`, disabled: false };
+      }
+      if (state === "DRAFT" || state === "GOLDEN") {
+        return { href: `/room/${nextRoomCode}/minigame`, disabled: true };
+      }
+      return { href: `/room/${nextRoomCode}/minigame`, disabled: false };
+    } catch {
+      return { href: `/room/${nextRoomCode}/minigame`, disabled: false };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!roomCode) return;
+    let cancelled = false;
+    (async () => {
+      const target = await resolvePredictionsTarget(roomCode);
+      if (!cancelled) {
+        setPredictionsHref(target.href);
+        setPredictionsDisabled(target.disabled);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, pathname, resolvePredictionsTarget]);
+
+  function onNavigate(item: NavItem) {
+    if (item.key !== "predictions") {
+      router.push(item.href);
+      return;
+    }
+    if (predictionsDisabled) return;
+    const cachedHref = predictionsHref || `/room/${roomCode}/minigame`;
+    if (pathname !== cachedHref) router.push(cachedHref);
+    void (async () => {
+      const target = await resolvePredictionsTarget(roomCode);
+      setPredictionsHref(target.href);
+      setPredictionsDisabled(target.disabled);
+      if (!target.disabled && target.href !== cachedHref && pathname !== target.href) {
+        router.replace(target.href);
+      }
+    })();
+  }
 
   const items: NavItem[] = [
     {
@@ -59,8 +130,9 @@ export default function RoomBottomNav() {
     {
       key: "predictions",
       label: "Predictions",
-      href: `/room/${roomCode}/minigame`,
+      href: predictionsHref,
       icon: Gamepad2,
+      disabled: predictionsDisabled,
       active:
         pathname === `/room/${roomCode}/minigame` ||
         pathname.startsWith(`/room/${roomCode}/minigame/`),
@@ -92,6 +164,7 @@ export default function RoomBottomNav() {
     pathname === `/room/${roomCode}/minigame/play` ||
     pathname === `/room/${roomCode}/minigame/golden`;
 
+  if (!roomCode) return null;
   if (hideForActiveGamePhase) return null;
 
   return (
@@ -107,12 +180,14 @@ export default function RoomBottomNav() {
             <button
               key={item.key}
               type="button"
-              onClick={() => router.push(item.href)}
+              onClick={() => void onNavigate(item)}
+              disabled={item.disabled}
               className={[
-                "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-all duration-200",
+                "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-all duration-200 touch-manipulation",
                 item.active
                   ? "scale-[1.05] border border-[color:rgba(var(--room-accent-rgb),0.72)] bg-[color:rgba(var(--room-accent-rgb),0.18)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.2)]"
                   : "border border-transparent bg-surface-2/70 text-muted",
+                item.disabled ? "opacity-45 cursor-not-allowed" : "",
               ].join(" ")}
             >
               <span className="nav-icon-wrap relative inline-flex h-4 w-4 items-center justify-center">

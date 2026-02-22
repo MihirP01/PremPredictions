@@ -343,7 +343,7 @@ export default function MiniGamePlayPage() {
 
   if (gw == null || fixtures == null) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
         <div className="text-sm text-muted">Loading…</div>
       </div>
@@ -351,7 +351,7 @@ export default function MiniGamePlayPage() {
   }
   if (!game) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
         <div className="text-sm text-muted">Game not started yet.</div>
       </div>
@@ -492,7 +492,7 @@ export default function MiniGamePlayPage() {
   };
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-1 sm:p-6 bg-app">
+    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
       <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
         <div className="flex items-center justify-between">
@@ -573,7 +573,7 @@ export default function MiniGamePlayPage() {
             <div className="mb-3 space-y-2">
               <div className="text-xs text-muted text-center">Captain: choose fixture</div>
               <SpecialBreak />
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="grid items-start gap-2 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {remainingCaptainFixtureIds.map((fid) => {
                   const f = fixtures.find((x) => x.fixtureId === fid);
                   const isSelected = captainFixtureChoice === fid;
@@ -585,7 +585,7 @@ export default function MiniGamePlayPage() {
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "w-full min-[430px]:w-[calc(50%-0.25rem)] lg:w-[calc(33.333%-0.45rem)] xl:w-[calc(25%-0.5rem)] rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
+                        "w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
                         isSelected
                           ? "bg-accent text-accent-foreground border-teal-400"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
@@ -690,10 +690,10 @@ export default function MiniGamePlayPage() {
                   name={fixture.home.name}
                   tla={fixture.home.tla}
                   shortName={fixture.home.shortName}
-                  wrapperClassName="mt-1 text-xs font-semibold text-foreground truncate w-full"
-                  abbrClassName="font-display block"
-                  fullNameClassName="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                  fullNameWindowPx={null}
+                  wrapperClassName="mt-1 flex w-[78px] sm:w-full flex-col items-center gap-1 text-center"
+                  abbrClassName="font-display w-full text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wide text-center"
+                  fullNameClassName="font-display w-full text-[9px] sm:text-[10px] font-medium text-muted leading-tight"
+                  fullNameWindowPx={68}
                 />
               </div>
               <div className="font-display text-xs text-muted uppercase">vs</div>
@@ -711,10 +711,10 @@ export default function MiniGamePlayPage() {
                   name={fixture.away.name}
                   tla={fixture.away.tla}
                   shortName={fixture.away.shortName}
-                  wrapperClassName="mt-1 text-xs font-semibold text-foreground truncate w-full"
-                  abbrClassName="font-display block"
-                  fullNameClassName="font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto"
-                  fullNameWindowPx={null}
+                  wrapperClassName="mt-1 flex w-[78px] sm:w-full flex-col items-center gap-1 text-center"
+                  abbrClassName="font-display w-full text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wide text-center"
+                  fullNameClassName="font-display w-full text-[9px] sm:text-[10px] font-medium text-muted leading-tight"
+                  fullNameWindowPx={68}
                 />
               </div>
               </div>

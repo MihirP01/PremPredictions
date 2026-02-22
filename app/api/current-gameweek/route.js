@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 const LEAGUE = "PL";
-const EXPECTED_MATCHES_PER_GW = 10;
 const SEASON_START_MONTH_UTC = 7; // Aug
 
 function inferSeasonKey(now = new Date()) {
@@ -60,13 +59,13 @@ export async function GET(req) {
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
   const season = seasonStartYearFromKey(seasonKey);
 
-  // Pull a window of matches around now + ahead to capture next GW(s).
-  // Bigger forward window helps during breaks / sparse periods.
+  // Pull a wide window so postponed/shifted schedules still include the
+  // active + next gameweeks.
   const now = new Date();
   const from = new Date(now);
-  from.setUTCDate(from.getUTCDate() - 21); // past 3 weeks
+  from.setUTCDate(from.getUTCDate() - 120);
   const to = new Date(now);
-  to.setUTCDate(to.getUTCDate() + 35); // next 5 weeks
+  to.setUTCDate(to.getUTCDate() + 120);
 
   const url =
     `https://api.football-data.org/v4/competitions/${LEAGUE}/matches` +
@@ -97,56 +96,75 @@ export async function GET(req) {
   const data = await res.json();
   const matches = Array.isArray(data?.matches) ? data.matches : [];
 
-  // Build per-matchday stats
-  const byMd = new Map(); // md -> { total, finished, hasNonFinished }
+  // Build per-matchday kickoff bounds from dates.
+  const byMd = new Map(); // md -> { earliestKickoffMs, latestKickoffMs, latestStartedKickoffMs, total }
+  const nowMs = now.getTime();
   for (const m of matches) {
     const md = m?.matchday;
     if (!Number.isFinite(md)) continue;
 
-    const status = m?.status;
-    const entry = byMd.get(md) ?? { total: 0, finished: 0 };
+    const kickoffMs = Date.parse(String(m?.utcDate || ""));
+    if (!Number.isFinite(kickoffMs)) continue;
+
+    const entry = byMd.get(md) ?? {
+      total: 0,
+      earliestKickoffMs: kickoffMs,
+      latestKickoffMs: kickoffMs,
+      latestStartedKickoffMs: null,
+    };
     entry.total += 1;
-    if (status === "FINISHED") entry.finished += 1;
+    entry.earliestKickoffMs = Math.min(entry.earliestKickoffMs, kickoffMs);
+    entry.latestKickoffMs = Math.max(entry.latestKickoffMs, kickoffMs);
+    if (kickoffMs <= nowMs) {
+      entry.latestStartedKickoffMs =
+        entry.latestStartedKickoffMs == null
+          ? kickoffMs
+          : Math.max(entry.latestStartedKickoffMs, kickoffMs);
+    }
 
     byMd.set(md, entry);
   }
 
   const matchdays = [...byMd.keys()].sort((a, b) => a - b);
 
-  // Find the first matchday that is NOT fully finished.
-  // “Fully finished” = at least EXPECTED matches AND all finished.
+  // Date-based GW rule:
+  // - Determine the next upcoming matchday by earliest kickoff > now.
+  // - Current GW is the previous matchday until its rollover time:
+  //   09:00 UTC on the day after that GW's last kickoff.
+  // - This prevents isolated rescheduled fixtures in future GWs from
+  //   incorrectly jumping the active GW.
   let nextOpen = null;
+  const upcomingMds = matchdays
+    .filter((md) => (byMd.get(md)?.earliestKickoffMs ?? Number.POSITIVE_INFINITY) > nowMs)
+    .sort((a, b) => a - b);
 
-  for (const md of matchdays) {
-    const { total, finished } = byMd.get(md);
-
-    // If we have matches for that matchday and not all are finished, it's still "open"
-    if (finished < total) {
-      nextOpen = md;
-      break;
+  if (upcomingMds.length > 0) {
+    const nextUpcomingMd = upcomingMds[0];
+    const prevMd = nextUpcomingMd - 1;
+    const prev = byMd.get(prevMd);
+    if (!prev) {
+      nextOpen = nextUpcomingMd;
+    } else {
+      const rolloverAt = new Date(prev.latestKickoffMs);
+      rolloverAt.setUTCDate(rolloverAt.getUTCDate() + 1);
+      rolloverAt.setUTCHours(9, 0, 0, 0);
+      nextOpen = nowMs >= rolloverAt.getTime() ? nextUpcomingMd : prevMd;
     }
-
-    // If we have a full set and all finished, skip to next
-    if (
-      total >= EXPECTED_MATCHES_PER_GW &&
-      finished >= EXPECTED_MATCHES_PER_GW
-    ) {
-      continue;
+  } else if (matchdays.length > 0) {
+    const latestMd = Math.max(...matchdays);
+    const latest = byMd.get(latestMd);
+    if (!latest) {
+      nextOpen = latestMd;
+    } else {
+      const rolloverAt = new Date(latest.latestKickoffMs);
+      rolloverAt.setUTCDate(rolloverAt.getUTCDate() + 1);
+      rolloverAt.setUTCHours(9, 0, 0, 0);
+      nextOpen = nowMs >= rolloverAt.getTime() ? latestMd + 1 : latestMd;
     }
-
-    // If totals are weird (postponements / partial data), treat it as open
-    // because from a UX perspective you probably still want to land here.
-    nextOpen = md;
-    break;
+  } else {
+    nextOpen = 1;
   }
-
-  // If everything we can see is fully finished, advance to the next GW after max
-  if (!Number.isFinite(nextOpen)) {
-    const maxMd = matchdays.length ? Math.max(...matchdays) : 1;
-    nextOpen = maxMd + 1;
-  }
-
-  nextOpen = clampGW(nextOpen);
+  nextOpen = clampGW(Number.isFinite(nextOpen) ? Number(nextOpen) : 1);
 
   return NextResponse.json(
     {
@@ -155,8 +173,9 @@ export async function GET(req) {
       debug: {
         window: { dateFrom: fmt(from), dateTo: fmt(to) },
         matchdaysSeen: matchdays.length,
+        selectedBy: "next-upcoming-then-rollover-0900-utc",
       },
     },
-    { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } },
+    { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -62,6 +62,30 @@ type PlayerStats = {
   >;
 };
 
+function projectStatsForGw(
+  source: PlayerStats | null | undefined,
+  selectedGwNumber: number | null,
+): PlayerStats | null {
+  if (!source) return null;
+  if (selectedGwNumber == null) return source;
+  const gwStats = source.byGwBreakdown[selectedGwNumber];
+  const gwPoints = source.byGw[selectedGwNumber] ?? 0;
+  return {
+    ...source,
+    totalPoints: gwPoints,
+    exactCount: gwStats?.exactCount ?? 0,
+    resultOnlyCount: gwStats?.resultOnlyCount ?? 0,
+    totalGradedPicks: gwStats?.totalGradedPicks ?? 0,
+    goldenBonusPoints: gwStats?.goldenBonusPoints ?? 0,
+    goldenPickCount: gwStats?.goldenPickCount ?? 0,
+    goalDisparity: gwStats?.goalDisparity ?? 0,
+    outcomeAttempts: gwStats?.outcomeAttempts ?? { H: 0, D: 0, A: 0 },
+    outcomeHits: gwStats?.outcomeHits ?? { H: 0, D: 0, A: 0 },
+    bestGw: gwStats ? selectedGwNumber : null,
+    bestGwPoints: gwStats ? gwPoints : 0,
+  } satisfies PlayerStats;
+}
+
 function parseGwId(id: string): number | null {
   const m = /^gw-(\d+)$/.exec(id);
   if (!m) return null;
@@ -118,6 +142,13 @@ function totalGoals(score: string) {
   const a = Number(m[2]);
   if (!Number.isFinite(h) || !Number.isFinite(a)) return null;
   return h + a;
+}
+
+function rankStyle(rank: number) {
+  if (rank === 1) return "metal-glow metal-glow-gold border border-yellow-400/80 bg-yellow-400/15";
+  if (rank === 2) return "metal-glow metal-glow-silver border border-gray-300/80 bg-gray-300/15";
+  if (rank === 3) return "metal-glow metal-glow-bronze border border-amber-500/80 bg-amber-500/15";
+  return "border border-teal-500 bg-surface-2";
 }
 
 export default function RoomStatsPage() {
@@ -242,7 +273,9 @@ export default function RoomStatsPage() {
               displayName: nick || data.displayName || "Player",
             } satisfies Player;
           })
-          .sort((a, b) => a.displayName.localeCompare(b.displayName));
+          .sort((a, b) =>
+            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          );
         setPlayers(list);
       },
       () => setError("Failed to load room players."),
@@ -435,26 +468,47 @@ export default function RoomStatsPage() {
       : Number.isFinite(Number(effectiveGwFilter))
         ? Number(effectiveGwFilter)
         : null;
-  const displayStats = useMemo(() => {
-    if (!stats) return null;
-    if (selectedGwNumber == null) return stats;
-    const gwStats = stats.byGwBreakdown[selectedGwNumber];
-    const gwPoints = stats.byGw[selectedGwNumber] ?? 0;
+  const displayStats = projectStatsForGw(stats, selectedGwNumber);
+
+  const rankMapByMetric = useMemo(() => {
+    const displayByUid: Record<string, PlayerStats> = {};
+    players.forEach((p) => {
+      const s = projectStatsForGw(statsByUid[p.uid], selectedGwNumber);
+      if (s) displayByUid[p.uid] = s;
+    });
+    const denseRank = (
+      metric: (uid: string) => number,
+      asc = false,
+    ): Record<string, number> => {
+      const ordered = [...players].sort((a, b) => {
+        const av = metric(a.uid);
+        const bv = metric(b.uid);
+        if (av !== bv) return asc ? av - bv : bv - av;
+        return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
+      });
+      const out: Record<string, number> = {};
+      let prev: number | null = null;
+      let rank = 0;
+      ordered.forEach((p) => {
+        const v = metric(p.uid);
+        if (prev === null || v !== prev) rank += 1;
+        out[p.uid] = rank;
+        prev = v;
+      });
+      return out;
+    };
     return {
-      ...stats,
-      totalPoints: gwPoints,
-      exactCount: gwStats?.exactCount ?? 0,
-      resultOnlyCount: gwStats?.resultOnlyCount ?? 0,
-      totalGradedPicks: gwStats?.totalGradedPicks ?? 0,
-      goldenBonusPoints: gwStats?.goldenBonusPoints ?? 0,
-      goldenPickCount: gwStats?.goldenPickCount ?? 0,
-      goalDisparity: gwStats?.goalDisparity ?? 0,
-      outcomeAttempts: gwStats?.outcomeAttempts ?? { H: 0, D: 0, A: 0 },
-      outcomeHits: gwStats?.outcomeHits ?? { H: 0, D: 0, A: 0 },
-      bestGw: gwStats ? selectedGwNumber : null,
-      bestGwPoints: gwStats ? gwPoints : 0,
-    } satisfies PlayerStats;
-  }, [stats, selectedGwNumber]);
+      totalPoints: denseRank((uid) => displayByUid[uid]?.totalPoints ?? 0),
+      bestGwPoints: denseRank((uid) => displayByUid[uid]?.bestGwPoints ?? 0),
+      exactCount: denseRank((uid) => displayByUid[uid]?.exactCount ?? 0),
+      correctResults: denseRank((uid) => {
+        const s = displayByUid[uid];
+        return (s?.exactCount ?? 0) + (s?.resultOnlyCount ?? 0);
+      }),
+      goalDisparity: denseRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
+      goldenBonus: denseRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
+    };
+  }, [players, statsByUid, selectedGwNumber]);
   const recentGws =
     Array.from({ length: Math.min(5, currentGw) }, (_, i) => currentGw - i);
   if (loading || !user) return null;
@@ -544,39 +598,47 @@ export default function RoomStatsPage() {
           <div className="text-sm text-muted">No player stats available yet.</div>
         ) : (
           <>
+            <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
+              <div className="text-xs text-muted">Room Ranking</div>
+              <div className="font-display text-xl font-semibold text-foreground">
+                #{rankMapByMetric.totalPoints[effectiveSelectedUid] ?? players.length}/{players.length || 1}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Total Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">{displayStats.totalPoints}</div>
               </div>
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
-                <div className="text-xs text-muted">Goal Disparity (+/-)</div>
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.bestGwPoints[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Best GW</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.goalDisparity > 0 ? `+${displayStats.goalDisparity}` : displayStats.goalDisparity}
+                  {displayStats.bestGw ? `GW${displayStats.bestGw} (${displayStats.bestGwPoints})` : "-"}
                 </div>
               </div>
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.exactCount[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Exact Scores</div>
                 <div className="font-display text-xl font-semibold text-foreground">
                   {displayStats.exactCount} ({pct(displayStats.exactCount, displayStats.totalGradedPicks)})
                 </div>
               </div>
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.correctResults[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Correct Results</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.resultOnlyCount} ({pct(displayStats.resultOnlyCount, displayStats.totalGradedPicks)})
+                  {displayStats.exactCount + displayStats.resultOnlyCount} (
+                  {pct(displayStats.exactCount + displayStats.resultOnlyCount, displayStats.totalGradedPicks)})
                 </div>
               </div>
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.goldenBonus[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Golden Bonus Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">
                   {displayStats.goldenBonusPoints}
                 </div>
               </div>
-              <div className="border border-teal-500 rounded-xl p-3 bg-surface-2">
-                <div className="text-xs text-muted">Best GW</div>
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Goal Disparity (+/-)</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {stats?.bestGw ? `GW${stats.bestGw} (${stats.bestGwPoints})` : "-"}
+                  {displayStats.goalDisparity > 0 ? `+${displayStats.goalDisparity}` : displayStats.goalDisparity}
                 </div>
               </div>
             </div>

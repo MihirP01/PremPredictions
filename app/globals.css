@@ -97,26 +97,26 @@ body {
 body > div {
   min-height: 100dvh;
   background: transparent;
-  padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+  padding-top: 0;
 }
 
 /* Keep iOS browser and standalone consistent */
 @media (display-mode: browser) {
   body > div {
-    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+    padding-top: 0;
   }
 }
 
 @media (display-mode: standalone) {
   body > div {
-    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-mobile));
+    padding-top: 0;
   }
 }
 
 /* Keep notch-safe behavior on phones, add breathing room on desktop */
 @media (min-width: 768px) {
   body > div {
-    padding-top: calc(env(safe-area-inset-top) + var(--app-top-gap-desktop));
+    padding-top: 0;
   }
 }
 
@@ -570,6 +570,52 @@ option {
   }
 }
 
+@keyframes keyChipGlow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes keyChipSweep {
+  0% {
+    transform: translateX(-65%) rotate(8deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(70%) rotate(8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(70%) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes metalGlowSweep {
+  0% {
+    transform: translateX(-72%) rotate(8deg);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  52% {
+    transform: translateX(74%) rotate(8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(74%) rotate(8deg);
+    opacity: 0;
+  }
+}
+
 @keyframes modalOverlayIn {
   from {
     opacity: 0;
@@ -688,6 +734,81 @@ option {
   animation: fixtureCardIn 320ms ease-out both;
 }
 
+.key-chip {
+  position: relative;
+  overflow: hidden;
+  animation: keyChipGlow 2.2s ease-in-out infinite;
+}
+
+.key-chip::after {
+  content: "";
+  position: absolute;
+  inset: -40% -70%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.04) 55%,
+    transparent 100%
+  );
+  transform: translateX(-65%) rotate(8deg);
+  animation: keyChipSweep 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.key-chip-result {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.18) inset, 0 0 10px rgba(16, 185, 129, 0.12);
+}
+
+.key-chip-exact {
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.18) inset, 0 0 10px rgba(168, 85, 247, 0.12);
+}
+
+.key-chip-golden-result,
+.key-chip-golden-exact {
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.16) inset, 0 0 10px rgba(250, 204, 21, 0.12);
+}
+
+.metal-glow {
+  position: relative;
+  overflow: hidden;
+  --metal-sweep-rgb: 250, 204, 21;
+  animation: keyChipGlow 2.2s ease-in-out infinite;
+}
+
+.metal-glow::after {
+  content: "";
+  position: absolute;
+  inset: -40% -70%;
+  background: linear-gradient(
+    120deg,
+    rgba(var(--metal-sweep-rgb), 0) 0%,
+    rgba(var(--metal-sweep-rgb), 0.05) 38%,
+    rgba(var(--metal-sweep-rgb), 0.42) 50%,
+    rgba(var(--metal-sweep-rgb), 0.05) 62%,
+    rgba(var(--metal-sweep-rgb), 0) 100%
+  );
+  transform: translateX(-72%) rotate(8deg);
+  animation: metalGlowSweep 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.metal-glow-gold {
+  --metal-sweep-rgb: 250, 204, 21;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.24) inset, 0 0 12px rgba(250, 204, 21, 0.18);
+}
+
+.metal-glow-silver {
+  --metal-sweep-rgb: 209, 213, 219;
+  box-shadow: 0 0 0 1px rgba(209, 213, 219, 0.24) inset, 0 0 12px rgba(209, 213, 219, 0.16);
+}
+
+.metal-glow-bronze {
+  --metal-sweep-rgb: 217, 119, 6;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.22) inset, 0 0 12px rgba(217, 119, 6, 0.16);
+}
+
 .bottom-nav-enter {
   animation: bottomNavIn 260ms ease-out both;
 }
@@ -800,6 +921,10 @@ option {
   .page-action-btn,
   .settings-panel-enter,
   .fixture-card-enter,
+  .key-chip,
+  .key-chip::after,
+  .metal-glow,
+  .metal-glow::after,
   .bottom-nav-enter,
   .fixtures-icon--active,
   .nav-icon-pulse,

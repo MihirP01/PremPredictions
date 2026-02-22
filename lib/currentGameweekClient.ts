@@ -8,8 +8,8 @@ type CurrentGameweekData = {
   seasonKey: string;
 };
 
-const TTL_MS = 5 * 60 * 1000;
-const STORAGE_PREFIX = "cgw:v1:";
+const TTL_MS = 10 * 1000;
+const STORAGE_PREFIX = "cgw:v2:";
 const memCache = new Map<string, { expiresAt: number; data: CurrentGameweekData }>();
 const pending = new Map<string, Promise<CurrentGameweekData>>();
 
@@ -80,7 +80,7 @@ export async function getCurrentGameweekCached(
     : "/api/current-gameweek";
 
   const req = (async () => {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
     const data = normalize((await res.json()) as CurrentGameweekResponse);
     memCache.set(cacheKey, { expiresAt: Date.now() + TTL_MS, data });
     setStorage(cacheKey, data);
@@ -92,4 +92,3 @@ export async function getCurrentGameweekCached(
   pending.set(cacheKey, req);
   return req;
 }
-

@@ -97,19 +97,22 @@ body {
 body > div {
   min-height: 100dvh;
   background: transparent;
-  padding-top: 0;
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Keep iOS browser and standalone consistent */
 @media (display-mode: browser) {
   body > div {
-    padding-top: 0;
+    padding-top: constant(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top);
   }
 }
 
 @media (display-mode: standalone) {
   body > div {
-    padding-top: 0;
+    padding-top: constant(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top);
   }
 }
 

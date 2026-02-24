@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
@@ -362,7 +363,10 @@ export default function GoldenPage() {
     return (
       <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
-        <div className="text-sm text-muted">Loading golden…</div>
+        <div className="text-sm text-muted inline-flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Loading golden…</span>
+        </div>
       </div>
     );
   }
@@ -497,7 +501,10 @@ export default function GoldenPage() {
                 />
               </div>
             </div>
-            <div className="text-xs text-muted mt-2">Waiting for others to lock in…</div>
+            <div className="text-xs text-muted mt-2 inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Waiting for others to lock in…</span>
+            </div>
           </div>
         ) : (
           <>

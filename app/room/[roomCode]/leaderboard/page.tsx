@@ -14,53 +14,20 @@ import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
 import {
   collection,
-  getDocs,
+  onSnapshot,
 } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
-type ScoreDoc = {
-  uid?: string;
-  points?: number;
-  breakdown?: Record<string, { pred?: string | null }>;
-};
-
-type ScoreWeekSummaryDoc = {
-  computedAt?: unknown;
-};
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
 }
 
-function parseGwId(id: string): number | null {
-  const m = /^gw-(\d+)$/.exec(id);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
 function toErrorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
-}
-
-function asDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const maybeTimestamp = value as { toDate?: () => Date };
-    if (typeof maybeTimestamp.toDate === "function") {
-      // Call as an instance method so Firestore Timestamp keeps its `this`.
-      const d = maybeTimestamp.toDate();
-      return Number.isNaN(d.getTime()) ? null : d;
-    }
-  }
-  return null;
 }
 
 function fmtDateTime(d: Date) {
@@ -148,6 +115,7 @@ export default function LeaderboardMatrixPage() {
   const settingsWrapMobileRef = useRef<HTMLDivElement | null>(null);
   const settingsWrapDesktopRef = useRef<HTMLDivElement | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
+  const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // matrix: userUid -> gw -> points (read only from score docs)
   const [pointsByUserByGw, setPointsByUserByGw] = useState<
@@ -166,8 +134,7 @@ export default function LeaderboardMatrixPage() {
   // load default season + gameweek
   useEffect(() => {
     let cancelled = false;
-
-    (async () => {
+    const loadBootstrap = async () => {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
@@ -182,19 +149,22 @@ export default function LeaderboardMatrixPage() {
               ? options
               : season
                 ? [season]
-                : [],
+              : [],
           );
         }
       } catch {
-        if (!cancelled) {
-          setCurrentGw(1);
-          setSeasonKey("");
-        }
+        if (cancelled) return;
+        bootstrapRetryRef.current = setTimeout(loadBootstrap, 1500);
       }
-    })();
+    };
+    void loadBootstrap();
 
     return () => {
       cancelled = true;
+      if (bootstrapRetryRef.current) {
+        clearTimeout(bootstrapRetryRef.current);
+        bootstrapRetryRef.current = null;
+      }
     };
   }, [roomCode]);
 
@@ -319,58 +289,34 @@ export default function LeaderboardMatrixPage() {
     }
 
     try {
-      // Only read already-computed score docs, never recompute in leaderboard.
-      const scoreWeeksSnap = await getDocs(
-        collection(db, "rooms", roomCode, "seasons", seasonKey, "scores"),
-      );
+      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
+      const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
       let currentGwComputedAt: Date | null = null;
-      for (const scoreWeekDoc of scoreWeeksSnap.docs) {
-        if (scoreWeekDoc.id !== `gw-${currentGw}`) continue;
-        const summary = scoreWeekDoc.data() as ScoreWeekSummaryDoc;
-        const computedAt = asDate(summary.computedAt);
-        if (computedAt && (!currentGwComputedAt || computedAt > currentGwComputedAt)) {
-          currentGwComputedAt = computedAt;
-        }
+      const currentWeek = weekByGw.get(currentGw);
+      if (currentWeek?.computedAtMs != null) {
+        currentGwComputedAt = new Date(currentWeek.computedAtMs);
       }
 
       // "Scored" means we actually have per-user score docs for that GW.
       // Do not infer scored weeks from summary doc ids alone.
       const scoredWeeks = new Set<number>();
 
-      let computedGws = scoreWeeksSnap.docs
-        .map((d) => parseGwId(d.id))
-        .filter((n): n is number => n !== null && n >= 1 && n <= currentGw);
+      let computedGws = snapshot.weeks
+        .map((w) => w.gw)
+        .filter((n) => n >= 1 && n <= currentGw);
 
       // If no score summaries, derive candidate weeks from seasonal games.
       if (computedGws.length === 0) {
-        const gameWeeksSnap = await getDocs(
-          collection(db, "rooms", roomCode, "seasons", seasonKey, "games"),
-        );
-        computedGws = gameWeeksSnap.docs
-          .map((d) => parseGwId(d.id))
-          .filter((n): n is number => n !== null && n >= 1 && n <= currentGw);
+        computedGws = snapshot.gameWeeks.filter((n) => n >= 1 && n <= currentGw);
       }
 
       computedGws = Array.from(new Set(computedGws)).sort((a, b) => a - b);
 
       for (const gw of computedGws) {
-        const usersSnap = await getDocs(
-          collection(
-            db,
-            "rooms",
-            roomCode,
-            "seasons",
-            seasonKey,
-            "scores",
-            `gw-${gw}`,
-            "users",
-          ),
-        );
-
+        const users = weekByGw.get(gw)?.users ?? [];
         let gwHasMeaningfulScore = false;
-        for (const d of usersSnap.docs) {
-          const data = d.data() as ScoreDoc;
-          const uid = String(data.uid ?? d.id);
+        for (const data of users) {
+          const uid = String(data.uid);
           const points = Number(data.points ?? 0);
           const hasPred = Object.values(data.breakdown ?? {}).some((b) =>
             Boolean(String(b?.pred ?? "").trim()),
@@ -402,6 +348,20 @@ export default function LeaderboardMatrixPage() {
   useEffect(() => {
     loadSavedScores().catch(() => {});
   }, [loadSavedScores]);
+
+  // Live refresh when score docs change (e.g. recalc/cron writes).
+  useEffect(() => {
+    if (!seasonKey || players.length === 0) return;
+    const scoresRef = collection(db, "rooms", roomCode, "seasons", seasonKey, "scores");
+    const unsub = onSnapshot(
+      scoresRef,
+      () => {
+        loadSavedScores().catch(() => {});
+      },
+      () => {},
+    );
+    return () => unsub();
+  }, [roomCode, seasonKey, players.length, loadSavedScores]);
 
   const weeks = useMemo(
     () => Array.from({ length: currentGw }, (_, i) => currentGw - i),

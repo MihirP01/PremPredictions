@@ -16,6 +16,7 @@ import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { prewarmSeasonScoresSnapshot } from "@/lib/seasonScoresClient";
 
 type AccentTheme = {
   hex: string;
@@ -216,6 +217,7 @@ export default function RoomScopedLayout({
               void getGameDataCached(roomCode, season, gw).catch(() => {});
               void getTableCached(season).catch(() => {});
               void getRoomPlayersCached(roomCode).catch(() => {});
+              prewarmSeasonScoresSnapshot(roomCode, season);
             });
           }
           lastWarmAtRef.current = Date.now();

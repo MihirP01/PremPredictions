@@ -1,4 +1,5 @@
 import React from "react";
+import { Loader2 } from "lucide-react";
 
 type TurnProps = {
   turnNumber: number;
@@ -12,6 +13,7 @@ type LatestPick = {
 
 type ActionProps = {
   myLockedIn: boolean;
+  isCaptainMode?: boolean;
   latestLockedPick: LatestPick;
   lockedProgressPct: number;
   playersLeftToLock: number;
@@ -39,6 +41,7 @@ export function SprintTurnIndicator({ turnNumber, totalTurns }: TurnProps) {
 
 export function SprintActionPanel({
   myLockedIn,
+  isCaptainMode = false,
   latestLockedPick,
   lockedProgressPct,
   playersLeftToLock,
@@ -53,9 +56,14 @@ export function SprintActionPanel({
   btnClassName,
 }: ActionProps) {
   if (myLockedIn) {
+    const panelClass = isCaptainMode
+      ? "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.16)_0%,rgba(var(--room-accent-rgb),0.06)_100%)] shadow-[0_10px_24px_rgba(var(--room-accent-rgb),0.14)]"
+      : "border border-teal-500 rounded-xl bg-surface-2";
     return (
-      <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3 text-center">
-        <div className="font-semibold text-foreground">Locked In</div>
+      <div className={`${panelClass} p-4 text-foreground space-y-3 text-center`}>
+        <div className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-[color:rgba(var(--room-accent-rgb),0.2)] px-3 py-1 text-xs font-display font-semibold text-foreground">
+          Locked In
+        </div>
         {latestLockedPick && (
           <div className="text-sm text-muted">
             Your pick:{" "}
@@ -64,13 +72,16 @@ export function SprintActionPanel({
             </span>
           </div>
         )}
-        <div className="w-full h-2 rounded-full border border-teal-500 bg-surface overflow-hidden">
+        <div className="w-full h-2 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.55)] bg-surface overflow-hidden">
           <div
             className="h-full bg-accent transition-all duration-500"
             style={{ width: `${lockedProgressPct}%` }}
           />
         </div>
-        <div className="text-sm text-muted">Waiting for others... {playersLeftToLock} left.</div>
+        <div className="text-sm text-muted inline-flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Waiting for others... {playersLeftToLock} left.</span>
+        </div>
       </div>
     );
   }

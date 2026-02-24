@@ -4,7 +4,7 @@ import LogoutButton from "../../../components/LogoutButton"; // adjust relative 
 import PageShell from "../../../components/PageShell";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Trophy } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Loader2, Trophy } from "lucide-react";
 import SectionCard from "../../../components/SectionCard";
 import StatusPill from "../../../components/StatusPill";
 import { ConfirmDialog, ModalHeader, ThemedModal } from "../../../components/RoomModal";
@@ -863,7 +863,10 @@ export default function RoomPage() {
                 Your Rooms
               </div>
               {switcherBusy ? (
-                <div className="text-sm text-muted">Loading rooms…</div>
+                <div className="text-sm text-muted inline-flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Loading rooms…</span>
+                </div>
               ) : memberRooms.length === 0 ? (
                 <div className="text-sm text-muted">No joined rooms found.</div>
               ) : (

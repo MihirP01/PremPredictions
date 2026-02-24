@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Lock } from "lucide-react";
+import { ChevronDown, Loader2, Lock } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
@@ -87,9 +87,16 @@ export default function MiniGameLobbyPage() {
   const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
   const [modeGuideOpen, setModeGuideOpen] = useState(false);
   const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
+  const [guideOpenMode, setGuideOpenMode] = useState<"round_robin" | "captain" | "sprint" | null>(
+    "round_robin",
+  );
+  const [guideOpenPowerup, setGuideOpenPowerup] = useState<"all_in" | "safety_net" | null>(
+    "all_in",
+  );
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
   const [unlockAtMs, setUnlockAtMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
+  const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isLeader = !!user && leaderUid === user.uid;
   const modeLabel =
@@ -123,11 +130,11 @@ export default function MiniGameLobbyPage() {
   // 2) Load current gameweek + initial room mode from bootstrap (lobby is tied to GW)
   useEffect(() => {
     let cancelled = false;
-
-    (async () => {
-      const data = await getRoomBootstrapCached(roomCode);
-      const gw = Number(data.currentGameweek ?? 1);
-      if (!cancelled) {
+    const loadBootstrap = async () => {
+      try {
+        const data = await getRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        const gw = Number(data.currentGameweek ?? 1);
         setGameweek(Number.isFinite(gw) ? gw : 1);
         setSeasonKey(String(data.seasonKey || ""));
         setLeaderUid(data.leaderUid ?? null);
@@ -146,16 +153,19 @@ export default function MiniGameLobbyPage() {
           else if (st === "POWERUPS") router.replace(`/room/${roomCode}/minigame/powerups`);
           else router.replace(`/room/${roomCode}/minigame/reveal`);
         }
+      } catch {
+        if (cancelled) return;
+        bootstrapRetryRef.current = setTimeout(loadBootstrap, 1500);
       }
-    })().catch(() => {
-      if (!cancelled) {
-        setGameweek(1);
-        setSeasonKey("");
-      }
-    });
+    };
+    void loadBootstrap();
 
     return () => {
       cancelled = true;
+      if (bootstrapRetryRef.current) {
+        clearTimeout(bootstrapRetryRef.current);
+        bootstrapRetryRef.current = null;
+      }
     };
   }, [roomCode, router]);
 
@@ -820,8 +830,9 @@ export default function MiniGameLobbyPage() {
           ) : isLocked ? (
             <div className="text-sm text-muted text-center">Missed deadline for this gameweek.</div>
           ) : (
-            <div className="text-sm text-muted">
-              Waiting for the leader to start once everyone is ready…
+            <div className="text-sm text-muted inline-flex items-center justify-center gap-2 w-full">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Waiting for the leader to start once everyone is ready…</span>
             </div>
           )}
         </SectionCard>
@@ -867,63 +878,125 @@ export default function MiniGameLobbyPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-lg rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
+        panelClassName="w-full max-w-lg h-[min(86vh,720px)] rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 overflow-hidden"
       >
-        <div className="flex items-center justify-between">
-          <div className="font-display text-lg font-semibold text-foreground">Game Guide</div>
-          <ModalExitButton
-            onClick={() => setModeGuideOpen(false)}
-            ariaLabel="Exit game guide"
-          />
-        </div>
-        <div className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-1">
-          <div className="text-xs text-muted">Current Setup</div>
-          <div className="font-display font-semibold text-foreground">
-            {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
+        <div className="h-full flex flex-col min-h-0">
+          <div className="flex items-center justify-between shrink-0">
+            <div className="font-display text-lg font-semibold text-foreground">Game Guide</div>
+            <ModalExitButton
+              onClick={() => setModeGuideOpen(false)}
+              ariaLabel="Exit game guide"
+            />
           </div>
-          <div className="text-xs text-muted">
-            Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
-          </div>
-          <div className="text-sm text-muted">{currentModeSummary}</div>
-          {allowIdenticalPicks && (
-            <div className="text-xs text-muted">ON = Hidden until reveal, same picks allowed.</div>
-          )}
-        </div>
-        <div className="w-full flex items-center justify-center gap-1.5">
-          <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-          <span
-            className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-            aria-hidden
-          />
-          <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
-        </div>
-        <div className="grid gap-2">
-          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
-            <div className="font-display font-semibold text-foreground">Round-Robin</div>
-            <div className="text-sm text-muted">
-              Traditional turn-by-turn mode. Players rotate through fixtures in order.
-              ON allows duplicate picks (hidden until reveal); OFF enforces unique picks per fixture.
+          <div className="min-h-0 flex-1 overflow-auto no-scrollbar space-y-4 pr-1 mt-4">
+            <div className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-1">
+              <div className="text-xs text-muted">Current Setup</div>
+              <div className="font-display font-semibold text-foreground">
+                {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
+              </div>
+              <div className="text-xs text-muted">
+                Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
+              </div>
+              <div className="text-sm text-muted">{currentModeSummary}</div>
+              {allowIdenticalPicks && (
+                <div className="text-xs text-muted">ON = Hidden until reveal, same picks allowed.</div>
+              )}
             </div>
-          </div>
-          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
-            <div className="font-display font-semibold text-foreground">Captain</div>
-            <div className="text-sm text-muted">
-              The captain rotates each round and selects which fixture to play next.
-              ON lets everyone submit together (hidden until reveal); OFF uses turn-based unique picks.
+            <div className="w-full flex items-center justify-center gap-1.5">
+              <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
+              <span
+                className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
+                aria-hidden
+              />
+              <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
             </div>
-          </div>
-          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
-            <div className="font-display font-semibold text-foreground">Sprint</div>
-            <div className="text-sm text-muted">
-              Fastest mode. Everyone submits at the same time for each fixture.
-              Picks stay hidden until reveal.
+            <div className="space-y-2">
+              <div className="text-xs text-muted uppercase tracking-wide">Modes</div>
+              {[
+                {
+                  key: "round_robin" as const,
+                  title: "Round-Robin",
+                  body:
+                    "Traditional turn-by-turn mode. Players rotate through fixtures in order. Allow Identical Picks ON allows duplicate picks (hidden until reveal); OFF enforces unique picks.",
+                },
+                {
+                  key: "captain" as const,
+                  title: "Captain",
+                  body:
+                    "Captain rotates each fixture and chooses which fixture is played next. Allow Identical Picks ON runs parallel submissions hidden until reveal; OFF runs turn-based picks.",
+                },
+                {
+                  key: "sprint" as const,
+                  title: "Sprint",
+                  body:
+                    "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
+                },
+              ].map((item) => {
+                const open = guideOpenMode === item.key;
+                return (
+                  <div key={item.key} className="rounded-lg border border-subtle bg-surface-2">
+                    <button
+                      type="button"
+                      onClick={() => setGuideOpenMode((prev) => (prev === item.key ? null : item.key))}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
+                    >
+                      <span className="font-display font-semibold text-foreground">{item.title}</span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                    <div
+                      className={[
+                        "grid transition-all duration-200 ease-out overflow-hidden",
+                        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                      ].join(" ")}
+                    >
+                      <div className="min-h-0 px-3 pb-3 text-sm text-muted">{item.body}</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
-            <div className="font-display font-semibold text-foreground">Power-Ups (Optional)</div>
-            <div className="text-sm text-muted">
-              When enabled, a Power-Ups phase appears after Golden. Each player picks one fixture
-              for either All-In or Safety Net.
+            <div className="space-y-2">
+              <div className="text-xs text-muted uppercase tracking-wide">Power-Ups (Optional)</div>
+              {[
+                {
+                  key: "all_in" as const,
+                  title: "All-In",
+                  body: "Exact score = 6 points, otherwise 0.",
+                },
+                {
+                  key: "safety_net" as const,
+                  title: "Safety Net",
+                  body: "If your fixture points are 0, they become 1.",
+                },
+              ].map((item) => {
+                const open = guideOpenPowerup === item.key;
+                return (
+                  <div key={item.key} className="rounded-lg border border-subtle bg-surface-2">
+                    <button
+                      type="button"
+                      onClick={() => setGuideOpenPowerup((prev) => (prev === item.key ? null : item.key))}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
+                    >
+                      <span className="font-display font-semibold text-foreground">{item.title}</span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                    <div
+                      className={[
+                        "grid transition-all duration-200 ease-out overflow-hidden",
+                        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                      ].join(" ")}
+                    >
+                      <div className="min-h-0 px-3 pb-3 text-sm text-muted">{item.body}</div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

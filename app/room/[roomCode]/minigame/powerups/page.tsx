@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
@@ -404,7 +405,10 @@ export default function PowerupsPage() {
   if (gw == null || fixtures == null || !game) {
     return (
       <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-        <div className="text-sm text-muted">Loading power-ups…</div>
+        <div className="text-sm text-muted inline-flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Loading power-ups…</span>
+        </div>
       </div>
     );
   }
@@ -532,7 +536,10 @@ export default function PowerupsPage() {
                 />
               </div>
             </div>
-            <div className="text-xs text-muted mt-2">Waiting for others to lock in…</div>
+            <div className="text-xs text-muted mt-2 inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Waiting for others to lock in…</span>
+            </div>
           </div>
         ) : (
           <>
@@ -548,7 +555,7 @@ export default function PowerupsPage() {
                       "rounded-lg border px-3 py-2 text-sm font-display text-left transition-all",
                       opt.className,
                       selectedPowerupType === opt.type
-                        ? "ring-1 ring-[color:rgba(var(--room-accent-rgb),0.7)] shadow-[0_0_0_1px_rgba(var(--room-accent-rgb),0.25)_inset]"
+                        ? "scale-[1.02] ring-2 ring-[color:rgba(var(--room-accent-rgb),0.85)] shadow-[0_0_0_1px_rgba(var(--room-accent-rgb),0.28)_inset,0_10px_22px_rgba(var(--room-accent-rgb),0.16)]"
                         : "opacity-85 hover:opacity-100",
                     ].join(" ")}
                   >
@@ -581,6 +588,14 @@ export default function PowerupsPage() {
                 const dayBoundary = dayBoundaryByIdx[idx];
                 const isSelected = selectedFixtureId === fid;
                 const isGoldenFixture = myGoldenFixtureId != null && fid === myGoldenFixtureId;
+                const pickToneClass =
+                  selectedPowerupType === "ALL_IN"
+                    ? "border-red-400/75 bg-red-500/10 shadow-[0_0_0_1px_rgba(248,113,113,0.2)_inset]"
+                    : "border-blue-400/75 bg-blue-500/10 shadow-[0_0_0_1px_rgba(96,165,250,0.2)_inset]";
+                const selectedFixtureToneClass =
+                  selectedPowerupType === "ALL_IN"
+                    ? "border-red-400/90 bg-[rgba(239,68,68,0.08)] shadow-[0_8px_18px_rgba(239,68,68,0.18),inset_0_0_0_1px_rgba(248,113,113,0.22)]"
+                    : "border-blue-400/90 bg-[rgba(59,130,246,0.08)] shadow-[0_8px_18px_rgba(59,130,246,0.18),inset_0_0_0_1px_rgba(96,165,250,0.22)]";
 
                 return (
                   <div key={fid} className="fixture-card-enter space-y-2 w-full">
@@ -613,7 +628,7 @@ export default function PowerupsPage() {
                       className={[
                         "no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
                         isSelected
-                          ? "border-red-400/90 bg-[rgba(239,68,68,0.08)] scale-[1.02] origin-center"
+                          ? `scale-[1.02] origin-center ${selectedFixtureToneClass}`
                           : isGoldenFixture
                             ? "border-yellow-300/70 bg-[linear-gradient(135deg,rgba(250,204,21,0.16)_0%,rgba(250,204,21,0.05)_100%)]"
                           : "border-teal-500 bg-surface-2",
@@ -681,7 +696,12 @@ export default function PowerupsPage() {
                       ) : (
                         <div className="font-semibold text-foreground">Fixture {fid}</div>
                       )}
-                      <div className="mt-2 rounded-lg border border-red-400/75 px-3 py-2 text-center">
+                      <div
+                        className={[
+                          "mt-2 rounded-lg border px-3 py-2 text-center",
+                          isGoldenFixture ? "border-yellow-300/75 bg-yellow-400/10" : pickToneClass,
+                        ].join(" ")}
+                      >
                         {isGoldenFixture ? (
                           <div className="h-[46px] flex items-center justify-center">
                             <span className="font-display inline-flex items-center rounded-full border border-yellow-300/75 bg-yellow-400/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground">

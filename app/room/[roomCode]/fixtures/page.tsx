@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronDown, Info, RefreshCw } from "lucide-react";
+import { ChevronDown, Info, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
@@ -692,7 +692,14 @@ export default function FixturesPage() {
                 disabled={tableOpen || tableLoading}
                 className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap disabled:opacity-60 ${BTN_3D}`}
               >
-                {tableLoading ? "Loading…" : "Table"}
+                {tableLoading ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Loading…</span>
+                  </span>
+                ) : (
+                  "Table"
+                )}
               </button>
               <button
                 onClick={refreshFixtures}
@@ -778,7 +785,10 @@ export default function FixturesPage() {
         <SpecialBreak />
         <div className="grid items-start gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {isLoading && (
-            <div className="col-span-full text-center text-muted">Loading fixtures…</div>
+            <div className="col-span-full text-center text-muted inline-flex items-center gap-2 justify-center">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading fixtures…</span>
+            </div>
           )}
 
           {!isLoading && fixtures.length === 0 && (
@@ -1045,7 +1055,7 @@ export default function FixturesPage() {
                             <div
                               key={p.uid}
                               className={[
-                                "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
+                                "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(33.333%-0.35rem)] min-[360px]:w-[calc(25%-0.4rem)] min-[400px]:w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
                                 isGoldenScored
                                   ? "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none ring-1 ring-yellow-300/65 shadow-[0_10px_22px_rgba(250,204,21,0.22),inset_0_0_0_1px_rgba(250,204,21,0.35)]"
                                   : "rounded-lg",
@@ -1061,7 +1071,9 @@ export default function FixturesPage() {
                                   "text-muted",
                                 ].join(" ")}
                               >
-                                {p.displayName}
+                                {p.displayName.length > 6
+                                  ? `${p.displayName.slice(0, 6)}`
+                                  : p.displayName}
                               </div>
 
                               <div
@@ -1164,7 +1176,12 @@ export default function FixturesPage() {
           <SpecialBreak />
 
           <div className="min-h-0 flex-1 overflow-auto no-scrollbar space-y-3 pr-1">
-            {matchInfoLoading && <div className="text-sm text-muted">Loading match info…</div>}
+            {matchInfoLoading && (
+              <div className="text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading match info…</span>
+              </div>
+            )}
             {!matchInfoLoading && matchInfoError && (
               <div className="rounded-lg border border-teal-500 bg-surface-2 p-3 text-sm text-danger">
                 {matchInfoError}
@@ -1375,7 +1392,10 @@ export default function FixturesPage() {
             </div>
             <div className="max-h-[calc(95vh-176px)] flex flex-col">
               {tableLoading ? (
-                <div className="p-4 text-sm text-muted">Loading table…</div>
+                <div className="p-4 text-sm text-muted inline-flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Loading table…</span>
+                </div>
               ) : tableError ? (
                 <div className="p-4 text-sm text-danger">{tableError}</div>
               ) : (tableRowsByMode[tableMode] ?? []).length === 0 ? (

@@ -2,18 +2,18 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import TopActionRow from "../../../../components/TopActionRow";
-import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { collection, getDocs } from "firebase/firestore";
+import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
 
 type Player = { uid: string; displayName: string };
 type ScoreDoc = {
@@ -23,13 +23,13 @@ type ScoreDoc = {
     {
       base?: number;
       golden?: boolean;
+      powerupType?: "ALL_IN" | "SAFETY_NET" | null;
+      total?: number;
       pred?: string | null;
       actual?: string | null;
-      total?: number;
     }
   >;
 };
-type ScoreWeekSummary = { computedAt?: unknown };
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
@@ -41,6 +41,8 @@ type PlayerStats = {
   resultOnlyCount: number;
   totalGradedPicks: number;
   goldenBonusPoints: number;
+  powerupBonusPoints: number;
+  powerupUsage: { ALL_IN: number; SAFETY_NET: number };
   goldenPickCount: number;
   goalDisparity: number;
   outcomeAttempts: { H: number; D: number; A: number };
@@ -56,6 +58,8 @@ type PlayerStats = {
       resultOnlyCount: number;
       totalGradedPicks: number;
       goldenBonusPoints: number;
+      powerupBonusPoints: number;
+      powerupUsage: { ALL_IN: number; SAFETY_NET: number };
       goldenPickCount: number;
       goalDisparity: number;
       outcomeAttempts: { H: number; D: number; A: number };
@@ -79,6 +83,8 @@ function projectStatsForGw(
     resultOnlyCount: gwStats?.resultOnlyCount ?? 0,
     totalGradedPicks: gwStats?.totalGradedPicks ?? 0,
     goldenBonusPoints: gwStats?.goldenBonusPoints ?? 0,
+    powerupBonusPoints: gwStats?.powerupBonusPoints ?? 0,
+    powerupUsage: gwStats?.powerupUsage ?? { ALL_IN: 0, SAFETY_NET: 0 },
     goldenPickCount: gwStats?.goldenPickCount ?? 0,
     goalDisparity: gwStats?.goalDisparity ?? 0,
     outcomeAttempts: gwStats?.outcomeAttempts ?? { H: 0, D: 0, A: 0 },
@@ -86,30 +92,6 @@ function projectStatsForGw(
     bestGw: gwStats ? selectedGwNumber : null,
     bestGwPoints: gwStats ? gwPoints : 0,
   } satisfies PlayerStats;
-}
-
-function parseGwId(id: string): number | null {
-  const m = /^gw-(\d+)$/.exec(id);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
-function asDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === "string" || typeof value === "number") {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const ts = value as { toDate?: () => Date };
-    if (typeof ts.toDate === "function") {
-      const d = ts.toDate();
-      return Number.isNaN(d.getTime()) ? null : d;
-    }
-  }
-  return null;
 }
 
 function fmtDateTime(d: Date) {
@@ -151,6 +133,14 @@ function rankStyle(rank: number) {
   if (rank === 2) return "metal-glow metal-glow-silver border border-gray-300/80 bg-gray-300/15";
   if (rank === 3) return "metal-glow metal-glow-bronze border border-amber-500/80 bg-amber-500/15";
   return "border border-teal-500 bg-surface-2";
+}
+
+function mostUsedPowerupLabel(usage: { ALL_IN: number; SAFETY_NET: number }) {
+  const allIn = usage.ALL_IN ?? 0;
+  const safety = usage.SAFETY_NET ?? 0;
+  if (allIn === 0 && safety === 0) return "None";
+  if (allIn === safety) return "All-In / Safety Net";
+  return allIn > safety ? "All-In" : "Safety Net";
 }
 
 export default function RoomStatsPage() {
@@ -289,6 +279,8 @@ export default function RoomStatsPage() {
         resultOnlyCount: 0,
         totalGradedPicks: 0,
         goldenBonusPoints: 0,
+        powerupBonusPoints: 0,
+        powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
         goldenPickCount: 0,
         goalDisparity: 0,
         outcomeAttempts: { H: 0, D: 0, A: 0 },
@@ -308,41 +300,30 @@ export default function RoomStatsPage() {
         setError(null);
       }
       let latestComputedAt: Date | null = null;
-      const scoreWeeksSnap = await getDocs(
-        collection(db, "rooms", roomCode, "seasons", seasonKey, "scores"),
-      );
-      const gws = scoreWeeksSnap.docs
-        .map((d) => parseGwId(d.id))
-        .filter((n): n is number => n !== null && n >= 1 && n <= currentGw)
+      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
+      const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
+      const gws = snapshot.weeks
+        .map((w) => w.gw)
+        .filter((n) => n >= 1 && n <= currentGw)
         .sort((a, b) => a - b);
 
-      for (const weekDoc of scoreWeeksSnap.docs) {
-        const summary = weekDoc.data() as ScoreWeekSummary;
-        const computedAt = asDate(summary.computedAt);
-        if (computedAt && (!latestComputedAt || computedAt > latestComputedAt)) {
-          latestComputedAt = computedAt;
+      for (const week of snapshot.weeks) {
+        if (
+          week.computedAtMs != null &&
+          (!latestComputedAt || week.computedAtMs > latestComputedAt.getTime())
+        ) {
+          latestComputedAt = new Date(week.computedAtMs);
         }
       }
 
       for (const gw of gws) {
-        const usersSnap = await getDocs(
-          collection(
-            db,
-            "rooms",
-            roomCode,
-            "seasons",
-            seasonKey,
-            "scores",
-            `gw-${gw}`,
-            "users",
-          ),
-        );
+        const users = weekByGw.get(gw)?.users ?? [];
 
-        for (const userScoreDoc of usersSnap.docs) {
-          const uid = userScoreDoc.id;
+        for (const userScoreDoc of users) {
+          const uid = String(userScoreDoc.uid);
           if (!playerSet.has(uid)) continue;
 
-          const score = userScoreDoc.data() as ScoreDoc;
+          const score = userScoreDoc as ScoreDoc;
           const points = Number(score.points ?? 0);
           const s = baseStats[uid];
           if (!s) continue;
@@ -356,6 +337,8 @@ export default function RoomStatsPage() {
               resultOnlyCount: 0,
               totalGradedPicks: 0,
               goldenBonusPoints: 0,
+              powerupBonusPoints: 0,
+              powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
               goldenPickCount: 0,
               goalDisparity: 0,
               outcomeAttempts: { H: 0, D: 0, A: 0 },
@@ -392,6 +375,18 @@ export default function RoomStatsPage() {
                 s.goldenBonusPoints += base;
                 gwStats.goldenBonusPoints += base;
               }
+            }
+
+            const multiplier = item.golden ? 2 : 1;
+            const nonPowerupPoints = Number(item.base ?? 0) * multiplier;
+            const fixtureTotalPoints = Number(item.total ?? nonPowerupPoints);
+            const powerupType = item.powerupType ?? null;
+            if (powerupType === "ALL_IN" || powerupType === "SAFETY_NET") {
+              const delta = fixtureTotalPoints - nonPowerupPoints;
+              s.powerupBonusPoints += delta;
+              gwStats.powerupBonusPoints += delta;
+              s.powerupUsage[powerupType] += 1;
+              gwStats.powerupUsage[powerupType] += 1;
             }
 
             const predOutcome = item.pred ? outcome(item.pred) : null;
@@ -495,6 +490,7 @@ export default function RoomStatsPage() {
       }),
       goalDisparity: competitionRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
       goldenBonus: competitionRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
+      powerupBonus: competitionRank((uid) => displayByUid[uid]?.powerupBonusPoints ?? 0),
     };
   }, [players, statsByUid, selectedGwNumber]);
   const recentGws =
@@ -581,7 +577,10 @@ export default function RoomStatsPage() {
         {error && <div className="text-sm text-danger">{error}</div>}
 
         {busy ? (
-          <div className="text-sm text-muted">Loading stats…</div>
+          <div className="text-sm text-muted inline-flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Loading stats…</span>
+          </div>
         ) : !selectedPlayer || !displayStats ? (
           <div className="text-sm text-muted">No player stats available yet.</div>
         ) : (
@@ -593,7 +592,7 @@ export default function RoomStatsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-2">
               <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Total Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">{displayStats.totalPoints}</div>
@@ -621,6 +620,20 @@ export default function RoomStatsPage() {
                 <div className="text-xs text-muted">Golden Bonus Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">
                   {displayStats.goldenBonusPoints}
+                </div>
+              </div>
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupBonus[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Power-up Bonus Points</div>
+                <div className="font-display text-xl font-semibold text-foreground">
+                  {displayStats.powerupBonusPoints > 0
+                    ? `+${displayStats.powerupBonusPoints}`
+                    : displayStats.powerupBonusPoints}
+                </div>
+              </div>
+              <div className="rounded-xl p-3 border border-teal-500 bg-surface-2">
+                <div className="text-xs text-muted">Most Used Power-up</div>
+                <div className="font-display text-xl font-semibold text-foreground">
+                  {mostUsedPowerupLabel(displayStats.powerupUsage)}
                 </div>
               </div>
               <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0)}`}>

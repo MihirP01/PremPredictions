@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import AnimatedModal from "../../../../../components/AnimatedModal";
 import SpecialBreak from "../../../../../components/SpecialBreak";
@@ -85,6 +86,7 @@ export default function MiniGamePlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [stoppingPredictions, setStoppingPredictions] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // auth guard
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function MiniGamePlayPage() {
   // current GW
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const loadBootstrap = async () => {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
@@ -104,14 +106,17 @@ export default function MiniGamePlayPage() {
           setSeasonKey(String(data.seasonKey || ""));
         }
       } catch {
-        if (!cancelled) {
-          setGw(1);
-          setSeasonKey("");
-        }
+        if (cancelled) return;
+        bootstrapRetryRef.current = setTimeout(loadBootstrap, 1500);
       }
-    })();
+    };
+    void loadBootstrap();
     return () => {
       cancelled = true;
+      if (bootstrapRetryRef.current) {
+        clearTimeout(bootstrapRetryRef.current);
+        bootstrapRetryRef.current = null;
+      }
     };
   }, [roomCode]);
 
@@ -321,7 +326,8 @@ export default function MiniGamePlayPage() {
     if (!game) return null;
     if (isCaptainParallelMode) {
       const stored = Number(game.currentFixtureId);
-      return Number.isFinite(stored) ? stored : null;
+      const validIds = game.fixtureIds ?? [];
+      return Number.isFinite(stored) && validIds.includes(stored) ? stored : null;
     }
     return isParallelDraft ? parallelActiveFixtureId : current?.fixtureId ?? null;
   }, [
@@ -384,7 +390,10 @@ export default function MiniGamePlayPage() {
     return (
       <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
-        <div className="text-sm text-muted">Loading…</div>
+        <div className="text-sm text-muted inline-flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" />
+          <span>Loading…</span>
+        </div>
       </div>
     );
   }
@@ -494,10 +503,8 @@ export default function MiniGamePlayPage() {
     1,
     Math.min(Math.max(sprintTotalTurns, 1), Number(game.currentTurn ?? 0) + 1),
   );
-  const captainParallelTurnNumber = Math.max(
-    1,
-    Math.min(Math.max(playerTurnTotal, 1), lockedInCount + (myLockedIn ? 0 : 1)),
-  );
+  const waitingForCaptainFixture =
+    isCaptainMode && !captainTurnNeedsFixtureChoice && effectiveFixtureId == null;
 
   const stopPredictions = async () => {
     if (!user || !isLeader || gw == null || !seasonKey) return;
@@ -557,8 +564,8 @@ export default function MiniGamePlayPage() {
                 captainIsChoosingFixture={captainIsChoosingFixture}
                 fixtureTurnNumber={fixtureTurnNumber}
                 fixtureTurnTotal={fixtureTurnTotal}
-                playerTurnNumber={isCaptainParallelMode ? captainParallelTurnNumber : playerTurnNumber}
-                playerTurnTotal={playerTurnTotal}
+                playerTurnNumber={isCaptainParallelMode ? 1 : playerTurnNumber}
+                playerTurnTotal={isCaptainParallelMode ? 1 : playerTurnTotal}
               />
             ) : isParallelDraft ? (
               <SprintTurnIndicator
@@ -630,9 +637,9 @@ export default function MiniGamePlayPage() {
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-2 text-left transition-colors",
+                        "w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
                         isSelected
-                          ? "bg-accent text-accent-foreground border-teal-400"
+                          ? "scale-[1.02] text-foreground border-[color:rgba(var(--room-accent-rgb),0.85)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.18)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] shadow-[0_8px_22px_rgba(var(--room-accent-rgb),0.18),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.24)]"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                       ].join(" ")}
                     >
@@ -668,9 +675,10 @@ export default function MiniGamePlayPage() {
                               name={f.home.name}
                               tla={f.home.tla}
                               shortName={f.home.shortName}
-                              wrapperClassName="w-full"
-                              abbrClassName="font-display mt-1 text-[10px] font-semibold truncate w-full"
-                              fullNameClassName="hidden"
+                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                              fullNameWindowPx={68}
                             />
                           </div>
                           <span className="font-display text-[9px] uppercase">vs</span>
@@ -688,9 +696,10 @@ export default function MiniGamePlayPage() {
                               name={f.away.name}
                               tla={f.away.tla}
                               shortName={f.away.shortName}
-                              wrapperClassName="w-full"
-                              abbrClassName="font-display mt-1 text-[10px] font-semibold truncate w-full"
-                              fullNameClassName="hidden"
+                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                              fullNameWindowPx={68}
                             />
                           </div>
                         </div>
@@ -701,7 +710,21 @@ export default function MiniGamePlayPage() {
               </div>
             </div>
           )}
-          {fixture && (
+          {waitingForCaptainFixture ? (
+            <div className="rounded-xl border-subtle bg-surface p-4 text-center">
+              <div className="inline-flex items-center gap-2 text-muted">
+                <Loader2 size={16} className="animate-spin" />
+                <span>
+                  Waiting for{" "}
+                  <span className="font-display text-foreground">
+                    {captainName || "captain"}
+                  </span>{" "}
+                  to choose fixture…
+                </span>
+              </div>
+            </div>
+          ) : null}
+          {!captainTurnNeedsFixtureChoice && fixture && (
             <div className="space-y-2 mb-2">
               <div className="text-xs text-muted">
                 <div className="flex items-center justify-between gap-2">
@@ -735,9 +758,9 @@ export default function MiniGamePlayPage() {
                   name={fixture.home.name}
                   tla={fixture.home.tla}
                   shortName={fixture.home.shortName}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-full flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameClassName="font-display w-full text-[9px] sm:text-[10px] font-medium text-muted leading-tight"
+                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                  fullNameClassName="font-display w-full text-[9px] sm:text-[9px] font-medium text-muted leading-tight"
                   fullNameWindowPx={68}
                 />
               </div>
@@ -756,9 +779,9 @@ export default function MiniGamePlayPage() {
                   name={fixture.away.name}
                   tla={fixture.away.tla}
                   shortName={fixture.away.shortName}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-full flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-xs font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameClassName="font-display w-full text-[9px] sm:text-[10px] font-medium text-muted leading-tight"
+                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                  fullNameClassName="font-display w-full text-[9px] sm:text-[9px] font-medium text-muted leading-tight"
                   fullNameWindowPx={68}
                 />
               </div>
@@ -797,7 +820,7 @@ export default function MiniGamePlayPage() {
         )}
 
         {/* pick action */}
-        {captainTurnNeedsFixtureChoice ? (
+        {waitingForCaptainFixture ? null : captainTurnNeedsFixtureChoice ? (
           <CaptainChooseFixturePanel
             submitting={submitting}
             isLocked={isLocked}
@@ -808,6 +831,7 @@ export default function MiniGamePlayPage() {
         ) : isParallelDraft ? (
           <SprintActionPanel
             myLockedIn={myLockedIn}
+            isCaptainMode={isCaptainParallelMode}
             latestLockedPick={latestLockedPick}
             lockedProgressPct={lockedProgressPct}
             playersLeftToLock={playersLeftToLock}

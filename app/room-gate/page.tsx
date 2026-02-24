@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import LogoutButton from "../../components/LogoutButton";
 import {
   collection,
@@ -248,7 +249,14 @@ export default function RoomGatePage() {
     }
   };
 
-  if (loading) return <div className="p-6">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="p-6 text-sm text-muted inline-flex items-center gap-2">
+        <Loader2 size={14} className="animate-spin" />
+        <span>Loading…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-app">
@@ -265,7 +273,10 @@ export default function RoomGatePage() {
         <div className="space-y-2">
           <div className="text-sm text-muted">Your joined rooms</div>
           {roomsLoading ? (
-            <div className="text-sm text-muted">Loading rooms…</div>
+            <div className="text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading rooms…</span>
+            </div>
           ) : memberRooms.length === 0 ? (
             <div className="text-sm text-muted">
               You are not in any rooms yet.

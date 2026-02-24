@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
@@ -23,19 +23,6 @@ export default function RoomBottomNav() {
   const roomCode = String(params?.roomCode || "").toUpperCase();
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
-  const [activePill, setActivePill] = useState<{ left: number; width: number; ready: boolean }>({
-    left: 0,
-    width: 0,
-    ready: false,
-  });
-  const navGridRef = useRef<HTMLDivElement | null>(null);
-  const navButtonRefs = useRef<Record<NavItem["key"], HTMLButtonElement | null>>({
-    fixtures: null,
-    predictions: null,
-    home: null,
-    leaderboard: null,
-    stats: null,
-  });
   const [navFxTick, setNavFxTick] = useState<Record<NavItem["key"], number>>({
     fixtures: 0,
     predictions: 0,
@@ -171,33 +158,6 @@ export default function RoomBottomNav() {
     items.forEach((item) => router.prefetch(item.href));
   }, [items, router]);
 
-  useEffect(() => {
-    const active = items.find((item) => item.active);
-    if (!active) return;
-    const gridEl = navGridRef.current;
-    const btnEl = navButtonRefs.current[active.key];
-    if (!gridEl || !btnEl) return;
-    const left = btnEl.offsetLeft;
-    const width = btnEl.offsetWidth;
-    setActivePill((prev) => {
-      if (prev.left === left && prev.width === width && prev.ready) return prev;
-      return { left, width, ready: true };
-    });
-  }, [items]);
-
-  useEffect(() => {
-    const onResize = () => {
-      const active = items.find((item) => item.active);
-      if (!active) return;
-      const gridEl = navGridRef.current;
-      const btnEl = navButtonRefs.current[active.key];
-      if (!gridEl || !btnEl) return;
-      setActivePill({ left: btnEl.offsetLeft, width: btnEl.offsetWidth, ready: true });
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [items]);
-
   const onNavClick = (key: NavItem["key"], href: string, active: boolean, disabled?: boolean) => {
     setNavFxTick((prev) => ({ ...prev, [key]: prev[key] + 1 }));
     if (active || disabled) return;
@@ -219,32 +179,20 @@ export default function RoomBottomNav() {
         transform: "translateZ(0)",
       }}
     >
-      <div ref={navGridRef} className="relative grid grid-cols-5 gap-1">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-0 bottom-0 rounded-xl border border-[color:rgba(var(--room-accent-rgb),0.72)] bg-[color:rgba(var(--room-accent-rgb),0.18)] shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.2)] transition-[left,width,opacity] duration-250 ease-out"
-          style={{
-            left: `${activePill.left}px`,
-            width: `${activePill.width}px`,
-            opacity: activePill.ready ? 1 : 0,
-          }}
-        />
+      <div className="grid grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           return (
             <button
               key={item.key}
-              ref={(el) => {
-                navButtonRefs.current[item.key] = el;
-              }}
               type="button"
               onClick={() => onNavClick(item.key, item.href, item.active, item.disabled)}
               disabled={item.disabled}
               aria-disabled={item.disabled ? "true" : undefined}
               className={[
-                "relative z-10 flex min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
+                "flex min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
                 item.active
-                  ? "scale-[1.02] border border-transparent bg-transparent text-foreground"
+                  ? "scale-[1.05] border border-[color:rgba(var(--room-accent-rgb),0.72)] bg-[color:rgba(var(--room-accent-rgb),0.18)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.2)]"
                   : item.disabled
                     ? "border border-transparent bg-surface-2/50 text-muted opacity-55 cursor-not-allowed"
                     : "border border-transparent bg-surface-2/70 text-muted",

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import PageBackButton from "../../../../../components/PageBackButton";
 import SpecialBreak from "../../../../../components/SpecialBreak";
@@ -481,7 +482,10 @@ export default function RevealPage() {
             </div>
           </div>
           <div className="rounded-xl p-4 bg-surface-2 border border-teal-500">
-            <div className="text-sm text-muted">Loading reveal…</div>
+            <div className="text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading reveal…</span>
+            </div>
           </div>
         </div>
       </div>
@@ -608,7 +612,10 @@ export default function RevealPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="font-semibold text-foreground">Reveal is syncing</div>
-                <div className="text-sm text-muted mt-1">Waiting for all locked picks to finish.</div>
+                <div className="text-sm text-muted mt-1 inline-flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Waiting for all locked picks to finish.</span>
+                </div>
               </div>
               <span className="font-display rounded-full border border-yellow-300/70 bg-yellow-400/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
                 {lockedCount}/{players.length || 0} locked

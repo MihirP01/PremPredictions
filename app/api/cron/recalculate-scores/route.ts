@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey, seasonStartYear } from "../../season";
 import { FieldValue } from "firebase-admin/firestore";
+import { applyFixtureScoring } from "../../../../lib/powerupScoring";
 
 function isAuthorized(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -226,13 +227,11 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
         const base = pred ? basePoints(pred, actual) : 0;
         const golden = goldenFixtureId === fid;
         const powerupType = powerupFixtureId === fid ? activePowerupType : null;
-        const withGolden = base * (golden ? 2 : 1);
-        let pts = withGolden;
-        if (powerupType === "ALL_IN") {
-          pts = base === 2 ? 6 : 0;
-        } else if (powerupType === "SAFETY_NET") {
-          pts = withGolden === 0 ? 1 : withGolden;
-        }
+        const pts = applyFixtureScoring({
+          basePoints: base,
+          isGolden: golden,
+          powerupType,
+        });
         total += pts;
         breakdown[String(fid)] = {
           pred: pred || null,

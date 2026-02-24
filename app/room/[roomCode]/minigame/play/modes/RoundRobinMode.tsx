@@ -1,4 +1,5 @@
 import React from "react";
+import { Loader2 } from "lucide-react";
 
 type TurnProps = {
   turnNumber: number;
@@ -48,11 +49,16 @@ export function RoundRobinActionPanel({
   if (!amITurn) {
     return (
       <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-        {waitingText ?? (
-          <>
-            Waiting for <span className="font-display">{currentTurnName}</span> to pick…
-          </>
-        )}
+        <span className="inline-flex items-center gap-2 text-muted">
+          <Loader2 size={14} className="animate-spin" />
+          <span>
+            {waitingText ?? (
+              <>
+                Waiting for <span className="font-display">{currentTurnName}</span> to pick…
+              </>
+            )}
+          </span>
+        </span>
       </div>
     );
   }

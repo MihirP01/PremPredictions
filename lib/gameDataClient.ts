@@ -17,10 +17,18 @@ export type CachedGolden = {
 export type CachedGameData = {
   picks: CachedPick[];
   goldens: CachedGolden[];
+  powerups: CachedPowerup[];
+};
+
+export type CachedPowerup = {
+  uid: string;
+  fixtureId: number;
+  powerupType: "DOUBLE";
+  locked: boolean;
 };
 
 const TTL_MS = 30 * 1000;
-const STORAGE_PREFIX = "gdat:v1:";
+const STORAGE_PREFIX = "gdat:v2:";
 const memCache = new Map<string, { expiresAt: number; data: CachedGameData }>();
 const pending = new Map<string, Promise<CachedGameData>>();
 
@@ -36,7 +44,13 @@ function getStorage(key: string): CachedGameData | null {
     const parsed = JSON.parse(raw) as { expiresAt?: number; data?: CachedGameData };
     if (!parsed?.data || !parsed?.expiresAt) return null;
     if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
+    return {
+      picks: Array.isArray(parsed.data.picks) ? parsed.data.picks : [],
+      goldens: Array.isArray(parsed.data.goldens) ? parsed.data.goldens : [],
+      powerups: Array.isArray((parsed.data as Partial<CachedGameData>).powerups)
+        ? ((parsed.data as Partial<CachedGameData>).powerups as CachedPowerup[])
+        : [],
+    };
   } catch {
     return null;
   }
@@ -68,7 +82,7 @@ export async function getGameDataCached(
   const normalizedSeason = String(seasonKey || "");
   const normalizedRoom = String(roomCode || "").toUpperCase();
   if (!normalizedRoom || !normalizedSeason || !Number.isFinite(normalizedGw)) {
-    return { picks: [], goldens: [] };
+    return { picks: [], goldens: [], powerups: [] };
   }
   const key = keyFor(normalizedRoom, normalizedSeason, normalizedGw);
   const now = Date.now();
@@ -84,9 +98,10 @@ export async function getGameDataCached(
 
   const req = (async () => {
     const base = ["rooms", normalizedRoom, "seasons", normalizedSeason, "games", `gw-${normalizedGw}`] as const;
-    const [picksSnap, goldenSnap] = await Promise.all([
+    const [picksSnap, goldenSnap, powerupsSnap] = await Promise.all([
       getDocs(collection(db, ...base, "picks")),
       getDocs(collection(db, ...base, "golden")),
+      getDocs(collection(db, ...base, "powerups")),
     ]);
     const picks: CachedPick[] = picksSnap.docs
       .map((d) => {
@@ -109,8 +124,32 @@ export async function getGameDataCached(
         } satisfies CachedGolden;
       })
       .filter((g) => !!g.uid && Number.isFinite(g.fixtureId));
+    const powerups: CachedPowerup[] = powerupsSnap.docs
+      .map((d) => {
+        const data = d.data() as {
+          fixtureId?: number;
+          powerupType?: string;
+          locked?: boolean;
+        };
+        return {
+          uid: d.id,
+          fixtureId: Number(data.fixtureId),
+          powerupType: String(data.powerupType || "").toUpperCase(),
+          locked: Boolean(data.locked),
+        };
+      })
+      .filter(
+        (p): p is { uid: string; fixtureId: number; powerupType: "DOUBLE"; locked: boolean } =>
+          !!p.uid && Number.isFinite(p.fixtureId) && p.powerupType === "DOUBLE",
+      )
+      .map((p) => ({
+        uid: p.uid,
+        fixtureId: p.fixtureId,
+        powerupType: "DOUBLE" as const,
+        locked: p.locked,
+      }));
 
-    const payload = { picks, goldens } satisfies CachedGameData;
+    const payload = { picks, goldens, powerups } satisfies CachedGameData;
     setCached(key, payload);
     return payload;
   })().finally(() => pending.delete(key));
@@ -118,4 +157,3 @@ export async function getGameDataCached(
   pending.set(key, req);
   return req;
 }
-

@@ -16,6 +16,7 @@ type RoomDoc = {
   leaderUid?: string;
   settings?: {
     sameResultLock?: boolean;
+    powerupsEnabled?: boolean;
     gameModeStyle?: "round_robin" | "sprint" | "captain";
   };
 };
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
       style === "sprint" || (style === "captain" && !sameResultLock)
         ? "parallel"
         : "turn";
+    const powerupsEnabled = room.settings?.powerupsEnabled === true;
 
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
 
@@ -168,6 +170,7 @@ export async function POST(req: Request) {
           totalTurns: order.length * fixtureIds10.length,
           draftMode,
           sameResultLock,
+          powerupsEnabled,
           gameModeStyle: style,
           draftReadyByUid: {},
           firstKickoffAt,

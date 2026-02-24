@@ -16,6 +16,7 @@ type GoldenBody = {
 type GameDoc = {
   state?: string;
   players?: string[];
+  powerupsEnabled?: boolean;
   lockAt?: unknown;
   firstKickoffAt?: unknown;
 };
@@ -111,7 +112,9 @@ export async function POST(req: Request) {
       );
 
       if (lockedAfter >= players.length) {
-        tx.update(gameRef, { state: "REVEAL" });
+        tx.update(gameRef, {
+          state: game.powerupsEnabled ? "POWERUPS" : "REVEAL",
+        });
       }
     });
 

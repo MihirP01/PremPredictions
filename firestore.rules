@@ -59,6 +59,10 @@ service cloud.firestore {
           allow read: if isMember(roomCode);
           allow write: if false;
         }
+        match /powerups/{playerUid} {
+          allow read: if isMember(roomCode);
+          allow write: if false;
+        }
       }
 
       // Season-scoped data.
@@ -79,6 +83,10 @@ service cloud.firestore {
             allow write: if false;
           }
           match /golden/{playerUid} {
+            allow read: if isMember(roomCode);
+            allow write: if false;
+          }
+          match /powerups/{playerUid} {
             allow read: if isMember(roomCode);
             allow write: if false;
           }

@@ -22,7 +22,7 @@ import {
 } from "@/lib/dateDisplay";
 
 type GameDoc = {
-  state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
+  state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
   players: string[];
   fixtureIds: number[];
   lockAt?: unknown;
@@ -160,6 +160,11 @@ export default function GoldenPage() {
         if (st === "REVEAL") {
           routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/reveal`);
+          return;
+        }
+        if (st === "POWERUPS") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/powerups`);
           return;
         }
         if (st === "LOBBY") {

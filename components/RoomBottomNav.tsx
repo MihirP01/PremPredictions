@@ -42,7 +42,11 @@ export default function RoomBottomNav() {
         if (bootstrapState === "REVEAL") {
           setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
           setPredictionsDisabled(false);
-        } else if (bootstrapState === "DRAFT" || bootstrapState === "GOLDEN") {
+        } else if (
+          bootstrapState === "DRAFT" ||
+          bootstrapState === "GOLDEN" ||
+          bootstrapState === "POWERUPS"
+        ) {
           setPredictionsHref(`/room/${roomCode}/minigame`);
           setPredictionsDisabled(true);
         } else {
@@ -66,7 +70,7 @@ export default function RoomBottomNav() {
               setPredictionsDisabled(false);
               return;
             }
-            if (state === "DRAFT" || state === "GOLDEN") {
+            if (state === "DRAFT" || state === "GOLDEN" || state === "POWERUPS") {
               setPredictionsHref(`/room/${roomCode}/minigame`);
               setPredictionsDisabled(true);
               return;
@@ -140,7 +144,8 @@ export default function RoomBottomNav() {
 
   const hideForActiveGamePhase =
     pathname === `/room/${roomCode}/minigame/play` ||
-    pathname === `/room/${roomCode}/minigame/golden`;
+    pathname === `/room/${roomCode}/minigame/golden` ||
+    pathname === `/room/${roomCode}/minigame/powerups`;
 
   useEffect(() => {
     items.forEach((item) => router.prefetch(item.href));

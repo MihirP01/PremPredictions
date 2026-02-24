@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
             themeAccent?: string;
             gameModeStyle?: "round_robin" | "sprint" | "captain";
             sameResultLock?: boolean;
+            powerupsEnabled?: boolean;
           };
         }
       | undefined;
@@ -72,6 +73,7 @@ export async function GET(req: NextRequest) {
         themeAccent: room?.settings?.themeAccent ?? "teal",
         gameModeStyle: room?.settings?.gameModeStyle ?? "sprint",
         allowIdenticalPicks: room?.settings?.sameResultLock === false,
+        powerupsEnabled: room?.settings?.powerupsEnabled === true,
         seasonOptions,
       },
       {

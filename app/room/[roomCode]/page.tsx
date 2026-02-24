@@ -77,6 +77,7 @@ export default function RoomPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [showKickControls, setShowKickControls] = useState(false);
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
+  const [powerupsEnabled, setPowerupsEnabled] = useState(false);
   const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
     "round_robin",
   );
@@ -200,6 +201,7 @@ export default function RoomPage() {
         const style = roomMeta.settings.gameModeStyle;
         setGameModeStyle(style);
         setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+        setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
         setThemeAccent(roomMeta.settings.themeAccent);
         setHasPassword(roomMeta.settings.hasPassword);
       },
@@ -545,6 +547,31 @@ export default function RoomPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
       setThemeAccent(nextAccent);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update settings.");
+    } finally {
+      setRoomSettingsBusy(false);
+    }
+  }
+
+  async function togglePowerups() {
+    if (!user || !isLeader || roomSettingsBusy) return;
+    const nextEnabled = !powerupsEnabled;
+    setRoomSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          powerupsEnabled: nextEnabled,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
+      setPowerupsEnabled(data?.powerupsEnabled === true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update settings.");
     } finally {
@@ -998,6 +1025,23 @@ export default function RoomPage() {
             </button>
             <div className="text-xs text-muted text-center">
               {resultLockSubtext}
+            </div>
+            <button
+              onClick={togglePowerups}
+              disabled={roomSettingsBusy}
+              className={[
+                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+              ].join(" ")}
+            >
+              {roomSettingsBusy
+                ? "Saving..."
+                : powerupsEnabled
+                  ? "Power-Ups: ON"
+                  : "Power-Ups: OFF"}
+            </button>
+            <div className="text-xs text-muted text-center">
+              Adds a Double Points phase after Golden for this week.
             </div>
             <div className="space-y-3">
               <SpecialBreak />

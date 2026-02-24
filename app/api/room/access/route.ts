@@ -79,6 +79,7 @@ export async function POST(req: Request) {
           settings: {
             gameModeStyle: "sprint",
             sameResultLock: false,
+            powerupsEnabled: false,
             themeAccent: "teal",
             hasPassword: !!password,
             updatedAt: FieldValue.serverTimestamp(),

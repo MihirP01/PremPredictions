@@ -83,6 +83,7 @@ export default function MiniGameLobbyPage() {
     "round_robin",
   );
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState<boolean>(true);
+  const [powerupsEnabled, setPowerupsEnabled] = useState<boolean>(false);
   const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
   const [modeGuideOpen, setModeGuideOpen] = useState(false);
   const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
@@ -133,11 +134,16 @@ export default function MiniGameLobbyPage() {
         const style = data.gameModeStyle ?? "sprint";
         setGameModeStyle(style);
         setAllowIdenticalPicks(style === "sprint" ? true : Boolean(data.allowIdenticalPicks));
+        setPowerupsEnabled(Boolean(data.powerupsEnabled));
         const st = String(data.gameState || "").trim().toUpperCase();
-        if (!routedRef.current && (st === "DRAFT" || st === "GOLDEN" || st === "REVEAL")) {
+        if (
+          !routedRef.current &&
+          (st === "DRAFT" || st === "GOLDEN" || st === "POWERUPS" || st === "REVEAL")
+        ) {
           routedRef.current = true;
           if (st === "DRAFT") router.replace(`/room/${roomCode}/minigame/play`);
           else if (st === "GOLDEN") router.replace(`/room/${roomCode}/minigame/golden`);
+          else if (st === "POWERUPS") router.replace(`/room/${roomCode}/minigame/powerups`);
           else router.replace(`/room/${roomCode}/minigame/reveal`);
         }
       }
@@ -163,6 +169,7 @@ export default function MiniGameLobbyPage() {
         const style = roomMeta.settings.gameModeStyle;
         setGameModeStyle(style);
         setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+        setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
       },
       () => {},
     );
@@ -408,6 +415,12 @@ export default function MiniGameLobbyPage() {
           return;
         }
 
+        if (st === "POWERUPS") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/powerups`);
+          return;
+        }
+
         if (st === "REVEAL") {
           routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/reveal`);
@@ -541,6 +554,31 @@ export default function MiniGameLobbyPage() {
     }
   }
 
+  async function togglePowerupsEnabled() {
+    if (!user || !isLeader || modeSettingsBusy) return;
+    const nextEnabled = !powerupsEnabled;
+    setModeSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          powerupsEnabled: nextEnabled,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to update power-ups.");
+      setPowerupsEnabled(data?.powerupsEnabled === true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update power-ups.");
+    } finally {
+      setModeSettingsBusy(false);
+    }
+  }
+
   // Simple loading guard
   if (loading) return null;
 
@@ -630,6 +668,12 @@ export default function MiniGameLobbyPage() {
                 Allow Identical Picks:{" "}
                 <span className="font-display text-foreground">
                   {allowIdenticalPicks ? "ON" : "OFF"}
+                </span>
+              </div>
+              <div className="text-xs text-muted">
+                Power-Ups:{" "}
+                <span className="font-display text-foreground">
+                  {powerupsEnabled ? "ON" : "OFF"}
                 </span>
               </div>
             </div>
@@ -837,6 +881,9 @@ export default function MiniGameLobbyPage() {
           <div className="font-display font-semibold text-foreground">
             {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
           </div>
+          <div className="text-xs text-muted">
+            Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
+          </div>
           <div className="text-sm text-muted">{currentModeSummary}</div>
           {allowIdenticalPicks && (
             <div className="text-xs text-muted">ON = Hidden until reveal, same picks allowed.</div>
@@ -870,6 +917,13 @@ export default function MiniGameLobbyPage() {
             <div className="text-sm text-muted">
               Fastest mode. Everyone submits at the same time for each fixture.
               Picks stay hidden until reveal.
+            </div>
+          </div>
+          <div className="rounded-lg border border-subtle bg-surface-2 p-3">
+            <div className="font-display font-semibold text-foreground">Power-Ups (Optional)</div>
+            <div className="text-sm text-muted">
+              When enabled, a Double Points phase appears after Golden. Each player picks one fixture
+              to multiply their points for that fixture.
             </div>
           </div>
         </div>
@@ -945,6 +999,17 @@ export default function MiniGameLobbyPage() {
                   : allowIdenticalPicks
                     ? "Allow Identical Picks: ON"
                     : "Allow Identical Picks: OFF"}
+            </button>
+            <button
+              onClick={togglePowerupsEnabled}
+              disabled={modeSettingsBusy}
+              className="w-full text-sm rounded-lg px-4 py-2 border bg-surface border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+            >
+              {modeSettingsBusy
+                ? "Saving..."
+                : powerupsEnabled
+                  ? "Power-Ups: ON"
+                  : "Power-Ups: OFF"}
             </button>
       </AnimatedModal>
     </>

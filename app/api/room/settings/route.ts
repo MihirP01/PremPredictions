@@ -9,6 +9,7 @@ type RoomSettingsBody = {
   roomCode?: string;
   leaderUid?: string;
   sameResultLock?: boolean;
+  powerupsEnabled?: boolean;
   themeAccent?: string;
   gameModeStyle?: "round_robin" | "sprint" | "captain";
 };
@@ -17,6 +18,7 @@ type RoomDoc = {
   leaderUid?: string;
   settings?: {
     sameResultLock?: boolean;
+    powerupsEnabled?: boolean;
     themeAccent?: string;
     gameModeStyle?: "round_robin" | "sprint" | "captain";
   };
@@ -38,6 +40,7 @@ export async function POST(req: Request) {
     const roomCode = String(body.roomCode || "").toUpperCase();
     const leaderUid = String(body.leaderUid || "");
     const sameResultLock = body.sameResultLock;
+    const powerupsEnabled = body.powerupsEnabled;
     const themeAccent =
       typeof body.themeAccent === "string" ? body.themeAccent.trim().toLowerCase() : undefined;
     const gameModeStyle =
@@ -53,11 +56,15 @@ export async function POST(req: Request) {
     }
     if (
       typeof sameResultLock !== "boolean" &&
+      typeof powerupsEnabled !== "boolean" &&
       typeof themeAccent !== "string" &&
       typeof gameModeStyle !== "string"
     ) {
       return NextResponse.json(
-        { error: "Provide sameResultLock and/or themeAccent and/or gameModeStyle" },
+        {
+          error:
+            "Provide sameResultLock and/or powerupsEnabled and/or themeAccent and/or gameModeStyle",
+        },
         { status: 400 },
       );
     }
@@ -101,12 +108,17 @@ export async function POST(req: Request) {
     if (nextGameModeStyle === "sprint") {
       nextSameResultLock = false;
     }
+    const nextPowerupsEnabled =
+      typeof powerupsEnabled === "boolean"
+        ? powerupsEnabled
+        : currentSettings.powerupsEnabled === true;
 
     const nextSettings: Record<string, unknown> = {
       updatedAt: FieldValue.serverTimestamp(),
     };
     nextSettings.gameModeStyle = nextGameModeStyle;
     nextSettings.sameResultLock = nextSameResultLock;
+    nextSettings.powerupsEnabled = nextPowerupsEnabled;
     if (themeAccent) nextSettings.themeAccent = themeAccent;
 
     await roomRef.set({ settings: nextSettings }, { merge: true });
@@ -114,6 +126,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       sameResultLock: nextSameResultLock,
+      powerupsEnabled: nextPowerupsEnabled,
       gameModeStyle: nextGameModeStyle,
       themeAccent: themeAccent ?? undefined,
     });

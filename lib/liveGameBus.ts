@@ -10,10 +10,17 @@ import { db } from "../firebase";
 type GameDocLike = Record<string, unknown> | null;
 type PickLike = { uid: string; fixtureId: number; score: string };
 type GoldenLike = { uid: string; fixtureId: number; score: string; locked: boolean };
+type PowerupLike = {
+  uid: string;
+  fixtureId: number;
+  powerupType: "DOUBLE";
+  locked: boolean;
+};
 type RoomMetaLike = {
   leaderUid: string | null;
   settings: {
     sameResultLock: boolean;
+    powerupsEnabled: boolean;
     gameModeStyle: "round_robin" | "sprint" | "captain";
     themeAccent: string;
     hasPassword: boolean;
@@ -32,6 +39,7 @@ type Channel<T> = {
 const gameChannels = new Map<string, Channel<GameDocLike>>();
 const picksChannels = new Map<string, Channel<PickLike[]>>();
 const goldenChannels = new Map<string, Channel<GoldenLike[]>>();
+const powerupsChannels = new Map<string, Channel<PowerupLike[]>>();
 const roomPlayersChannels = new Map<string, Channel<RoomPlayerLike[]>>();
 const roomMetaChannels = new Map<string, Channel<RoomMetaLike | null>>();
 
@@ -145,6 +153,52 @@ function attachGoldenListener(roomCode: string, seasonKey: string, gw: number, c
   );
 }
 
+function attachPowerupsListener(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  ch: Channel<PowerupLike[]>,
+) {
+  const q = query(
+    collection(
+      db,
+      "rooms",
+      roomCode.toUpperCase(),
+      "seasons",
+      seasonKey,
+      "games",
+      `gw-${gw}`,
+      "powerups",
+    ),
+  );
+  ch.firestoreUnsub = onSnapshot(
+    q,
+    (snap) => {
+      const powerups = snap.docs
+        .map((d) => {
+          const data = d.data() as {
+            fixtureId?: number;
+            powerupType?: string;
+            locked?: boolean;
+          };
+          const powerupType = String(data.powerupType || "").toUpperCase();
+          return {
+            uid: d.id,
+            fixtureId: Number(data.fixtureId),
+            powerupType: powerupType === "DOUBLE" ? "DOUBLE" : null,
+            locked: Boolean(data.locked),
+          };
+        })
+        .filter(
+          (p): p is { uid: string; fixtureId: number; powerupType: "DOUBLE"; locked: boolean } =>
+            !!p.uid && Number.isFinite(p.fixtureId) && p.powerupType === "DOUBLE",
+        );
+      emitData(ch, powerups);
+    },
+    (e) => emitErr(ch, e),
+  );
+}
+
 function subscribeChannel<T>(
   bucket: Map<string, Channel<T>>,
   key: string,
@@ -219,6 +273,23 @@ export function subscribeRoomGoldens(
   );
 }
 
+export function subscribeRoomPowerups(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  onData: DataListener<PowerupLike[]>,
+  onError?: ErrorListener,
+) {
+  const key = keyFor(roomCode, seasonKey, gw);
+  return subscribeChannel(
+    powerupsChannels,
+    key,
+    onData,
+    onError,
+    (ch) => attachPowerupsListener(roomCode, seasonKey, gw, ch),
+  );
+}
+
 function attachRoomPlayersListener(roomCode: string, ch: Channel<RoomPlayerLike[]>) {
   const q = query(collection(db, "rooms", roomCode.toUpperCase(), "players"));
   ch.firestoreUnsub = onSnapshot(
@@ -275,6 +346,7 @@ function attachRoomMetaListener(roomCode: string, ch: Channel<RoomMetaLike | nul
         leaderUid?: string;
         settings?: {
           sameResultLock?: boolean;
+          powerupsEnabled?: boolean;
           gameModeStyle?: "round_robin" | "sprint" | "captain";
           themeAccent?: string;
           hasPassword?: boolean;
@@ -285,6 +357,7 @@ function attachRoomMetaListener(roomCode: string, ch: Channel<RoomMetaLike | nul
         leaderUid: data?.leaderUid ?? null,
         settings: {
           sameResultLock,
+          powerupsEnabled: data?.settings?.powerupsEnabled === true,
           gameModeStyle:
             data?.settings?.gameModeStyle ??
             (sameResultLock ? "round_robin" : "sprint"),

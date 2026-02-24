@@ -145,7 +145,8 @@ export default function LeaderboardMatrixPage() {
     "overall",
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
-  const settingsWrapRef = useRef<HTMLDivElement | null>(null);
+  const settingsWrapMobileRef = useRef<HTMLDivElement | null>(null);
+  const settingsWrapDesktopRef = useRef<HTMLDivElement | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
 
   // matrix: userUid -> gw -> points (read only from score docs)
@@ -268,7 +269,8 @@ export default function LeaderboardMatrixPage() {
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (settingsWrapRef.current?.contains(target)) return;
+      if (settingsWrapMobileRef.current?.contains(target)) return;
+      if (settingsWrapDesktopRef.current?.contains(target)) return;
       setSettingsOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
@@ -609,7 +611,46 @@ export default function LeaderboardMatrixPage() {
           <TopActionRow
             title="Leaderboard"
             subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-            actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
+            actions={
+              <div className="ml-auto flex items-center gap-2">
+                {isLeader && (
+                  <div ref={settingsWrapMobileRef} className="relative sm:hidden">
+                    <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+                    <SettingsDropdownPanel open={settingsOpen}>
+                      <div className="font-display font-semibold text-foreground">Leader Tools</div>
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted">
+                          Recalculate score docs, then reload leaderboard data.
+                        </div>
+                        <button
+                          onClick={recalcAndRefreshScores}
+                          disabled={leaderToolBusy}
+                          className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                        >
+                          {leaderToolBusy
+                            ? `Recalculating around GW${currentGw}...`
+                            : "Recalculate Scores"}
+                        </button>
+                      </div>
+                    </SettingsDropdownPanel>
+                  </div>
+                )}
+                <button
+                  onClick={refreshLeaderboard}
+                  disabled={busy || refreshLockSeconds > 0}
+                  className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex sm:hidden items-center justify-center page-action-btn disabled:opacity-60"
+                  aria-label="Refresh leaderboard"
+                  title={
+                    refreshLockSeconds > 0
+                      ? `Refresh locked (${refreshLockSeconds}s)`
+                      : "Refresh leaderboard"
+                  }
+                >
+                  <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
+                </button>
+                <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
+              </div>
+            }
           />
 
           <div className="flex items-center justify-between gap-2">
@@ -635,9 +676,9 @@ export default function LeaderboardMatrixPage() {
                 </span>
               </div>
             )}
-            <div className="ml-auto flex items-center gap-2 page-actions-enter">
+            <div className="ml-auto hidden sm:flex items-center gap-2 page-actions-enter">
               {isLeader && (
-                <div ref={settingsWrapRef} className="relative">
+                <div ref={settingsWrapDesktopRef} className="relative">
                   <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
                   <SettingsDropdownPanel open={settingsOpen}>
                     <div className="font-display font-semibold text-foreground">Leader Tools</div>

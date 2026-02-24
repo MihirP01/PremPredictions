@@ -27,6 +27,12 @@ type GoldenDoc = {
   locked?: boolean;
 };
 
+type PowerupDoc = {
+  fixtureId?: number;
+  locked?: boolean;
+  powerupType?: string;
+};
+
 type GwRunResult = {
   gw: number;
   status: "scored" | "skipped" | "error";
@@ -146,6 +152,18 @@ async function scoreSingleGw(
     });
   }
 
+  const powerupsSnap = await adminDb.collection(`${gameBase}/powerups`).get();
+  const doubleByUid = new Map<string, { fixtureId: number; locked: boolean }>();
+  for (const d of powerupsSnap.docs) {
+    const data = d.data() as PowerupDoc;
+    const powerupType = String(data.powerupType || "").toUpperCase();
+    if (powerupType !== "DOUBLE") continue;
+    doubleByUid.set(d.id, {
+      fixtureId: Number(data.fixtureId),
+      locked: !!data.locked,
+    });
+  }
+
   const batch = adminDb.batch();
   let scoredUsers = 0;
 
@@ -158,12 +176,16 @@ async function scoreSingleGw(
         actual: string;
         base: number;
         golden: boolean;
+        powerupType: "DOUBLE" | null;
+        doubled: boolean;
         total: number;
       }
     > = {};
 
     const g = goldenByUid.get(uid);
     const goldenFixtureId = g?.locked ? g.fixtureId : null;
+    const d = doubleByUid.get(uid);
+    const doubleFixtureId = d?.locked ? d.fixtureId : null;
 
     for (const fid of fixtureIds) {
       const actual = actualByFixture.get(fid);
@@ -172,7 +194,8 @@ async function scoreSingleGw(
       const pred = pickMap.get(`${uid}|${fid}`) || "";
       const base = pred ? basePoints(pred, actual) : 0;
       const isGolden = goldenFixtureId === fid;
-      const pts = base * (isGolden ? 2 : 1);
+      const isDoubled = doubleFixtureId === fid;
+      const pts = base * (isGolden ? 2 : 1) * (isDoubled ? 2 : 1);
 
       total += pts;
       breakdown[String(fid)] = {
@@ -180,6 +203,8 @@ async function scoreSingleGw(
         actual,
         base,
         golden: isGolden,
+        powerupType: isDoubled ? "DOUBLE" : null,
+        doubled: isDoubled,
         total: pts,
       };
     }

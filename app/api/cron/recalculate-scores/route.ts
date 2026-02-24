@@ -38,6 +38,12 @@ type GoldenDoc = {
   locked?: boolean;
 };
 
+type PowerupDoc = {
+  fixtureId?: number;
+  locked?: boolean;
+  powerupType?: string;
+};
+
 function parseScore(s: string | null | undefined) {
   if (!s) return null;
   const m = String(s)
@@ -174,6 +180,17 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
         locked: !!data.locked,
       });
     }
+    const powerupsSnap = await adminDb.collection(`${gameBase}/powerups`).get();
+    const doubleByUid = new Map<string, { fixtureId: number; locked: boolean }>();
+    for (const d of powerupsSnap.docs) {
+      const data = d.data() as PowerupDoc;
+      const powerupType = String(data.powerupType || "").toUpperCase();
+      if (powerupType !== "DOUBLE") continue;
+      doubleByUid.set(d.id, {
+        fixtureId: Number(data.fixtureId),
+        locked: !!data.locked,
+      });
+    }
 
     const batch = adminDb.batch();
     let scoredUsers = 0;
@@ -182,10 +199,20 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
       let total = 0;
       const breakdown: Record<
         string,
-        { pred: string | null; actual: string; base: number; golden: boolean; total: number }
+        {
+          pred: string | null;
+          actual: string;
+          base: number;
+          golden: boolean;
+          powerupType: "DOUBLE" | null;
+          doubled: boolean;
+          total: number;
+        }
       > = {};
       const g = goldenByUid.get(uid);
       const goldenFixtureId = g?.locked ? g.fixtureId : null;
+      const d = doubleByUid.get(uid);
+      const doubleFixtureId = d?.locked ? d.fixtureId : null;
 
       for (const fid of fixtureIds) {
         const actual = actualByFixture.get(fid);
@@ -193,13 +220,16 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
         const pred = pickMap.get(`${uid}|${fid}`) || "";
         const base = pred ? basePoints(pred, actual) : 0;
         const golden = goldenFixtureId === fid;
-        const pts = base * (golden ? 2 : 1);
+        const doubled = doubleFixtureId === fid;
+        const pts = base * (golden ? 2 : 1) * (doubled ? 2 : 1);
         total += pts;
         breakdown[String(fid)] = {
           pred: pred || null,
           actual,
           base,
           golden,
+          powerupType: doubled ? "DOUBLE" : null,
+          doubled,
           total: pts,
         };
       }

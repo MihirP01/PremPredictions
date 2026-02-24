@@ -28,7 +28,7 @@ import { RoundRobinActionPanel, RoundRobinTurnIndicator } from "./modes/RoundRob
 import { SprintActionPanel, SprintTurnIndicator } from "./modes/SprintMode";
 
 type GameDoc = {
-  state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
+  state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
   order: string[];
   fixtureIds: number[];
   currentTurn: number;
@@ -408,6 +408,10 @@ export default function MiniGamePlayPage() {
   }
   if (game.state === "REVEAL") {
     router.replace(`/room/${roomCode}/minigame/reveal`);
+    return null;
+  }
+  if (game.state === "POWERUPS") {
+    router.replace(`/room/${roomCode}/minigame/powerups`);
     return null;
   }
 

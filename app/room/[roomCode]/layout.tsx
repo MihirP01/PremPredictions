@@ -285,7 +285,8 @@ export default function RoomScopedLayout({
   const accent = ACCENT_THEME[accentKey] || ACCENT_THEME.teal;
   const hideBottomNav =
     pathname === `/room/${roomCode}/minigame/play` ||
-    pathname === `/room/${roomCode}/minigame/golden`;
+    pathname === `/room/${roomCode}/minigame/golden` ||
+    pathname === `/room/${roomCode}/minigame/powerups`;
 
   // Capture default app vars once, restore only when leaving room scope.
   useEffect(() => {

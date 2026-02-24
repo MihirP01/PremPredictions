@@ -10,6 +10,7 @@ export type RoomBootstrapData = {
   themeAccent: string;
   gameModeStyle: "round_robin" | "sprint" | "captain";
   allowIdenticalPicks: boolean;
+  powerupsEnabled?: boolean;
   seasonOptions?: string[];
 };
 

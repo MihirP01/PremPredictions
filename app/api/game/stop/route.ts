@@ -60,7 +60,12 @@ export async function POST(req: Request) {
     if (state === "LOBBY") {
       return NextResponse.json({ ok: true, state });
     }
-    if (state !== "DRAFT" && state !== "GOLDEN" && state !== "REVEAL") {
+    if (
+      state !== "DRAFT" &&
+      state !== "GOLDEN" &&
+      state !== "POWERUPS" &&
+      state !== "REVEAL"
+    ) {
       return NextResponse.json({ error: `Cannot stop from state ${state || "UNKNOWN"}` }, { status: 400 });
     }
     const picksCol = adminDb.collection(
@@ -69,13 +74,18 @@ export async function POST(req: Request) {
     const goldenCol = adminDb.collection(
       `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}/golden`,
     );
-    const [picksSnap, goldenSnap] = await Promise.all([
+    const powerupsCol = adminDb.collection(
+      `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}/powerups`,
+    );
+    const [picksSnap, goldenSnap, powerupsSnap] = await Promise.all([
       picksCol.get(),
       goldenCol.get(),
+      powerupsCol.get(),
     ]);
     const batch = adminDb.batch();
     picksSnap.docs.forEach((d) => batch.delete(d.ref));
     goldenSnap.docs.forEach((d) => batch.delete(d.ref));
+    powerupsSnap.docs.forEach((d) => batch.delete(d.ref));
     await batch.commit();
 
     await gameRef.set(

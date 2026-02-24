@@ -16,6 +16,7 @@ import {
   subscribeRoomGameDoc,
   subscribeRoomGoldens,
   subscribeRoomPicks,
+  subscribeRoomPowerups,
   subscribeRoomPlayers,
 } from "@/lib/liveGameBus";
 import {
@@ -27,7 +28,7 @@ import {
 import { getCountdownParts } from "../lock-utils";
 
 type GameDoc = {
-  state: "LOBBY" | "DRAFT" | "GOLDEN" | "REVEAL";
+  state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
   players: string[];
   order?: string[];
   fixtureIds: number[];
@@ -53,6 +54,13 @@ type GoldenDoc = {
   uid: string;
   fixtureId: number;
   score: string;
+  locked: boolean;
+};
+
+type PowerupDoc = {
+  uid: string;
+  fixtureId: number;
+  powerupType: "DOUBLE";
   locked: boolean;
 };
 
@@ -91,6 +99,7 @@ export default function RevealPage() {
   const [goldensByUid, setGoldensByUid] = useState<Record<string, GoldenDoc>>(
     {},
   );
+  const [powerupsByUid, setPowerupsByUid] = useState<Record<string, PowerupDoc>>({});
   const [displayNamesByUid, setDisplayNamesByUid] = useState<
     Record<string, string>
   >({});
@@ -169,6 +178,9 @@ export default function RevealPage() {
         } else if (st === "GOLDEN") {
           routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/golden`);
+        } else if (st === "POWERUPS") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}/minigame/powerups`);
         } else if (st === "LOBBY") {
           routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame`);
@@ -217,8 +229,19 @@ export default function RevealPage() {
           locked: g.locked,
         };
       }
+      const powerupMap: Record<string, PowerupDoc> = {};
+      for (const p of data.powerups ?? []) {
+        if (p.powerupType !== "DOUBLE") continue;
+        powerupMap[p.uid] = {
+          uid: p.uid,
+          fixtureId: p.fixtureId,
+          powerupType: "DOUBLE",
+          locked: p.locked,
+        };
+      }
       setPicks(list);
       setGoldensByUid(map);
+      setPowerupsByUid(powerupMap);
     })().catch(() => {});
     return () => {
       cancelled = true;
@@ -257,6 +280,28 @@ export default function RevealPage() {
         setGoldensByUid(map);
       },
       () => setError("Failed to listen for goldens."),
+    );
+  }, [roomCode, gw, seasonKey]);
+
+  useEffect(() => {
+    if (gw == null || !seasonKey) return;
+    return subscribeRoomPowerups(
+      roomCode,
+      seasonKey,
+      gw,
+      (list) => {
+        const map: Record<string, PowerupDoc> = {};
+        for (const p of list) {
+          map[p.uid] = {
+            uid: p.uid,
+            fixtureId: p.fixtureId,
+            powerupType: "DOUBLE",
+            locked: p.locked,
+          };
+        }
+        setPowerupsByUid(map);
+      },
+      () => setError("Failed to listen for power-ups."),
     );
   }, [roomCode, gw, seasonKey]);
 
@@ -716,6 +761,8 @@ export default function RevealPage() {
                       const sc = picksByUserFixture.get(`${uid}|${fid}`) || "";
                       const g = goldensByUid[uid];
                       const isGolden = g?.locked && g?.fixtureId === fid;
+                      const p = powerupsByUid[uid];
+                      const isDoubled = p?.locked && p?.powerupType === "DOUBLE" && p?.fixtureId === fid;
                       return (
                         <div
                           key={`${fid}-${uid}`}
@@ -735,6 +782,9 @@ export default function RevealPage() {
                               isGolden
                                 ? "bg-gradient-to-r from-yellow-500/25 to-amber-300/15 border-yellow-300/70"
                                 : "bg-surface/70",
+                              isDoubled
+                                ? "border-red-400/80 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
+                                : "",
                             ].join(" ")}
                           >
                             {fmtScore(sc)}

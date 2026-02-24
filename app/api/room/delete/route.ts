@@ -29,6 +29,7 @@ async function deleteSeasonData(roomCode: string, seasonKey: string) {
     await deleteCollectionDocs(`${base}/lobby`);
     await deleteCollectionDocs(`${base}/picks`);
     await deleteCollectionDocs(`${base}/golden`);
+    await deleteCollectionDocs(`${base}/powerups`);
     await gwDoc.ref.delete();
   }
 
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
       await deleteCollectionDocs(`${base}/lobby`);
       await deleteCollectionDocs(`${base}/picks`);
       await deleteCollectionDocs(`${base}/golden`);
+      await deleteCollectionDocs(`${base}/powerups`);
       await gwDoc.ref.delete();
     }
     const scoresSnap = await adminDb.collection(`rooms/${roomCode}/scores`).get();

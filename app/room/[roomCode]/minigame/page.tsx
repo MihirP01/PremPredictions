@@ -922,8 +922,8 @@ export default function MiniGameLobbyPage() {
           <div className="rounded-lg border border-subtle bg-surface-2 p-3">
             <div className="font-display font-semibold text-foreground">Power-Ups (Optional)</div>
             <div className="text-sm text-muted">
-              When enabled, a Double Points phase appears after Golden. Each player picks one fixture
-              to multiply their points for that fixture.
+              When enabled, a Power-Ups phase appears after Golden. Each player picks one fixture
+              for either All-In or Safety Net.
             </div>
           </div>
         </div>

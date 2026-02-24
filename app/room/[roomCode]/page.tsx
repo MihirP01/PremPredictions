@@ -1081,7 +1081,7 @@ export default function RoomPage() {
                   : "Power-Ups: OFF"}
             </button>
             <div className="text-xs text-muted text-center">
-              Adds a Double Points phase after Golden for this week.
+              Adds a Power-Ups phase after Golden for this week.
             </div>
             <div className="space-y-3">
               <SpecialBreak />

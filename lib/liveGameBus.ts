@@ -13,7 +13,7 @@ type GoldenLike = { uid: string; fixtureId: number; score: string; locked: boole
 type PowerupLike = {
   uid: string;
   fixtureId: number;
-  powerupType: "DOUBLE";
+  powerupType: "ALL_IN" | "SAFETY_NET";
   locked: boolean;
 };
 type RoomMetaLike = {
@@ -182,16 +182,26 @@ function attachPowerupsListener(
             locked?: boolean;
           };
           const powerupType = String(data.powerupType || "").toUpperCase();
+          const normalizedType =
+            powerupType === "ALL_IN" || powerupType === "SAFETY_NET"
+              ? powerupType
+              : null;
           return {
             uid: d.id,
             fixtureId: Number(data.fixtureId),
-            powerupType: powerupType === "DOUBLE" ? "DOUBLE" : null,
+            powerupType: normalizedType,
             locked: Boolean(data.locked),
           };
         })
         .filter(
-          (p): p is { uid: string; fixtureId: number; powerupType: "DOUBLE"; locked: boolean } =>
-            !!p.uid && Number.isFinite(p.fixtureId) && p.powerupType === "DOUBLE",
+          (
+            p,
+          ): p is {
+            uid: string;
+            fixtureId: number;
+            powerupType: "ALL_IN" | "SAFETY_NET";
+            locked: boolean;
+          } => !!p.uid && Number.isFinite(p.fixtureId) && !!p.powerupType,
         );
       emitData(ch, powerups);
     },

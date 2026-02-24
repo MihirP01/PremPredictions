@@ -23,7 +23,7 @@ export type CachedGameData = {
 export type CachedPowerup = {
   uid: string;
   fixtureId: number;
-  powerupType: "DOUBLE";
+  powerupType: "ALL_IN" | "SAFETY_NET";
   locked: boolean;
 };
 
@@ -131,23 +131,28 @@ export async function getGameDataCached(
           powerupType?: string;
           locked?: boolean;
         };
+        const rawType = String(data.powerupType || "").toUpperCase();
+        const normalizedType =
+          rawType === "ALL_IN" || rawType === "SAFETY_NET"
+            ? rawType
+            : null;
         return {
           uid: d.id,
           fixtureId: Number(data.fixtureId),
-          powerupType: String(data.powerupType || "").toUpperCase(),
+          powerupType: normalizedType,
           locked: Boolean(data.locked),
         };
       })
       .filter(
-        (p): p is { uid: string; fixtureId: number; powerupType: "DOUBLE"; locked: boolean } =>
-          !!p.uid && Number.isFinite(p.fixtureId) && p.powerupType === "DOUBLE",
-      )
-      .map((p) => ({
-        uid: p.uid,
-        fixtureId: p.fixtureId,
-        powerupType: "DOUBLE" as const,
-        locked: p.locked,
-      }));
+        (
+          p,
+        ): p is {
+          uid: string;
+          fixtureId: number;
+          powerupType: "ALL_IN" | "SAFETY_NET";
+          locked: boolean;
+        } => !!p.uid && Number.isFinite(p.fixtureId) && !!p.powerupType,
+      );
 
     const payload = { picks, goldens, powerups } satisfies CachedGameData;
     setCached(key, payload);

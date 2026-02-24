@@ -46,7 +46,7 @@ type PickDoc = {
 type PowerupDoc = {
   uid: string;
   fixtureId: number;
-  powerupType: "DOUBLE";
+  powerupType: "ALL_IN" | "SAFETY_NET";
   locked: boolean;
 };
 
@@ -58,6 +58,20 @@ type GoldenDoc = {
 };
 
 const BTN_3D = "btn-3d-accent";
+const POWERUP_OPTIONS = [
+  {
+    type: "ALL_IN" as const,
+    label: "All-In",
+    className: "border-red-300/75 bg-red-500/10",
+    help: "Exact score = 6, else 0.",
+  },
+  {
+    type: "SAFETY_NET" as const,
+    label: "Safety Net",
+    className: "border-blue-300/75 bg-blue-500/10",
+    help: "If 0 points, becomes 1.",
+  },
+];
 
 export default function PowerupsPage() {
   const params = useParams<{ roomCode: string }>();
@@ -74,6 +88,7 @@ export default function PowerupsPage() {
   const [powerupsByUid, setPowerupsByUid] = useState<Record<string, PowerupDoc>>({});
   const [goldensByUid, setGoldensByUid] = useState<Record<string, GoldenDoc>>({});
   const [selectedFixtureId, setSelectedFixtureId] = useState<number | null>(null);
+  const [selectedPowerupType, setSelectedPowerupType] = useState<PowerupDoc["powerupType"]>("SAFETY_NET");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
@@ -176,10 +191,12 @@ export default function PowerupsPage() {
       );
       const map: Record<string, PowerupDoc> = {};
       for (const p of data.powerups) {
+        const t = String(p.powerupType || "").toUpperCase();
+        if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
         map[p.uid] = {
           uid: p.uid,
           fixtureId: p.fixtureId,
-          powerupType: "DOUBLE",
+          powerupType: t as PowerupDoc["powerupType"],
           locked: p.locked,
         };
       }
@@ -234,10 +251,12 @@ export default function PowerupsPage() {
       (list) => {
         const map: Record<string, PowerupDoc> = {};
         for (const p of list) {
+          const t = String(p.powerupType || "").toUpperCase();
+          if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
           map[p.uid] = {
             uid: p.uid,
             fixtureId: p.fixtureId,
-            powerupType: "DOUBLE",
+            powerupType: t as PowerupDoc["powerupType"],
             locked: p.locked,
           };
         }
@@ -305,6 +324,40 @@ export default function PowerupsPage() {
 
   const myPowerup = user ? powerupsByUid[user.uid] : undefined;
   const myPowerupLocked = !!myPowerup?.locked;
+  const myPowerupLabel =
+    myPowerup?.powerupType === "ALL_IN"
+      ? "All-In"
+      : "Safety Net";
+  const myPowerupTheme =
+    myPowerup?.powerupType === "ALL_IN"
+      ? {
+          border: "border-red-400/75",
+          bg: "bg-[linear-gradient(180deg,rgba(239,68,68,0.14)_0%,rgba(239,68,68,0.05)_100%)]",
+          shadow: "shadow-[0_10px_24px_rgba(239,68,68,0.16)]",
+          pill: "border-red-300/75 bg-red-400/20",
+          pick: "border-red-300/70 bg-[linear-gradient(135deg,rgba(239,68,68,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
+          progress: "border-red-300/60",
+          bar: "bg-[linear-gradient(90deg,rgba(239,68,68,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+        }
+      : myPowerup?.powerupType === "SAFETY_NET"
+        ? {
+            border: "border-blue-400/75",
+            bg: "bg-[linear-gradient(180deg,rgba(59,130,246,0.14)_0%,rgba(59,130,246,0.05)_100%)]",
+            shadow: "shadow-[0_10px_24px_rgba(59,130,246,0.16)]",
+            pill: "border-blue-300/75 bg-blue-400/20",
+            pick: "border-blue-300/70 bg-[linear-gradient(135deg,rgba(59,130,246,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
+            progress: "border-blue-300/60",
+            bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+          }
+        : {
+            border: "border-blue-400/75",
+            bg: "bg-[linear-gradient(180deg,rgba(59,130,246,0.14)_0%,rgba(59,130,246,0.05)_100%)]",
+            shadow: "shadow-[0_10px_24px_rgba(59,130,246,0.16)]",
+            pill: "border-blue-300/75 bg-blue-400/20",
+            pick: "border-blue-300/70 bg-[linear-gradient(135deg,rgba(59,130,246,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
+            progress: "border-blue-300/60",
+            bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+          };
   const myGoldenFixtureId = user ? goldensByUid[user.uid]?.fixtureId ?? null : null;
 
   useEffect(() => {
@@ -320,7 +373,7 @@ export default function PowerupsPage() {
   async function lockPowerup() {
     if (!user || gw == null || selectedFixtureId == null) return;
     if (!myPicksByFixture[selectedFixtureId]) {
-      setError("You can only place Double Points on your own pick.");
+      setError("You can only place a power-up on your own pick.");
       return;
     }
     setSubmitting(true);
@@ -334,7 +387,7 @@ export default function PowerupsPage() {
           gw,
           uid: user.uid,
           fixtureId: selectedFixtureId,
-          powerupType: "DOUBLE",
+          powerupType: selectedPowerupType,
           seasonKey,
         }),
       });
@@ -406,14 +459,27 @@ export default function PowerupsPage() {
         )}
 
         {myPowerupLocked ? (
-          <div className="border border-red-400/75 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(239,68,68,0.14)_0%,rgba(239,68,68,0.05)_100%)] shadow-[0_10px_24px_rgba(239,68,68,0.16)]">
+          <div
+            className={[
+              "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4",
+              "border",
+              myPowerupTheme.border,
+              myPowerupTheme.bg,
+              myPowerupTheme.shadow,
+            ].join(" ")}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold text-foreground">Locked In</div>
                 <div className="text-xs text-muted mt-0.5">Your power-up is saved.</div>
               </div>
-              <span className="font-display rounded-full border border-red-300/75 bg-red-400/20 px-2.5 py-1 text-xs font-semibold text-foreground">
-                Double Points
+              <span
+                className={[
+                  "font-display rounded-full border px-2.5 py-1 text-xs font-semibold text-foreground",
+                  myPowerupTheme.pill,
+                ].join(" ")}
+              >
+                {myPowerupLabel}
               </span>
             </div>
 
@@ -442,7 +508,7 @@ export default function PowerupsPage() {
                   );
                 })()}
               </div>
-              <div className="rounded-lg border border-red-300/70 bg-[linear-gradient(135deg,rgba(239,68,68,0.18)_0%,rgba(45,212,191,0.14)_100%)] px-3 py-2 text-center">
+              <div className={["rounded-lg border px-3 py-2 text-center", myPowerupTheme.pick].join(" ")}>
                 <div className="text-[11px] uppercase tracking-wide text-muted">Pick</div>
                 <div className="font-display text-base font-semibold text-foreground tabular-nums">
                   {String(myPicksByFixture[myPowerup.fixtureId] || "—").replace("-", " - ")}
@@ -457,9 +523,9 @@ export default function PowerupsPage() {
                   {lockedCount}/{playersCount || 0}
                 </span>
               </div>
-              <div className="w-full h-2 rounded-full bg-surface border border-red-300/60 overflow-hidden">
+              <div className={["w-full h-2 rounded-full bg-surface border overflow-hidden", myPowerupTheme.progress].join(" ")}>
                 <div
-                  className="h-full bg-[linear-gradient(90deg,rgba(239,68,68,0.95)_0%,rgba(45,212,191,0.9)_100%)] transition-all duration-500"
+                  className={["h-full transition-all duration-500", myPowerupTheme.bar].join(" ")}
                   style={{
                     width: playersCount > 0 ? `${Math.round((lockedCount / playersCount) * 100)}%` : "0%",
                   }}
@@ -472,11 +538,27 @@ export default function PowerupsPage() {
           <>
             <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 space-y-1">
               <div className="font-semibold text-foreground">Select Power-Up</div>
-              <div className="rounded-lg border border-red-400/85 px-3 py-2 text-sm font-display text-foreground">
-                Double Points
+              <div className="grid grid-cols-1 min-[520px]:grid-cols-3 gap-2">
+                {POWERUP_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.type}
+                    type="button"
+                    onClick={() => setSelectedPowerupType(opt.type)}
+                    className={[
+                      "rounded-lg border px-3 py-2 text-sm font-display text-left transition-all",
+                      opt.className,
+                      selectedPowerupType === opt.type
+                        ? "ring-1 ring-[color:rgba(var(--room-accent-rgb),0.7)] shadow-[0_0_0_1px_rgba(var(--room-accent-rgb),0.25)_inset]"
+                        : "opacity-85 hover:opacity-100",
+                    ].join(" ")}
+                  >
+                    <div className="font-semibold text-foreground">{opt.label}</div>
+                    <div className="text-xs text-muted">{opt.help}</div>
+                  </button>
+                ))}
               </div>
               <div className="text-sm text-muted">
-                Choose one fixture. If it scores 1/2/4, it becomes 2/4/8.
+                Choose one fixture (Golden fixture blocked).
               </div>
             </div>
 
@@ -648,7 +730,7 @@ export default function PowerupsPage() {
               }
               className={`w-full rounded-xl py-4 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
             >
-              {submitting ? "Locking…" : "Lock Double Points"}
+              {submitting ? "Locking…" : `Lock ${POWERUP_OPTIONS.find((p) => p.type === selectedPowerupType)?.label || "Power-Up"}`}
             </button>
           </>
         )}

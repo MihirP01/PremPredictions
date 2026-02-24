@@ -10,7 +10,7 @@ type PowerupBody = {
   gw?: number;
   uid?: string;
   fixtureId?: number;
-  powerupType?: "DOUBLE";
+  powerupType?: "ALL_IN" | "SAFETY_NET";
   seasonKey?: string;
 };
 
@@ -41,13 +41,13 @@ export async function POST(req: Request) {
     const gwn = Number(gw);
     const userUid = String(uid || "");
     const fxId = Number(fixtureId);
-    const type = String(powerupType || "DOUBLE").toUpperCase();
+    const type = String(powerupType || "SAFETY_NET").toUpperCase();
     const sk = resolveSeasonKey(seasonKey);
 
     if (!rc || !Number.isFinite(gwn) || !userUid || !Number.isFinite(fxId)) {
       return NextResponse.json({ error: "Bad input" }, { status: 400 });
     }
-    if (type !== "DOUBLE") {
+    if (type !== "ALL_IN" && type !== "SAFETY_NET") {
       return NextResponse.json({ error: "Unsupported power-up type" }, { status: 400 });
     }
 
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
         const golden = goldenSnap.data() as GoldenDoc;
         const goldenFixtureId = Number(golden.fixtureId);
         if (golden.locked && Number.isFinite(goldenFixtureId) && goldenFixtureId === fxId) {
-          throw new Error("Double Points cannot be used on your Golden fixture");
+          throw new Error("Power-Up cannot be used on your Golden fixture");
         }
       }
 
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         {
           uid: userUid,
           fixtureId: fxId,
-          powerupType: "DOUBLE",
+          powerupType: type,
           score: pickScore,
           createdAt: new Date(),
           locked: true,

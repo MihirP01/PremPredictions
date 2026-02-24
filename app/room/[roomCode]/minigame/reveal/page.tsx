@@ -60,7 +60,7 @@ type GoldenDoc = {
 type PowerupDoc = {
   uid: string;
   fixtureId: number;
-  powerupType: "DOUBLE";
+  powerupType: "ALL_IN" | "SAFETY_NET";
   locked: boolean;
 };
 
@@ -241,11 +241,12 @@ export default function RevealPage() {
       }
       const powerupMap: Record<string, PowerupDoc> = {};
       for (const p of data.powerups ?? []) {
-        if (p.powerupType !== "DOUBLE") continue;
+        const t = String(p.powerupType || "").toUpperCase();
+        if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
         powerupMap[p.uid] = {
           uid: p.uid,
           fixtureId: p.fixtureId,
-          powerupType: "DOUBLE",
+          powerupType: t as PowerupDoc["powerupType"],
           locked: p.locked,
         };
       }
@@ -302,10 +303,12 @@ export default function RevealPage() {
       (list) => {
         const map: Record<string, PowerupDoc> = {};
         for (const p of list) {
+          const t = String(p.powerupType || "").toUpperCase();
+          if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
           map[p.uid] = {
             uid: p.uid,
             fixtureId: p.fixtureId,
-            powerupType: "DOUBLE",
+            powerupType: t as PowerupDoc["powerupType"],
             locked: p.locked,
           };
         }
@@ -776,7 +779,8 @@ export default function RevealPage() {
                       const g = goldensByUid[uid];
                       const isGolden = g?.locked && g?.fixtureId === fid;
                       const p = powerupsByUid[uid];
-                      const isDoubled = p?.locked && p?.powerupType === "DOUBLE" && p?.fixtureId === fid;
+                      const powerupType =
+                        p?.locked && p?.fixtureId === fid ? p.powerupType : null;
                       const predNorm = String(sc || "").trim();
                       const isExact =
                         !!predNorm && !!actualRaw && predNorm === actualRaw;
@@ -803,7 +807,11 @@ export default function RevealPage() {
                           className={[
                             "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
                             isGolden ? goldenToneClass : toneClass,
-                            isDoubled ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]" : "",
+                            powerupType === "ALL_IN"
+                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
+                                : powerupType === "SAFETY_NET"
+                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.5)]"
+                                  : "",
                           ].join(" ")}
                         >
                           <div

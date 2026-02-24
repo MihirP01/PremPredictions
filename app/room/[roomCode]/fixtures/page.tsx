@@ -54,7 +54,7 @@ type PicksByFixture = Record<number, Record<string, string>>;
 type GoldenByUid = Record<string, { fixtureId: number; score: string }>;
 type PowerupByUid = Record<
   string,
-  { fixtureId: number; powerupType: "DOUBLE"; locked: boolean }
+  { fixtureId: number; powerupType: "ALL_IN" | "SAFETY_NET"; locked: boolean }
 >;
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type TableMode = "HOME" | "TOTAL" | "AWAY";
@@ -511,10 +511,11 @@ export default function FixturesPage() {
       }
       const pByUid: PowerupByUid = {};
       for (const data of gameData.powerups ?? []) {
-        if (data.powerupType !== "DOUBLE") continue;
+        const t = String(data.powerupType || "").toUpperCase();
+        if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
         pByUid[data.uid] = {
           fixtureId: Number(data.fixtureId),
-          powerupType: "DOUBLE",
+          powerupType: t as "ALL_IN" | "SAFETY_NET",
           locked: Boolean(data.locked),
         };
       }
@@ -748,7 +749,7 @@ export default function FixturesPage() {
               buttonClassName="font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors text-foreground"
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-[11px] text-muted">
             <div className="key-chip key-chip-result font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
               Correct Result
             </div>
@@ -759,7 +760,10 @@ export default function FixturesPage() {
               Golden Pick
             </div>
             <div className="font-display rounded-md border border-red-400/80 bg-transparent px-2 py-1 text-center text-foreground">
-              Double Points
+              All-In
+            </div>
+            <div className="font-display rounded-md border border-blue-400/80 bg-transparent px-2 py-1 text-center text-foreground">
+              Safety Net
             </div>
           </div>
         </SectionCard>
@@ -1003,11 +1007,16 @@ export default function FixturesPage() {
                             golden.fixtureId === f.fixtureId &&
                             golden.score === pred;
                           const powerup = powerupByUid[p.uid];
-                          const isDouble =
-                            !!powerup &&
-                            powerup.locked &&
-                            powerup.powerupType === "DOUBLE" &&
-                            powerup.fixtureId === f.fixtureId;
+                          const powerupType =
+                            powerup && powerup.locked && powerup.fixtureId === f.fixtureId
+                              ? powerup.powerupType
+                              : null;
+                          const powerupClass =
+                            powerupType === "ALL_IN"
+                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
+                                : powerupType === "SAFETY_NET"
+                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.5)]"
+                                  : "";
                           const predNorm = String(pred || "").trim();
                           const actualNorm = String(actual || "").trim();
                           const isExact =
@@ -1043,7 +1052,7 @@ export default function FixturesPage() {
                                 isGolden
                                   ? goldenToneClass
                                   : toneClass,
-                                isDouble ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]" : "",
+                                powerupClass,
                               ].join(" ")}
                             >
                               <div

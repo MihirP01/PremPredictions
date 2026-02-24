@@ -37,16 +37,13 @@ export default function AnimatedModal({
 
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevBodyTouchAction = document.body.style.touchAction;
 
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
 
     return () => {
       document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.touchAction = prevBodyTouchAction;
     };
   }, [open, lockBackground]);
 

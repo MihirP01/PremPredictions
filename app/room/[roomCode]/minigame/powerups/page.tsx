@@ -13,6 +13,7 @@ import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import {
   subscribeRoomGameDoc,
   subscribeRoomGoldens,
+  subscribeRoomMeta,
   subscribeRoomPicks,
   subscribeRoomPowerups,
 } from "@/lib/liveGameBus";
@@ -75,6 +76,7 @@ export default function PowerupsPage() {
   const [selectedFixtureId, setSelectedFixtureId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
 
   const routedRef = useRef(false);
 
@@ -267,6 +269,19 @@ export default function PowerupsPage() {
     );
   }, [gw, roomCode, seasonKey]);
 
+  useEffect(() => {
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => {
+        if (!roomMeta) return;
+        const style = roomMeta.settings.gameModeStyle;
+        const allow = style === "sprint" ? true : !roomMeta.settings.sameResultLock;
+        setAllowIdenticalPicks(allow);
+      },
+      () => {},
+    );
+  }, [roomCode]);
+
   const fixtureMap = useMemo(() => {
     const m = new Map<number, Fixture>();
     (fixtures ?? []).forEach((f) => m.set(f.fixtureId, f));
@@ -391,26 +406,67 @@ export default function PowerupsPage() {
         )}
 
         {myPowerupLocked ? (
-          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-            <div className="font-semibold text-foreground">You’re locked in ✅</div>
-            <div className="text-sm text-muted mt-1">
-              Power-up: <span className="font-display text-foreground">Double Points</span>
-            </div>
-            <div className="text-sm text-muted">
-              Fixture:{" "}
-              <span className="font-display text-foreground">
-                {myPowerup.fixtureId} ({String(myPicksByFixture[myPowerup.fixtureId] || "—").replace("-", "–")})
+          <div className="border border-red-400/75 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(239,68,68,0.14)_0%,rgba(239,68,68,0.05)_100%)] shadow-[0_10px_24px_rgba(239,68,68,0.16)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold text-foreground">Locked In</div>
+                <div className="text-xs text-muted mt-0.5">Your power-up is saved.</div>
+              </div>
+              <span className="font-display rounded-full border border-red-300/75 bg-red-400/20 px-2.5 py-1 text-xs font-semibold text-foreground">
+                Double Points
               </span>
             </div>
-            <div className="mt-4 w-full h-2 bg-surface border border-teal-500 rounded">
-              <div
-                className="h-2 bg-accent rounded"
-                style={{
-                  width: playersCount > 0 ? `${Math.round((lockedCount / playersCount) * 100)}%` : "0%",
-                }}
-              />
+
+            <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2">
+              <div className="rounded-lg border border-subtle bg-surface/80 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted">Fixture</div>
+                {(() => {
+                  const lockedFixture = fixtureMap.get(myPowerup.fixtureId);
+                  if (!lockedFixture) {
+                    return (
+                      <div className="font-display text-sm font-semibold text-foreground">
+                        #{myPowerup.fixtureId}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+                      <div className="font-display text-xs font-semibold text-foreground truncate text-left">
+                        {lockedFixture.home.tla || lockedFixture.home.shortName || lockedFixture.home.name}
+                      </div>
+                      <span className="font-display text-[10px] uppercase text-muted">vs</span>
+                      <div className="font-display text-xs font-semibold text-foreground truncate text-right">
+                        {lockedFixture.away.tla || lockedFixture.away.shortName || lockedFixture.away.name}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="rounded-lg border border-red-300/70 bg-[linear-gradient(135deg,rgba(239,68,68,0.18)_0%,rgba(45,212,191,0.14)_100%)] px-3 py-2 text-center">
+                <div className="text-[11px] uppercase tracking-wide text-muted">Pick</div>
+                <div className="font-display text-base font-semibold text-foreground tabular-nums">
+                  {String(myPicksByFixture[myPowerup.fixtureId] || "—").replace("-", " - ")}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-muted mt-2">Waiting for others to lock their power-up…</div>
+
+            <div className="mt-4">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-muted">
+                <span>Lobby lock progress</span>
+                <span className="font-display text-foreground">
+                  {lockedCount}/{playersCount || 0}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-surface border border-red-300/60 overflow-hidden">
+                <div
+                  className="h-full bg-[linear-gradient(90deg,rgba(239,68,68,0.95)_0%,rgba(45,212,191,0.9)_100%)] transition-all duration-500"
+                  style={{
+                    width: playersCount > 0 ? `${Math.round((lockedCount / playersCount) * 100)}%` : "0%",
+                  }}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-muted mt-2">Waiting for others to lock in…</div>
           </div>
         ) : (
           <>
@@ -476,6 +532,8 @@ export default function PowerupsPage() {
                         "no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
                         isSelected
                           ? "border-red-400/90 bg-[rgba(239,68,68,0.08)] scale-[1.02] origin-center"
+                          : isGoldenFixture
+                            ? "border-yellow-300/70 bg-[linear-gradient(135deg,rgba(250,204,21,0.16)_0%,rgba(250,204,21,0.05)_100%)]"
                           : "border-teal-500 bg-surface-2",
                         !myScore || isGoldenFixture
                           ? "opacity-60 cursor-not-allowed"
@@ -542,12 +600,22 @@ export default function PowerupsPage() {
                         <div className="font-semibold text-foreground">Fixture {fid}</div>
                       )}
                       <div className="mt-2 rounded-lg border border-red-400/75 px-3 py-2 text-center">
-                        <div className="text-xs text-muted">Your pick</div>
-                        <div className="font-display text-lg font-semibold text-foreground tabular-nums">
-                          {myScore ? myScore.replace("-", " - ") : "—"}
-                        </div>
+                        {isGoldenFixture ? (
+                          <div className="h-[46px] flex items-center justify-center">
+                            <span className="font-display inline-flex items-center rounded-full border border-yellow-300/75 bg-yellow-400/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground">
+                              Golden Locked
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-xs text-muted">Your pick</div>
+                            <div className="font-display text-lg font-semibold text-foreground tabular-nums">
+                              {myScore ? myScore.replace("-", " - ") : "—"}
+                            </div>
+                          </>
+                        )}
                       </div>
-                      {others.length > 0 ? (
+                      {!allowIdenticalPicks && others.length > 0 ? (
                         <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
                           {others.slice(0, 8).map((score, index) => (
                             <span
@@ -562,11 +630,6 @@ export default function PowerupsPage() {
                       {!myScore && (
                         <div className="mt-2 text-xs text-danger">
                           You didn’t pick this fixture (can’t apply power-up).
-                        </div>
-                      )}
-                      {isGoldenFixture && (
-                        <div className="mt-2 text-xs text-danger">
-                          Double Points can’t be used on your Golden fixture.
                         </div>
                       )}
                     </button>

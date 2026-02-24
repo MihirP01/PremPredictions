@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "../components/AuthProvider";
+import InputFocusScrollLock from "../components/InputFocusScrollLock";
 import PWARegister from "../components/PWARegister";
 import PWAEntryGuard from "../components/PWAEntryGuard";
 import { Orbitron } from "next/font/google";
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`min-h-[100dvh] ${displayFont.variable}`}>
         <AuthProvider>
+          <InputFocusScrollLock />
           <PWARegister />
           <PWAEntryGuard />
           {children}

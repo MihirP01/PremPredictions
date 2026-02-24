@@ -269,6 +269,13 @@ export default function LeaderboardMatrixPage() {
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
+      const el = target as Element;
+      if (
+        typeof (el as Element).closest === "function" &&
+        el.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
       if (settingsWrapMobileRef.current?.contains(target)) return;
       if (settingsWrapDesktopRef.current?.contains(target)) return;
       setSettingsOpen(false);

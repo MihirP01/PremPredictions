@@ -23,6 +23,13 @@ export default function RoomBottomNav() {
   const roomCode = String(params?.roomCode || "").toUpperCase();
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
+  const [navFxTick, setNavFxTick] = useState<Record<NavItem["key"], number>>({
+    fixtures: 0,
+    predictions: 0,
+    home: 0,
+    leaderboard: 0,
+    stats: 0,
+  });
 
   useEffect(() => {
     if (!roomCode) return;
@@ -151,20 +158,10 @@ export default function RoomBottomNav() {
     items.forEach((item) => router.prefetch(item.href));
   }, [items, router]);
 
-  const onNavClick = (href: string, active: boolean, disabled?: boolean) => {
+  const onNavClick = (key: NavItem["key"], href: string, active: boolean, disabled?: boolean) => {
+    setNavFxTick((prev) => ({ ...prev, [key]: prev[key] + 1 }));
     if (active || disabled) return;
     router.push(href);
-  };
-
-  const onNavPointerUp = (
-    e: React.PointerEvent<HTMLButtonElement>,
-    href: string,
-    active: boolean,
-    disabled?: boolean,
-  ) => {
-    // Make taps feel immediate on mobile Safari/PWA.
-    e.preventDefault();
-    onNavClick(href, active, disabled);
   };
 
   if (!roomCode || hideForActiveGamePhase || typeof document === "undefined") return null;
@@ -172,12 +169,14 @@ export default function RoomBottomNav() {
   const navNode = (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed left-1/2 z-[80] w-[min(95vw,520px)] -translate-x-1/2 rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.62)] bg-surface/95 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm pointer-events-auto"
+      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(95vw,520px)] rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.62)] bg-surface/95 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm pointer-events-auto"
       style={{
         position: "fixed",
-        bottom: "calc(env(safe-area-inset-bottom) + 0.5rem)",
+        bottom: "-0.8rem",
+        paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
+        transform: "translateZ(0)",
       }}
     >
       <div className="grid grid-cols-5 gap-1">
@@ -187,13 +186,7 @@ export default function RoomBottomNav() {
             <button
               key={item.key}
               type="button"
-              onPointerUp={(e) =>
-                onNavPointerUp(e, item.href, item.active, item.disabled)
-              }
-              onClick={(e) => {
-                // Keep keyboard activation support (Enter/Space).
-                if (e.detail === 0) onNavClick(item.href, item.active, item.disabled);
-              }}
+              onClick={() => onNavClick(item.key, item.href, item.active, item.disabled)}
               disabled={item.disabled}
               aria-disabled={item.disabled ? "true" : undefined}
               className={[
@@ -217,8 +210,63 @@ export default function RoomBottomNav() {
                     item.key === "stats" ? "nav-icon-stats-fix" : "",
                     item.key === "home" && item.active ? "home-icon--active" : "",
                     item.key === "stats" && item.active ? "stats-icon--active" : "",
+                    item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0)
+                      ? "leaderboard-icon-pop"
+                      : "",
+                    item.key === "fixtures" && (item.active || navFxTick.fixtures > 0) ? "fixtures-icon-pop" : "",
+                    item.key === "predictions" && (item.active || navFxTick.predictions > 0)
+                      ? "predictions-icon-pop"
+                      : "",
+                    item.key === "home" && (item.active || navFxTick.home > 0) ? "home-icon-pop" : "",
+                    item.key === "stats" && (item.active || navFxTick.stats > 0) ? "stats-icon-pop" : "",
                   ].join(" ")}
                 />
+                {item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0) ? (
+                  <>
+                    <span
+                      key={`lb-ring-${navFxTick.leaderboard}`}
+                      className="leaderboard-burst-once"
+                    />
+                    {[
+                      { x: -14, y: -10, d: "0ms" },
+                      { x: 13, y: -12, d: "60ms" },
+                      { x: 16, y: 2, d: "100ms" },
+                      { x: -15, y: 4, d: "140ms" },
+                      { x: 0, y: -16, d: "40ms" },
+                    ].map((spark, idx) => (
+                      <span
+                        key={`lb-spark-${navFxTick.leaderboard}-${idx}`}
+                        className="leaderboard-firework-once"
+                        style={
+                          {
+                            "--sx": `${spark.x}px`,
+                            "--sy": `${spark.y}px`,
+                            animationDelay: spark.d,
+                          } as React.CSSProperties
+                        }
+                      />
+                    ))}
+                  </>
+                ) : null}
+                {item.key === "fixtures" && (item.active || navFxTick.fixtures > 0) ? (
+                  <span key={`fx-wave-${navFxTick.fixtures}`} className="fixtures-wave-once" />
+                ) : null}
+                {item.key === "predictions" && (item.active || navFxTick.predictions > 0) ? (
+                  <>
+                    <span key={`pr-dot-l-${navFxTick.predictions}`} className="predictions-dot-once predictions-dot-once--left" />
+                    <span key={`pr-dot-r-${navFxTick.predictions}`} className="predictions-dot-once predictions-dot-once--right" />
+                  </>
+                ) : null}
+                {item.key === "home" && (item.active || navFxTick.home > 0) ? (
+                  <span key={`home-ring-${navFxTick.home}`} className="home-ring-once" />
+                ) : null}
+                {item.key === "stats" && (item.active || navFxTick.stats > 0) ? (
+                  <>
+                    <span key={`st-bar-1-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--1" />
+                    <span key={`st-bar-2-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--2" />
+                    <span key={`st-bar-3-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--3" />
+                  </>
+                ) : null}
               </span>
               <span className="font-display text-[8px] leading-none truncate">{item.label}</span>
             </button>

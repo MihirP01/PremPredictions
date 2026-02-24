@@ -283,10 +283,11 @@ export default function RoomScopedLayout({
   }, [bootHint, roomCode, router]);
 
   const accent = ACCENT_THEME[accentKey] || ACCENT_THEME.teal;
+  const isMinigamePath = pathname.startsWith(`/room/${roomCode}/minigame`);
   const hideBottomNav =
-    pathname === `/room/${roomCode}/minigame/play` ||
-    pathname === `/room/${roomCode}/minigame/golden` ||
-    pathname === `/room/${roomCode}/minigame/powerups`;
+    pathname.startsWith(`/room/${roomCode}/minigame/play`) ||
+    pathname.startsWith(`/room/${roomCode}/minigame/golden`) ||
+    pathname.startsWith(`/room/${roomCode}/minigame/powerups`);
 
   // Capture default app vars once, restore only when leaving room scope.
   useEffect(() => {
@@ -334,8 +335,8 @@ export default function RoomScopedLayout({
         } as React.CSSProperties
       }
     >
-      {showBootOverlay ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+      {showBootOverlay && !isMinigamePath ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none">
           <div className="rounded-xl border border-subtle bg-surface px-4 py-3 text-sm text-foreground shadow-card">
             Getting app ready...
           </div>

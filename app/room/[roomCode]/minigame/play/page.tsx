@@ -548,7 +548,7 @@ export default function MiniGamePlayPage() {
                   : "Round-Robin"}
             </h1>
             <div className="font-display text-sm text-muted">
-              Room {roomCode} • GW {gw}
+              {roomCode} • GW {gw}
             </div>
           </div>
           <div className="text-right -mt-1">
@@ -582,34 +582,36 @@ export default function MiniGamePlayPage() {
             {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
           </button>
         )}
-        <AnimatedModal
-          open={stopConfirmOpen}
-          onClose={() => setStopConfirmOpen(false)}
-          zIndexClassName="z-[90]"
-          overlayClassName="bg-black/50"
-          panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
-        >
-          <div className="text-lg font-semibold text-foreground">Stop Mini-game</div>
-          <div className="text-sm text-muted">
-            Stop this mini-game and send everyone back to lobby?
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => setStopConfirmOpen(false)}
-              disabled={stoppingPredictions}
-              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmStopPredictions}
-              disabled={stoppingPredictions}
-              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-            >
-              Confirm Stop
-            </button>
-          </div>
-        </AnimatedModal>
+        {stopConfirmOpen ? (
+          <AnimatedModal
+            open
+            onClose={() => setStopConfirmOpen(false)}
+            zIndexClassName="z-[90]"
+            overlayClassName="bg-black/50"
+            panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-4"
+          >
+            <div className="text-lg font-semibold text-foreground">Stop Mini-game</div>
+            <div className="text-sm text-muted">
+              Stop this mini-game and send everyone back to lobby?
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setStopConfirmOpen(false)}
+                disabled={stoppingPredictions}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStopPredictions}
+                disabled={stoppingPredictions}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+              >
+                Confirm Stop
+              </button>
+            </div>
+          </AnimatedModal>
+        ) : null}
         {/* fixture */}
         <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
           {captainTurnNeedsFixtureChoice && (

@@ -1030,12 +1030,16 @@ export default function FixturesPage() {
                                 ? "key-chip key-chip-golden-exact bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
                                 : "key-chip key-chip-golden-result bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
                               : "bg-yellow-300/10 border-yellow-300/60";
+                          const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
 
                           return (
                             <div
                               key={p.uid}
                               className={[
-                                "rounded-lg px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
+                                "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
+                                isGoldenScored
+                                  ? "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none ring-1 ring-yellow-300/65 shadow-[0_10px_22px_rgba(250,204,21,0.22),inset_0_0_0_1px_rgba(250,204,21,0.35)]"
+                                  : "rounded-lg",
                                 isGolden
                                   ? goldenToneClass
                                   : toneClass,

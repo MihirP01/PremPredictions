@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
@@ -13,6 +13,7 @@ import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import {
   subscribeRoomGameDoc,
   subscribeRoomGoldens,
+  subscribeRoomMeta,
   subscribeRoomPicks,
 } from "@/lib/liveGameBus";
 import {
@@ -81,8 +82,7 @@ export default function GoldenPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [compactOtherPicks, setCompactOtherPicks] = useState(false);
-
-  const routedRef = useRef(false);
+  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
 
   // auth guard
   useEffect(() => {
@@ -148,27 +148,20 @@ export default function GoldenPage() {
         const st = String(gameData?.state ?? "")
           .trim()
           .toUpperCase();
-
-        if (routedRef.current) return;
-
+        if (st === "GOLDEN" || !st) return;
         if (st === "DRAFT") {
-          routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/play`);
           return;
         }
-
         if (st === "REVEAL") {
-          routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/reveal`);
           return;
         }
         if (st === "POWERUPS") {
-          routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame/powerups`);
           return;
         }
         if (st === "LOBBY") {
-          routedRef.current = true;
           router.replace(`/room/${roomCode}/minigame`);
           return;
         }
@@ -275,6 +268,20 @@ export default function GoldenPage() {
       () => setError("Failed to listen for golden locks."),
     );
   }, [roomCode, gw, seasonKey]);
+
+  // hide/show other picks based on room setting
+  useEffect(() => {
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => {
+        if (!roomMeta) return;
+        const style = roomMeta.settings.gameModeStyle;
+        const allow = style === "sprint" ? true : !roomMeta.settings.sameResultLock;
+        setAllowIdenticalPicks(allow);
+      },
+      () => {},
+    );
+  }, [roomCode]);
 
   const playersCount = game?.players?.length ?? 0;
   const lockedCount = useMemo(() => {
@@ -427,32 +434,70 @@ export default function GoldenPage() {
 
         {/* If locked, show waiting room */}
         {myGoldenLocked ? (
-          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-            <div className="font-semibold text-foreground">
-              You’re locked in ✅
-            </div>
-            <div className="text-sm text-muted mt-1">
-              Golden fixture:{" "}
-              <span className="font-semibold text-foreground">
-                {myGolden.fixtureId} ({String(myGolden.score).replace("-", "–")}
-                )
+          <div className="border border-yellow-300/70 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(250,204,21,0.14)_0%,rgba(250,204,21,0.06)_100%)] shadow-[0_10px_24px_rgba(250,204,21,0.18)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold text-foreground">Locked In</div>
+                <div className="text-xs text-muted mt-0.5">Your golden pick is saved.</div>
+              </div>
+              <span className="font-display rounded-full border border-yellow-300/70 bg-yellow-400/20 px-2.5 py-1 text-xs font-semibold text-foreground">
+                Golden
               </span>
             </div>
 
-            <div className="mt-4 w-full h-2 bg-surface border border-teal-500 rounded">
-              <div
-                className="h-2 bg-accent rounded"
-                style={{
-                  width:
-                    playersCount > 0
-                      ? `${Math.round((lockedCount / playersCount) * 100)}%`
-                      : "0%",
-                }}
-              />
+            <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2">
+              <div className="rounded-lg border border-subtle bg-surface/80 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted">Fixture</div>
+                {(() => {
+                  const lockedFixture = fixtureMap.get(myGolden.fixtureId);
+                  if (!lockedFixture) {
+                    return (
+                      <div className="font-display text-sm font-semibold text-foreground">
+                        #{myGolden.fixtureId}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+                      <div className="font-display text-xs font-semibold text-foreground truncate text-left">
+                        {lockedFixture.home.tla || lockedFixture.home.shortName || lockedFixture.home.name}
+                      </div>
+                      <span className="font-display text-[10px] uppercase text-muted">vs</span>
+                      <div className="font-display text-xs font-semibold text-foreground truncate text-right">
+                        {lockedFixture.away.tla || lockedFixture.away.shortName || lockedFixture.away.name}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="rounded-lg border border-yellow-300/70 bg-[linear-gradient(135deg,rgba(168,85,247,0.16)_0%,rgba(250,204,21,0.18)_100%)] px-3 py-2 text-center">
+                <div className="text-[11px] uppercase tracking-wide text-muted">Pick</div>
+                <div className="font-display text-base font-semibold text-foreground tabular-nums">
+                  {String(myGolden.score).replace("-", " - ")}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-muted mt-2">
-              Waiting for others to lock their golden pick…
+
+            <div className="mt-4">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-muted">
+                <span>Lobby lock progress</span>
+                <span className="font-display text-foreground">
+                  {lockedCount}/{playersCount || 0}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-surface border border-yellow-300/60 overflow-hidden">
+                <div
+                  className="h-full bg-[linear-gradient(90deg,rgba(250,204,21,0.95)_0%,rgba(45,212,191,0.9)_100%)] transition-all duration-500"
+                  style={{
+                    width:
+                      playersCount > 0
+                        ? `${Math.round((lockedCount / playersCount) * 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
             </div>
+            <div className="text-xs text-muted mt-2">Waiting for others to lock in…</div>
           </div>
         ) : (
           <>
@@ -460,19 +505,19 @@ export default function GoldenPage() {
               <div className="font-semibold mb-2 text-foreground">
                 Choose your Golden fixture
               </div>
-              <div className="text-sm text-muted">
-                Your golden doubles points:
-                <ul className="list-disc pl-5 mt-1">
-                  <li>
-                    Correct result = <b className="text-foreground">2 points</b>
-                  </li>
-                  <li>
-                    Correct score = <b className="text-foreground">4 points</b>
-                  </li>
-                  <li>
-                    Otherwise = <b className="text-foreground">0</b>
-                  </li>
-                </ul>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(98px,1fr))] gap-2">
+                <div className="key-chip key-chip-golden-result rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted">Result</div>
+                  <div className="font-display text-base font-semibold text-foreground">+2 pts</div>
+                </div>
+                <div className="key-chip key-chip-golden-exact rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted">Score</div>
+                  <div className="font-display text-base font-semibold text-foreground">+4 pts</div>
+                </div>
+                <div className="rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-subtle bg-surface px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted">Miss</div>
+                  <div className="font-display text-base font-semibold text-foreground">0 pts</div>
+                </div>
               </div>
             </div>
 
@@ -695,6 +740,7 @@ export default function GoldenPage() {
 	                      </div>
 	                    </div>
 
+                      {!allowIdenticalPicks && (
 	                    <div className="mt-3">
 	                      {!compactOtherPicks && (
 	                        <div className="text-xs text-muted text-center">Other picks</div>
@@ -719,6 +765,7 @@ export default function GoldenPage() {
 	                        </div>
 	                      )}
 	                    </div>
+                      )}
 
                     {!myScore && (
                       <div className="mt-2 text-xs text-danger">

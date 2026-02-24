@@ -133,6 +133,7 @@ export default function AuthEntryForm() {
             autoComplete="email"
             autoCapitalize="none"
             spellCheck={false}
+            inputMode="email"
           />
         </div>
 
@@ -146,6 +147,7 @@ export default function AuthEntryForm() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            inputMode="text"
           />
         </div>
 

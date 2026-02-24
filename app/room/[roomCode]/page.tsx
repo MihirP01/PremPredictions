@@ -13,6 +13,7 @@ import { useAuth } from "../../../components/AuthProvider";
 import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../components/RoomSettingsMenu";
 import SpecialBreak from "../../../components/SpecialBreak";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { db } from "../../../firebase";
 import {
@@ -97,6 +98,7 @@ export default function RoomPage() {
   const [nickNameDraft, setNickNameDraft] = useState("");
   const [nickNameBusy, setNickNameBusy] = useState(false);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
+  const activePhaseRedirectedRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -143,12 +145,48 @@ export default function RoomPage() {
     };
   }, [loading, user, router, roomCode]);
 
+  // If a minigame is already in progress, jump returning users straight back in.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (activePhaseRedirectedRef.current) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const bootstrap = await getRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        const st = String(bootstrap?.gameState || "").trim().toUpperCase();
+        let target: string | null = null;
+        if (st === "DRAFT") target = `/room/${roomCode}/minigame/play`;
+        else if (st === "GOLDEN") target = `/room/${roomCode}/minigame/golden`;
+        else if (st === "POWERUPS") target = `/room/${roomCode}/minigame/powerups`;
+        if (target) {
+          activePhaseRedirectedRef.current = true;
+          router.replace(target);
+        }
+      } catch {
+        // Leave user on hub if bootstrap lookup fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, router, roomCode]);
+
   useEffect(() => {
     if (!settingsOpen) return;
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       if (roomRulesOpen) return;
       const target = event.target as Node | null;
       if (!target) return;
+      const el = target as Element;
+      if (
+        typeof (el as Element).closest === "function" &&
+        el.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
       if (settingsWrapRef.current?.contains(target)) return;
       setSettingsOpen(false);
     };
@@ -853,6 +891,7 @@ export default function RoomPage() {
                   onChange={(e) => setJoinCode(e.target.value)}
                   placeholder="AB12"
                   className="flex-1 rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground uppercase"
+                  inputMode="text"
                 />
                 <button
                   onClick={joinNewRoom}
@@ -874,6 +913,7 @@ export default function RoomPage() {
                   onChange={(e) => setCreateCode(e.target.value)}
                   placeholder="NEW25"
                   className="flex-1 rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground uppercase"
+                  inputMode="text"
                 />
                 <button
                   onClick={createNewRoom}

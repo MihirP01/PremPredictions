@@ -71,6 +71,16 @@ function fmtScore(s?: string | null) {
   return s.replace("-", "–");
 }
 
+function parseOutcome(score: string): "H" | "A" | "D" | null {
+  const m = String(score || "").trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!m) return null;
+  const home = Number(m[1]);
+  const away = Number(m[2]);
+  if (home > away) return "H";
+  if (away > home) return "A";
+  return "D";
+}
+
 function byDisplayName(
   uidA: string,
   uidB: string,
@@ -591,12 +601,15 @@ export default function RevealPage() {
         </div>
 
         {!allLocked && (
-          <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-            <div className="font-semibold text-foreground">
-              Waiting for all golden picks…
-            </div>
-            <div className="text-sm text-muted mt-1">
-              This screen will fill in as players lock.
+          <div className="border border-yellow-300/65 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.04)_100%)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-semibold text-foreground">Reveal is syncing</div>
+                <div className="text-sm text-muted mt-1">Waiting for all locked picks to finish.</div>
+              </div>
+              <span className="font-display rounded-full border border-yellow-300/70 bg-yellow-400/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                {lockedCount}/{players.length || 0} locked
+              </span>
             </div>
           </div>
         )}
@@ -606,6 +619,7 @@ export default function RevealPage() {
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
             const actual = f?.result ? fmtScore(f.result) : "TBD";
+            const actualRaw = String(f?.result || "").trim();
             const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
             const dayBoundary = dayBoundaryByIdx[idx];
             const showDayHeader = !!dayBoundary?.showDayHeader;
@@ -763,32 +777,51 @@ export default function RevealPage() {
                       const isGolden = g?.locked && g?.fixtureId === fid;
                       const p = powerupsByUid[uid];
                       const isDoubled = p?.locked && p?.powerupType === "DOUBLE" && p?.fixtureId === fid;
+                      const predNorm = String(sc || "").trim();
+                      const isExact =
+                        !!predNorm && !!actualRaw && predNorm === actualRaw;
+                      const isOutcomeOnly =
+                        !isExact &&
+                        !!predNorm &&
+                        !!actualRaw &&
+                        parseOutcome(predNorm) != null &&
+                        parseOutcome(predNorm) === parseOutcome(actualRaw);
+                      const toneClass = isExact
+                        ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
+                        : isOutcomeOnly
+                          ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
+                          : "bg-surface border-teal-500";
+                      const goldenToneClass =
+                        isExact || isOutcomeOnly
+                          ? isExact
+                            ? "key-chip key-chip-golden-exact bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
+                            : "key-chip key-chip-golden-result bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
+                          : "bg-yellow-300/10 border-yellow-300/60";
                       return (
                         <div
                           key={`${fid}-${uid}`}
-                          className="min-w-0 text-center w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]"
+                          className={[
+                            "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
+                            isGolden ? goldenToneClass : toneClass,
+                            isDoubled ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]" : "",
+                          ].join(" ")}
                         >
                           <div
                             className={[
-                              "text-[11px] truncate",
-                              isGolden ? "text-yellow-300 font-semibold" : "text-muted",
+                              "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
+                              "text-muted",
                             ].join(" ")}
                           >
-                            <span className="font-display">{displayNamesByUid[uid] ?? uid.slice(0, 6)}</span>
+                            {displayNamesByUid[uid] ?? uid.slice(0, 6)}
                           </div>
-                          <span
+                          <div
                             className={[
-                              "font-display mt-1 inline-flex items-center justify-center rounded-full border border-subtle px-2.5 py-1 text-sm font-semibold text-foreground tabular-nums min-w-[58px] whitespace-nowrap",
-                              isGolden
-                                ? "bg-gradient-to-r from-yellow-500/25 to-amber-300/15 border-yellow-300/70"
-                                : "bg-surface/70",
-                              isDoubled
-                                ? "border-red-400/80 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
-                                : "",
+                              "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap",
+                              "text-foreground",
                             ].join(" ")}
                           >
                             {fmtScore(sc)}
-                          </span>
+                          </div>
                         </div>
                       );
                     })}

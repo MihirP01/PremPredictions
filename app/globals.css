@@ -2,61 +2,32 @@
 
 /* ===== Theme tokens ===== */
 :root {
-  /* Light: blue-green fluid */
-  --app-bg: linear-gradient(135deg, #d9f2f0, #a7e1dc, #6fc3bf);
+  /* Force dark theme across all OS/browser modes */
+  --app-bg: linear-gradient(135deg, #06181c, #0b3b3a, #0ea5a4);
 
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-2: rgba(255, 255, 255, 0.92);
-  --input: rgba(255, 255, 255, 0.72);
+  --surface: rgba(10, 12, 16, 0.72);
+  --surface-2: rgba(10, 12, 16, 0.84);
+  --input: rgba(10, 12, 16, 0.6);
 
-  --foreground: #0b1220;
-  --muted: rgba(11, 18, 32, 0.65);
+  --foreground: #eef2ff;
+  --muted: rgba(238, 242, 255, 0.7);
 
-  --border: rgba(11, 18, 32, 0.12);
+  --border: rgba(238, 242, 255, 0.14);
 
-  --accent: #0ea5a4;
-  --accent-rgb: 14, 165, 164;
-  --accent-foreground: #061018;
+  --accent: #2dd4bf;
+  --accent-rgb: 45, 212, 191;
+  --accent-foreground: #04110f;
 
-  --danger: #dc2626;
+  --danger: #f87171;
 
-  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
 
   /* Solid fallback under Safari UI */
-  --app-solid: #0f2027;
+  --app-solid: #06181c;
 
   /* Consistent top offset across browser + standalone modes */
   --app-top-gap-mobile: 0px;
   --app-top-gap-desktop: 0px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /*
-      Dark mode: still dark, but teal/blue-green rather than navy-only.
-      (This is the main “why it’s still navy” fix.)
-    */
-    --app-bg: linear-gradient(135deg, #06181c, #0b3b3a, #0ea5a4);
-
-    --surface: rgba(10, 12, 16, 0.72);
-    --surface-2: rgba(10, 12, 16, 0.84);
-    --input: rgba(10, 12, 16, 0.6);
-
-    --foreground: #eef2ff;
-    --muted: rgba(238, 242, 255, 0.7);
-
-    --border: rgba(238, 242, 255, 0.14);
-
-    --accent: #2dd4bf;
-    --accent-rgb: 45, 212, 191;
-    --accent-foreground: #04110f;
-
-    --danger: #f87171;
-
-    --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
-
-    --app-solid: #06181c;
-  }
 }
 
 /* ===== Tailwind v4 inline theme mapping ===== */
@@ -70,6 +41,7 @@
 html,
 body {
   background-color: var(--app-solid);
+  color-scheme: dark;
 }
 
 /*

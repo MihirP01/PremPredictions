@@ -771,6 +771,20 @@ select:-webkit-autofill:focus {
   animation: fixtureCardIn 320ms ease-out both;
 }
 
+@keyframes fixture-clash-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.fixture-clash-bg {
+  background-size: 220% 220%;
+  animation: fixture-clash-shift 8.5s ease-in-out infinite alternate;
+}
+
 .key-chip {
   position: relative;
   overflow: hidden;

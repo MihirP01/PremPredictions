@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
@@ -19,9 +20,6 @@ import {
   subscribeRoomPowerups,
 } from "@/lib/liveGameBus";
 import {
-  fixtureDayKey,
-  fixtureDayLabel,
-  formatDateWithOrdinal,
 } from "@/lib/dateDisplay";
 
 type GameDoc = {
@@ -59,16 +57,68 @@ type GoldenDoc = {
 };
 
 const BTN_3D = "btn-3d-accent";
+const TEAM_COLOR_BY_TLA: Record<string, string> = {
+  ARS: "#ef4444",
+  AVL: "#7c3aed",
+  BHA: "#3b82f6",
+  BOU: "#ef4444",
+  BRE: "#dc2626",
+  CHE: "#2563eb",
+  CRY: "#1d4ed8",
+  EVE: "#1e3a8a",
+  FUL: "#f3f4f6",
+  IPS: "#1d4ed8",
+  LEI: "#1d4ed8",
+  LIV: "#dc2626",
+  MCI: "#38bdf8",
+  MUN: "#dc2626",
+  NEW: "#94a3b8",
+  NFO: "#dc2626",
+  SOU: "#ef4444",
+  TOT: "#f8fafc",
+  WHU: "#7c3aed",
+  WOL: "#f59e0b",
+  SUN: "#ef4444",
+  BUR: "#7c3aed",
+  LEE: "#f8fafc",
+};
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : normalized.padEnd(6, "0");
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+  const key = String(tla || shortName || name || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  return TEAM_COLOR_BY_TLA[key] || "#475569";
+}
+
 const POWERUP_OPTIONS = [
   {
     type: "ALL_IN" as const,
     label: "All-In",
+    icon: "/icons/powerups/all-in-v2.svg",
     className: "border-red-300/75 bg-red-500/10",
     help: "Exact score = 6, else 0.",
   },
   {
     type: "SAFETY_NET" as const,
     label: "Safety Net",
+    icon: "/icons/powerups/safety-net-v2.svg",
     className: "border-blue-300/75 bg-blue-500/10",
     help: "If 0 points, becomes 1.",
   },
@@ -322,6 +372,8 @@ export default function PowerupsPage() {
     () => Object.values(powerupsByUid).filter((p) => p.locked).length,
     [powerupsByUid],
   );
+  const lockedProgressPct =
+    playersCount > 0 ? Math.round((lockedCount / playersCount) * 100) : 0;
 
   const myPowerup = user ? powerupsByUid[user.uid] : undefined;
   const myPowerupLocked = !!myPowerup?.locked;
@@ -357,8 +409,24 @@ export default function PowerupsPage() {
             pill: "border-blue-300/75 bg-blue-400/20",
             pick: "border-blue-300/70 bg-[linear-gradient(135deg,rgba(59,130,246,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
             progress: "border-blue-300/60",
-            bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
-          };
+          bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+        };
+  const roomLockTheme =
+    selectedPowerupType === "ALL_IN"
+      ? {
+          box: "border-red-300/65 bg-[linear-gradient(180deg,rgba(248,113,113,0.2)_0%,rgba(239,68,68,0.07)_100%)]",
+          pill: "border-red-300/70 bg-red-500/15",
+          pct: "text-red-200",
+          progress: "border-red-300/60",
+          bar: "bg-[linear-gradient(90deg,rgba(248,113,113,0.65),rgba(239,68,68,0.98))] shadow-[0_0_12px_rgba(239,68,68,0.35)]",
+        }
+      : {
+          box: "border-blue-300/65 bg-[linear-gradient(180deg,rgba(96,165,250,0.2)_0%,rgba(59,130,246,0.07)_100%)]",
+          pill: "border-blue-300/70 bg-blue-500/15",
+          pct: "text-blue-200",
+          progress: "border-blue-300/60",
+          bar: "bg-[linear-gradient(90deg,rgba(96,165,250,0.65),rgba(59,130,246,0.98))] shadow-[0_0_12px_rgba(59,130,246,0.35)]",
+        };
   const myGoldenFixtureId = user ? goldensByUid[user.uid]?.fixtureId ?? null : null;
 
   useEffect(() => {
@@ -425,35 +493,14 @@ export default function PowerupsPage() {
   }
 
   const orderedFixtureIds = game.fixtureIds?.length ? game.fixtureIds : fixtures.map((f) => f.fixtureId);
-  const dayBoundaryByIdx = (() => {
-    const firstIdxByDay = new Map<string, number>();
-    const lastIdxByDay = new Map<string, number>();
-    orderedFixtureIds.forEach((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
-      lastIdxByDay.set(dayKey, idx);
-    });
-    return orderedFixtureIds.map((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      return {
-        showDayHeader: firstIdxByDay.get(dayKey) === idx,
-        showDayFooter: lastIdxByDay.get(dayKey) === idx,
-        dayLabel: fixtureDayLabel(fixture?.kickoff || ""),
-      };
-    });
-  })();
-
   return (
     <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle shadow-[0_10px_28px_rgba(var(--room-accent-rgb),0.1)]">
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Power-Ups</h1>
           <div className="font-display text-sm text-muted">
             {roomCode} • GW {gw}
           </div>
-          <div className="text-xs text-muted">Locked: {lockedCount} / {playersCount}</div>
         </div>
 
         {error && (
@@ -559,7 +606,17 @@ export default function PowerupsPage() {
                         : "opacity-85 hover:opacity-100",
                     ].join(" ")}
                   >
-                    <div className="font-semibold text-foreground">{opt.label}</div>
+                    <div className="inline-flex items-center gap-2 font-semibold text-foreground">
+                      <Image
+                        src={opt.icon}
+                        alt=""
+                        aria-hidden
+                        width={16}
+                        height={16}
+                        className="h-4 w-4 shrink-0"
+                      />
+                      <span>{opt.label}</span>
+                    </div>
                     <div className="text-xs text-muted">{opt.help}</div>
                   </button>
                 ))}
@@ -569,23 +626,14 @@ export default function PowerupsPage() {
               </div>
             </div>
 
-            <SpecialBreak />
-            <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {orderedFixtureIds.map((fid, idx) => {
+            <SpecialBreak className="mb-3" />
+            <div className="grid items-start gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {orderedFixtureIds.map((fid) => {
                 const f = fixtureMap.get(fid);
                 const myScore = myPicksByFixture[fid];
-                const kickoffDate = f ? formatDateWithOrdinal(f.kickoff) : null;
-                const kickoffTime = f
-                  ? new Date(f.kickoff).toLocaleTimeString("en-GB", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    })
-                  : "";
                 const others = (picksByFixture.get(fid) ?? [])
                   .filter((p) => p.uid !== user.uid)
                   .map((p) => p.score);
-                const dayBoundary = dayBoundaryByIdx[idx];
                 const isSelected = selectedFixtureId === fid;
                 const isGoldenFixture = myGoldenFixtureId != null && fid === myGoldenFixtureId;
                 const pickToneClass =
@@ -596,63 +644,31 @@ export default function PowerupsPage() {
                   selectedPowerupType === "ALL_IN"
                     ? "border-red-400/90 bg-[rgba(239,68,68,0.08)] shadow-[0_8px_18px_rgba(239,68,68,0.18),inset_0_0_0_1px_rgba(248,113,113,0.22)]"
                     : "border-blue-400/90 bg-[rgba(59,130,246,0.08)] shadow-[0_8px_18px_rgba(59,130,246,0.18),inset_0_0_0_1px_rgba(96,165,250,0.22)]";
+                const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
+                const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
+                const clashBgStyle: React.CSSProperties = {
+                  backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, isSelected ? 0.3 : 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, isSelected ? 0.3 : 0.2)} 100%)`,
+                };
 
                 return (
                   <div key={fid} className="fixture-card-enter space-y-2 w-full">
-                    <div className="h-5 sm:h-6 flex items-center justify-center">
-                      {dayBoundary?.showDayHeader ? (
-                        <div className="w-full flex items-center gap-2">
-                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                          <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
-                            {dayBoundary.dayLabel}
-                          </span>
-                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                        </div>
-                      ) : dayBoundary?.showDayFooter ? (
-                        <div className="w-full flex items-center justify-center gap-1.5">
-                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-                          <span
-                            className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-                            aria-hidden
-                          />
-                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
-                        </div>
-                      ) : (
-                        <span aria-hidden className="invisible w-full">_</span>
-                      )}
-                    </div>
                     <button
                       type="button"
                       onClick={() => setSelectedFixtureId(fid)}
                       disabled={!myScore || isGoldenFixture}
                       className={[
-                        "no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
+                        "fixture-clash-bg no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
                         isSelected
                           ? `scale-[1.02] origin-center ${selectedFixtureToneClass}`
                           : isGoldenFixture
                             ? "border-yellow-300/70 bg-[linear-gradient(135deg,rgba(250,204,21,0.16)_0%,rgba(250,204,21,0.05)_100%)]"
-                          : "border-teal-500 bg-surface-2",
+                          : "border-white/15",
                         !myScore || isGoldenFixture
                           ? "opacity-60 cursor-not-allowed"
-                          : "hover:bg-surface",
+                          : "",
                       ].join(" ")}
+                      style={isGoldenFixture ? undefined : clashBgStyle}
                     >
-                      <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-display font-semibold">
-                            {kickoffDate ? (
-                              <>
-                                {kickoffDate.dayNum}
-                                <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                                  {kickoffDate.suffix}
-                                </span>{" "}
-                                {kickoffDate.monthYear}
-                              </>
-                            ) : null}
-                          </span>
-                          <span className="font-display font-semibold tabular-nums">{kickoffTime}</span>
-                        </div>
-                      </div>
                       {f ? (
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                           <div className="flex flex-col items-center text-center min-w-0">
@@ -666,9 +682,9 @@ export default function PowerupsPage() {
                               name={f.home.name}
                               tla={f.home.tla}
                               shortName={f.home.shortName}
+                              showFullName={false}
                               wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                               abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                               fullNameWindowPx={68}
                             />
                           </div>
@@ -686,9 +702,9 @@ export default function PowerupsPage() {
                               name={f.away.name}
                               tla={f.away.tla}
                               shortName={f.away.shortName}
+                              showFullName={false}
                               wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                               abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                               fullNameWindowPx={68}
                             />
                           </div>
@@ -740,6 +756,30 @@ export default function PowerupsPage() {
               })}
             </div>
 
+            <SpecialBreak className="my-3" />
+            <div className={["w-full rounded-xl border px-3 py-2.5", roomLockTheme.box].join(" ")}>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className={["font-display inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide text-foreground", roomLockTheme.pill].join(" ")}>
+                  Room Lock-In
+                </span>
+                <span className={["font-display text-xs font-semibold tabular-nums", roomLockTheme.pct].join(" ")}>
+                  {lockedProgressPct}%
+                </span>
+              </div>
+              <div className={["h-2.5 w-full overflow-hidden rounded-full border bg-surface/80", roomLockTheme.progress].join(" ")}>
+                <div
+                  className={["h-full rounded-full transition-all duration-500", roomLockTheme.bar].join(" ")}
+                  style={{ width: `${lockedProgressPct}%` }}
+                />
+              </div>
+              <div className="mt-1.5 text-[11px] text-muted">
+                <span className="font-display text-foreground">{lockedCount}</span>
+                <span> of </span>
+                <span className="font-display text-foreground">{playersCount || 0}</span>
+                <span> players locked</span>
+              </div>
+            </div>
+
             <button
               onClick={lockPowerup}
               disabled={
@@ -748,9 +788,14 @@ export default function PowerupsPage() {
                 !myPicksByFixture[selectedFixtureId] ||
                 (myGoldenFixtureId != null && selectedFixtureId === myGoldenFixtureId)
               }
-              className={`w-full rounded-xl py-4 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
+              className={[
+                `w-full rounded-xl py-5 text-lg font-semibold border disabled:opacity-60 ${BTN_3D}`,
+                selectedPowerupType === "ALL_IN"
+                  ? "border-red-300/75 bg-[linear-gradient(180deg,rgba(248,113,113,0.22)_0%,rgba(239,68,68,0.08)_100%)] text-foreground shadow-[0_10px_24px_rgba(239,68,68,0.22)] hover:bg-[linear-gradient(180deg,rgba(248,113,113,0.28)_0%,rgba(239,68,68,0.12)_100%)]"
+                  : "border-blue-300/75 bg-[linear-gradient(180deg,rgba(96,165,250,0.22)_0%,rgba(59,130,246,0.08)_100%)] text-foreground shadow-[0_10px_24px_rgba(59,130,246,0.22)] hover:bg-[linear-gradient(180deg,rgba(96,165,250,0.28)_0%,rgba(59,130,246,0.12)_100%)]",
+              ].join(" ")}
             >
-              {submitting ? "Locking…" : `Lock ${POWERUP_OPTIONS.find((p) => p.type === selectedPowerupType)?.label || "Power-Up"}`}
+              {submitting ? "Locking…" : "Lock-In"}
             </button>
           </>
         )}

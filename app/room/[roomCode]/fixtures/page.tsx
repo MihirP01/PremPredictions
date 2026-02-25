@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDown, Info, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
@@ -77,6 +78,56 @@ function seasonLabel(seasonKey: string) {
 
 const MIN_GW = 1;
 const MAX_GW = 38;
+const SHOW_MATCH_INFO = false;
+const TEAM_COLOR_BY_TLA: Record<string, string> = {
+  ARS: "#ef4444",
+  AVL: "#7c3aed",
+  BHA: "#3b82f6",
+  BOU: "#ef4444",
+  BRE: "#dc2626",
+  CHE: "#2563eb",
+  CRY: "#1d4ed8",
+  EVE: "#1e3a8a",
+  FUL: "#f3f4f6",
+  IPS: "#1d4ed8",
+  LEI: "#1d4ed8",
+  LIV: "#dc2626",
+  MCI: "#38bdf8",
+  MUN: "#dc2626",
+  NEW: "#94a3b8",
+  NFO: "#dc2626",
+  SOU: "#ef4444",
+  TOT: "#f8fafc",
+  WHU: "#7c3aed",
+  WOL: "#f59e0b",
+  SUN: "#ef4444",
+  BUR: "#7c3aed",
+  LEE: "#f8fafc",
+};
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : normalized.padEnd(6, "0");
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+  const key = String(tla || shortName || name || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  return TEAM_COLOR_BY_TLA[key] || "#475569";
+}
 
 
 function fmtScore(s?: string | null) {
@@ -94,6 +145,28 @@ function parseOutcome(score?: string | null) {
   if (home > away) return "H";
   if (home < away) return "A";
   return "D";
+}
+
+function powerupHitState(
+  powerupType: "ALL_IN" | "SAFETY_NET" | null,
+  pred: string,
+  actual: string | null,
+): boolean | null {
+  if (!powerupType) return null;
+  const predNorm = String(pred || "").trim();
+  const actualNorm = String(actual || "").trim();
+  if (!actualNorm) return null;
+
+  const exact = !!predNorm && predNorm === actualNorm;
+  const outcomeOnly =
+    !exact &&
+    !!predNorm &&
+    parseOutcome(predNorm) != null &&
+    parseOutcome(predNorm) === parseOutcome(actualNorm);
+
+  if (powerupType === "ALL_IN") return exact;
+  // Safety Net "hits" only when base score would be 0 (miss on result/exact)
+  return !exact && !outcomeOnly;
 }
 
 function displayResult(status: string, actual: string | null) {
@@ -756,21 +829,57 @@ export default function FixturesPage() {
               buttonClassName="font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors text-foreground"
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-[11px] text-muted">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 text-[11px] text-muted">
             <div className="key-chip key-chip-result font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
               Correct Result
             </div>
             <div className="key-chip key-chip-exact font-display rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
               Exact Score
             </div>
-            <div className="font-display rounded-md border border-yellow-300/70 bg-yellow-400/10 px-2 py-1 text-center">
-              Golden Pick
+            <div className="key-chip font-display rounded-md border border-orange-400/80 bg-orange-500/20 px-2 py-1 text-center">
+              Powerup Hit
             </div>
-            <div className="font-display rounded-md border border-red-400/80 bg-transparent px-2 py-1 text-center text-foreground">
-              All-In
+            <div className="key-chip font-display rounded-md border border-slate-400/80 bg-slate-500/20 px-2 py-1 text-center">
+              Powerup Miss
             </div>
-            <div className="font-display rounded-md border border-blue-400/80 bg-transparent px-2 py-1 text-center text-foreground">
-              Safety Net
+            <div className="font-display rounded-md border border-yellow-300/70 bg-transparent px-2 py-1 text-foreground">
+              <span className="inline-flex items-center justify-center gap-1.5 w-full">
+                <Image
+                  src="/icons/powerups/golden-pick-v2.svg"
+                  alt=""
+                  aria-hidden
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+                <span>Golden Pick</span>
+              </span>
+            </div>
+            <div className="font-display rounded-md border border-red-400/80 bg-transparent px-2 py-1 text-foreground">
+              <span className="inline-flex items-center justify-center gap-1.5 w-full">
+                <Image
+                  src="/icons/powerups/all-in-v2.svg"
+                  alt=""
+                  aria-hidden
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+                <span>All-In</span>
+              </span>
+            </div>
+            <div className="font-display rounded-md border border-blue-400/80 bg-transparent px-2 py-1 text-foreground">
+              <span className="inline-flex items-center justify-center gap-1.5 w-full">
+                <Image
+                  src="/icons/powerups/safety-net-v2.svg"
+                  alt=""
+                  aria-hidden
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+                <span>Safety Net</span>
+              </span>
             </div>
           </div>
         </SectionCard>
@@ -818,6 +927,11 @@ export default function FixturesPage() {
               const actual = f.result ?? null;
               const kickoffParts = formatKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
+              const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
+              const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
+              const clashBgStyle: React.CSSProperties = {
+                backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+              };
               return (
                 <div
                   key={f.fixtureId}
@@ -850,7 +964,8 @@ export default function FixturesPage() {
                     )}
                   </div>
                 <div
-                  className="border border-teal-500 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.58rem,0.92vw,0.95rem)] bg-surface-2 page-action-btn cursor-pointer"
+                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.58rem,0.92vw,0.95rem)] page-action-btn cursor-pointer"
+                  style={clashBgStyle}
                   role="button"
                   tabIndex={0}
                   onClick={() => toggleFixtureExpanded(f.fixtureId)}
@@ -969,19 +1084,21 @@ export default function FixturesPage() {
                         {displayResult(f.status, actual)}
                       </div>
                     </div>
-                    <div className="flex items-center justify-center text-xs text-muted">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openMatchInfo(f.fixtureId, f.home?.id, f.away?.id);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-md border border-teal-500 px-2 py-1 bg-surface text-foreground hover:bg-surface-2"
-                      >
-                        <Info size={12} />
-                        Match Info
-                      </button>
-                    </div>
+                    {SHOW_MATCH_INFO ? (
+                      <div className="flex items-center justify-center text-xs text-muted">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openMatchInfo(f.fixtureId, f.home?.id, f.away?.id);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-teal-500 px-2 py-1 bg-surface text-foreground hover:bg-surface-2"
+                        >
+                          <Info size={12} />
+                          Match Info
+                        </button>
+                      </div>
+                    ) : null}
                     <div className="flex items-center justify-center gap-1 text-xs text-muted">
                       <span>{isExpanded ? "Hide" : "Show"} Predictions</span>
                       <ChevronDown
@@ -993,8 +1110,10 @@ export default function FixturesPage() {
 
                   <div
                     className={[
-                      "grid overflow-hidden transition-all duration-400 ease-out",
-                      isExpanded ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0 mt-0",
+                      "grid transition-all duration-400 ease-out",
+                      isExpanded
+                        ? "grid-rows-[1fr] opacity-100 mt-4 overflow-visible"
+                        : "grid-rows-[0fr] opacity-0 mt-0 overflow-hidden",
                     ].join(" ")}
                   >
                     <div className="min-h-0">
@@ -1021,11 +1140,11 @@ export default function FixturesPage() {
                             powerup && powerup.locked && powerup.fixtureId === f.fixtureId
                               ? powerup.powerupType
                               : null;
-                          const powerupClass =
+                          const powerupTypeClass =
                             powerupType === "ALL_IN"
-                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
+                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
                                 : powerupType === "SAFETY_NET"
-                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.5)]"
+                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
                                   : "";
                           const predNorm = String(pred || "").trim();
                           const actualNorm = String(actual || "").trim();
@@ -1037,53 +1156,94 @@ export default function FixturesPage() {
                             !!actualNorm &&
                             parseOutcome(predNorm) != null &&
                             parseOutcome(predNorm) === parseOutcome(actualNorm);
+                          const isPowerupHit = powerupHitState(powerupType, predNorm, actualNorm);
+                          const powerupOutcomeClass =
+                            powerupType && isPowerupHit === true
+                              ? "shadow-[inset_0_0_0_1px_rgba(251,146,60,0.55),0_6px_14px_rgba(251,146,60,0.18)]"
+                              : powerupType && isPowerupHit === false
+                                ? "shadow-[inset_0_0_0_1px_rgba(148,163,184,0.5),0_6px_14px_rgba(100,116,139,0.18)]"
+                                : "";
 
                           const toneClass = isExact
                             ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
                             : isOutcomeOnly
                               ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
                               : "bg-surface border-teal-500";
-                          const goldenToneClass =
-                            isExact || isOutcomeOnly
-                              ? isExact
-                                ? "key-chip key-chip-golden-exact bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
-                                : "key-chip key-chip-golden-result bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
-                              : "bg-yellow-300/10 border-yellow-300/60";
                           const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
+                          const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
+                          const goldenGlowClass = isGolden
+                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
+                            : "";
+                          const goldenIndicatorClass = isGoldenScored
+                            ? "ring-1 ring-yellow-300/65 shadow-[0_8px_20px_rgba(250,204,21,0.22),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
+                            : "";
 
                           return (
                             <div
                               key={p.uid}
                               className={[
-                                "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(33.333%-0.35rem)] min-[360px]:w-[calc(25%-0.4rem)] min-[400px]:w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
-                                isGoldenScored
-                                  ? "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none ring-1 ring-yellow-300/65 shadow-[0_10px_22px_rgba(250,204,21,0.22),inset_0_0_0_1px_rgba(250,204,21,0.35)]"
-                                  : "rounded-lg",
-                                isGolden
-                                  ? goldenToneClass
-                                  : toneClass,
-                                powerupClass,
+                                "relative min-w-0 !overflow-visible w-[calc(33.333%-0.35rem)] min-[360px]:w-[calc(25%-0.4rem)] min-[400px]:w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
                               ].join(" ")}
                             >
+                              {isGolden || powerupType ? (
+                                <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
+                                  {isGolden ? (
+                                    <Image
+                                      src="/icons/powerups/golden-pick-v2.svg"
+                                      alt=""
+                                      aria-hidden
+                                      width={16}
+                                      height={16}
+                                      className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                    />
+                                  ) : null}
+                                  {powerupType ? (
+                                    <Image
+                                      src={
+                                        powerupType === "ALL_IN"
+                                          ? "/icons/powerups/all-in-v2.svg"
+                                          : "/icons/powerups/safety-net-v2.svg"
+                                      }
+                                      alt=""
+                                      aria-hidden
+                                      width={16}
+                                      height={16}
+                                      className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                    />
+                                  ) : null}
+                                </span>
+                              ) : null}
                               <div
                                 className={[
-                                  "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
-                                  "text-muted",
+                                  "rounded-lg rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center border",
+                                  toneClass,
+                                  goldenBorderClass,
+                                  goldenGlowClass,
+                                  goldenIndicatorClass,
+                                  powerupTypeClass,
+                                  powerupOutcomeClass,
                                 ].join(" ")}
                               >
-                                {p.displayName.length > 6
-                                  ? `${p.displayName.slice(0, 6)}`
-                                  : p.displayName}
-                              </div>
+                                <div
+                                  className={[
+                                    "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
+                                    "text-muted",
+                                  ].join(" ")}
+                                >
+                                  {p.displayName.length > 6
+                                    ? `${p.displayName.slice(0, 6)}`
+                                    : p.displayName}
+                                </div>
 
-                              <div
-                                className={[
-                                  "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums",
-                                  "whitespace-nowrap",
-                                  "text-foreground",
-                                ].join(" ")}
-                              >
-                                {fmtScore(pred)}
+                                <div
+                                  className={[
+                                    "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums",
+                                    "whitespace-nowrap",
+                                    "text-foreground",
+                                  ].join(" ")}
+                                >
+                                  {fmtScore(pred)}
+                                </div>
                               </div>
                             </div>
                           );

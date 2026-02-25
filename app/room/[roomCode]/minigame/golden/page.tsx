@@ -17,11 +17,6 @@ import {
   subscribeRoomMeta,
   subscribeRoomPicks,
 } from "@/lib/liveGameBus";
-import {
-  fixtureDayKey,
-  fixtureDayLabel,
-  formatDateWithOrdinal,
-} from "@/lib/dateDisplay";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
@@ -52,6 +47,55 @@ type GoldenDoc = {
   locked: boolean;
 };
 const BTN_3D = "btn-3d-accent";
+const TEAM_COLOR_BY_TLA: Record<string, string> = {
+  ARS: "#ef4444",
+  AVL: "#7c3aed",
+  BHA: "#3b82f6",
+  BOU: "#ef4444",
+  BRE: "#dc2626",
+  CHE: "#2563eb",
+  CRY: "#1d4ed8",
+  EVE: "#1e3a8a",
+  FUL: "#f3f4f6",
+  IPS: "#1d4ed8",
+  LEI: "#1d4ed8",
+  LIV: "#dc2626",
+  MCI: "#38bdf8",
+  MUN: "#dc2626",
+  NEW: "#94a3b8",
+  NFO: "#dc2626",
+  SOU: "#ef4444",
+  TOT: "#f8fafc",
+  WHU: "#7c3aed",
+  WOL: "#f59e0b",
+  SUN: "#ef4444",
+  BUR: "#7c3aed",
+  LEE: "#f8fafc",
+};
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : normalized.padEnd(6, "0");
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+  const key = String(tla || shortName || name || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  return TEAM_COLOR_BY_TLA[key] || "#475569";
+}
 
 export default function GoldenPage() {
   const params = useParams<{ roomCode: string }>();
@@ -288,6 +332,8 @@ export default function GoldenPage() {
   const lockedCount = useMemo(() => {
     return Object.values(goldensByUid).filter((g) => g?.locked).length;
   }, [goldensByUid]);
+  const lockedProgressPct =
+    playersCount > 0 ? Math.round((lockedCount / playersCount) * 100) : 0;
 
   const myGolden = user ? goldensByUid[user.uid] : undefined;
   const myGoldenLocked = !!myGolden?.locked;
@@ -390,31 +436,12 @@ export default function GoldenPage() {
   const orderedFixtureIds = game.fixtureIds?.length
     ? game.fixtureIds
     : fixtures.map((f) => f.fixtureId);
-  const dayBoundaryByIdx = (() => {
-    const firstIdxByDay = new Map<string, number>();
-    const lastIdxByDay = new Map<string, number>();
-    orderedFixtureIds.forEach((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
-      lastIdxByDay.set(dayKey, idx);
-    });
-    return orderedFixtureIds.map((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      return {
-        showDayHeader: firstIdxByDay.get(dayKey) === idx,
-        showDayFooter: lastIdxByDay.get(dayKey) === idx,
-        dayLabel: fixtureDayLabel(fixture?.kickoff || ""),
-      };
-    });
-  })();
   const isLocked = false;
 
   return (
     <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle shadow-[0_10px_28px_rgba(250,204,21,0.10)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold text-foreground">
@@ -423,11 +450,7 @@ export default function GoldenPage() {
             <div className="font-display text-sm text-muted">
               {roomCode} • GW {gw}
             </div>
-            <div className="text-xs text-muted">
-              Locked: {lockedCount} / {playersCount}
-            </div>
           </div>
-
         </div>
 
         {error && (
@@ -513,15 +536,15 @@ export default function GoldenPage() {
                 Choose your Golden fixture
               </div>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(98px,1fr))] gap-2">
-                <div className="key-chip key-chip-golden-result rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/60 bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wide text-muted">Result</div>
+                <div className="key-chip key-chip-result rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/70 bg-emerald-500/20 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.35)]">
+                  <div className="text-[11px] uppercase tracking-wide text-muted">Correct Result</div>
                   <div className="font-display text-base font-semibold text-foreground">+2 pts</div>
                 </div>
-                <div className="key-chip key-chip-golden-exact rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/60 bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wide text-muted">Score</div>
+                <div className="key-chip key-chip-exact rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/70 bg-purple-500/20 px-3 py-2 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.35)]">
+                  <div className="text-[11px] uppercase tracking-wide text-muted">Exact Score</div>
                   <div className="font-display text-base font-semibold text-foreground">+4 pts</div>
                 </div>
-                <div className="rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-subtle bg-surface px-3 py-2">
+                <div className="rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-yellow-300/70 bg-transparent px-3 py-2 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.35)]">
                   <div className="text-[11px] uppercase tracking-wide text-muted">Miss</div>
                   <div className="font-display text-base font-semibold text-foreground">0 pts</div>
                 </div>
@@ -529,54 +552,47 @@ export default function GoldenPage() {
             </div>
 
 	            <div>
-              <SpecialBreak />
-	              <div className="mb-3 flex items-center justify-end">
-	                <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
-	                  <span>Compact Other Picks</span>
-	                  <button
-	                    type="button"
-	                    role="switch"
-	                    aria-checked={compactOtherPicks}
-	                    onClick={toggleCompactOtherPicks}
-	                    className={[
-	                      `relative h-6 w-11 rounded-full border transition-colors ${BTN_3D}`,
-	                      compactOtherPicks
-	                        ? "bg-yellow-500/20 border-yellow-400/80"
-	                        : "bg-surface border-subtle",
-	                    ].join(" ")}
-	                  >
-	                    <span
+              <SpecialBreak className="mb-3" />
+                {!allowIdenticalPicks && (
+	                <div className="mb-3 flex items-center justify-end">
+	                  <label className="inline-flex items-center gap-2 text-xs text-foreground select-none">
+	                    <span>Compact Other Picks</span>
+	                    <button
+	                      type="button"
+	                      role="switch"
+	                      aria-checked={compactOtherPicks}
+	                      onClick={toggleCompactOtherPicks}
 	                      className={[
-	                        "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all",
-	                        compactOtherPicks ? "left-6" : "left-0.5",
+	                        `relative h-6 w-11 rounded-full border transition-colors ${BTN_3D}`,
+	                        compactOtherPicks
+	                          ? "bg-yellow-500/20 border-yellow-400/80"
+	                          : "bg-surface border-subtle",
 	                      ].join(" ")}
-	                    />
-	                  </button>
-	                </label>
-	              </div>
-	              <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+	                    >
+	                      <span
+	                        className={[
+	                          "absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-all",
+	                          compactOtherPicks ? "left-6" : "left-0.5",
+	                        ].join(" ")}
+	                      />
+	                    </button>
+	                  </label>
+	                </div>
+                )}
+	              <div className="grid items-start gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 	              {orderedFixtureIds.map((fid, idx) => {
 	                const f = fixtureMap.get(fid);
 	                const myScore = myPicksByFixture[fid];
-	                const kickoff = f ? new Date(f.kickoff) : null;
-	                const kickoffDate = f ? formatDateWithOrdinal(f.kickoff) : null;
-	                const kickoffTime = kickoff
-	                  ? kickoff.toLocaleTimeString("en-GB", {
-	                      hour: "2-digit",
-	                      minute: "2-digit",
-	                      hour12: false,
-	                    })
-	                  : "";
-
 	                const others = (picksByFixture.get(fid) ?? [])
 	                  .filter((p) => p.uid !== user.uid)
 	                  .map((p) => p.score);
-                  const dayBoundary = dayBoundaryByIdx[idx];
-                  const showDayHeader = !!dayBoundary?.showDayHeader;
-                  const showDayFooter = !!dayBoundary?.showDayFooter;
-                  const dayLabel = dayBoundary?.dayLabel || "";
 
                 const isSelected = selectedFixtureId === fid;
+                const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
+                const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
+                const clashBgStyle: React.CSSProperties = {
+                  backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, isSelected ? 0.32 : 0.22)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, isSelected ? 0.32 : 0.22)} 100%)`,
+                };
 
                 return (
                   <div
@@ -587,62 +603,22 @@ export default function GoldenPage() {
                       animationDuration: "520ms",
                     }}
                   >
-                    <div className="h-5 sm:h-6 flex items-center justify-center">
-                      {showDayHeader ? (
-                        <div className="w-full flex items-center gap-2">
-                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                          <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
-                            {dayLabel}
-                          </span>
-                          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                        </div>
-                      ) : showDayFooter ? (
-                        <div className="w-full flex items-center justify-center gap-1.5">
-                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-                          <span
-                            className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-                            aria-hidden
-                          />
-                          <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
-                        </div>
-                      ) : (
-                        <span aria-hidden className="invisible w-full">_</span>
-                      )}
-                    </div>
 	                  <button
 	                    type="button"
 	                    onClick={() => setSelectedFixtureId(fid)}
 	                    disabled={!myScore}
 	                    className={[
-	                      "no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
+	                      "fixture-clash-bg no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
 	                      isSelected
-	                        ? "golden-selected border-yellow-400/90 bg-gradient-to-b from-yellow-500/15 to-amber-400/5 shadow-[0_10px_22px_rgba(250,204,21,0.20)] scale-[1.02] origin-center"
-	                        : "border-teal-500 bg-surface-2",
+	                        ? "golden-selected border-yellow-300/65 shadow-[0_10px_22px_rgba(250,204,21,0.20)] scale-[1.02] origin-center"
+	                        : "border-white/15",
 	                      !myScore
 	                        ? "opacity-60 cursor-not-allowed"
-	                        : "hover:bg-surface",
+	                        : "",
 	                    ].join(" ")}
+                      style={clashBgStyle}
 	                  >
 	                    <div className="space-y-2">
-	                      <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
-	                        <div className="flex items-center justify-between gap-2">
-	                          <span className="font-display font-semibold">
-	                            {kickoffDate ? (
-	                              <>
-	                                {kickoffDate.dayNum}
-	                                <span
-	                                  className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold"
-	                                  aria-hidden="true"
-	                                >
-	                                  {kickoffDate.suffix}
-	                                </span>{" "}
-	                                {kickoffDate.monthYear}
-	                              </>
-	                            ) : null}
-	                          </span>
-	                          <span className="font-display font-semibold tabular-nums">{kickoffTime}</span>
-	                        </div>
-	                      </div>
 	                      <div>
 	                        {f ? (
                             <>
@@ -659,9 +635,9 @@ export default function GoldenPage() {
                                       name={f.home.name}
                                       tla={f.home.tla}
                                       shortName={f.home.shortName}
+                                      showFullName={false}
                                       wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                                       abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                      fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                                       fullNameWindowPx={68}
                                     />
                                   </div>
@@ -679,9 +655,9 @@ export default function GoldenPage() {
                                       name={f.away.name}
                                       tla={f.away.tla}
                                       shortName={f.away.shortName}
+                                      showFullName={false}
                                       wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                                       abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                      fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                                       fullNameWindowPx={68}
                                     />
                                   </div>
@@ -700,9 +676,9 @@ export default function GoldenPage() {
                                     name={f.home.name}
                                     tla={f.home.tla}
                                     shortName={f.home.shortName}
+                                    showFullName={false}
                                     wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
                                     abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
                                     fullNameWindowPx={88}
                                   />
                                 </div>
@@ -720,9 +696,9 @@ export default function GoldenPage() {
                                     name={f.away.name}
                                     tla={f.away.tla}
                                     shortName={f.away.shortName}
+                                    showFullName={false}
                                     wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
                                     abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
                                     fullNameWindowPx={88}
                                   />
                                 </div>
@@ -785,6 +761,29 @@ export default function GoldenPage() {
 	              })}
 	              </div>
 	            </div>
+            <SpecialBreak className="my-3" />
+            <div className="w-full rounded-xl border border-yellow-300/65 bg-[linear-gradient(180deg,rgba(250,204,21,0.2)_0%,rgba(250,204,21,0.07)_100%)] px-3 py-2.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-display inline-flex items-center rounded-full border border-yellow-300/70 bg-yellow-400/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-foreground">
+                  Room Lock-In
+                </span>
+                <span className="font-display text-xs font-semibold tabular-nums text-yellow-200">
+                  {lockedProgressPct}%
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full border border-yellow-300/60 bg-surface/80">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(250,204,21,0.6),rgba(251,191,36,0.98))] shadow-[0_0_14px_rgba(250,204,21,0.38)] transition-all duration-500"
+                  style={{ width: `${lockedProgressPct}%` }}
+                />
+              </div>
+              <div className="mt-1.5 text-[11px] text-muted">
+                <span className="font-display text-foreground">{lockedCount}</span>
+                <span> of </span>
+                <span className="font-display text-foreground">{playersCount || 0}</span>
+                <span> players locked</span>
+              </div>
+            </div>
 
             <button
               onClick={lockGolden}
@@ -794,9 +793,9 @@ export default function GoldenPage() {
                 selectedFixtureId == null ||
                 !myPicksByFixture[selectedFixtureId]
               }
-              className={`w-full rounded-xl py-4 bg-accent text-accent-foreground disabled:opacity-60 ${BTN_3D}`}
+              className={`w-full rounded-xl py-5 text-lg font-semibold border border-yellow-300/75 bg-[linear-gradient(180deg,rgba(250,204,21,0.22)_0%,rgba(250,204,21,0.08)_100%)] text-foreground shadow-[0_10px_24px_rgba(250,204,21,0.22)] hover:bg-[linear-gradient(180deg,rgba(250,204,21,0.28)_0%,rgba(250,204,21,0.12)_100%)] disabled:opacity-60 ${BTN_3D}`}
             >
-              {submitting ? "Locking…" : "Lock Golden Pick"}
+              {submitting ? "Locking…" : "Lock-In"}
             </button>
           </>
         )}

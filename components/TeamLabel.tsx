@@ -8,6 +8,7 @@ type TeamLabelProps = {
   name: string;
   tla?: string | null;
   shortName?: string | null;
+  showFullName?: boolean;
   wrapperClassName?: string;
   abbrClassName?: string;
   fullNameClassName?: string;
@@ -18,6 +19,7 @@ export default function TeamLabel({
   name,
   tla,
   shortName,
+  showFullName = true,
   wrapperClassName = "mt-1 text-xs font-semibold text-foreground truncate w-full",
   abbrClassName = "font-display block",
   fullNameClassName = "font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto",
@@ -28,11 +30,13 @@ export default function TeamLabel({
       <span className={abbrClassName}>
         {teamAbbrFromParts(name, tla, shortName)}
       </span>
-      <PendulumName
-        text={name}
-        windowPx={fullNameWindowPx}
-        className={fullNameClassName}
-      />
+      {showFullName ? (
+        <PendulumName
+          text={name}
+          windowPx={fullNameWindowPx}
+          className={fullNameClassName}
+        />
+      ) : null}
     </div>
   );
 }

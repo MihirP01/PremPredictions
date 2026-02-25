@@ -304,16 +304,6 @@ export default function MiniGamePlayPage() {
     }
     return m;
   }, [allPicks, user]);
-  const latestLockedPick = useMemo(() => {
-    const fixtureIds = game?.fixtureIds ?? [];
-    for (let i = fixtureIds.length - 1; i >= 0; i -= 1) {
-      const fid = fixtureIds[i];
-      const sc = myPickByFixture.get(fid);
-      if (sc) return { fixtureId: fid, score: sc };
-    }
-    return null;
-  }, [game?.fixtureIds, myPickByFixture]);
-
   const parallelActiveFixtureId = useMemo(() => {
     const fixtureIds = game?.fixtureIds ?? [];
     if (!fixtureIds.length) return null;
@@ -359,6 +349,23 @@ export default function MiniGamePlayPage() {
       !activeFixtureId);
   const effectiveFixtureId =
     captainTurnNeedsFixtureChoice ? captainFixtureChoice : activeFixtureId;
+
+  const latestLockedPick = useMemo(() => {
+    // Prefer the pick for the currently active fixture.
+    if (effectiveFixtureId != null) {
+      const score = myPickByFixture.get(effectiveFixtureId);
+      if (score) return { fixtureId: effectiveFixtureId, score };
+    }
+
+    // Fallback: most recent pick across fixture order.
+    const fixtureIds = game?.fixtureIds ?? [];
+    for (let i = fixtureIds.length - 1; i >= 0; i -= 1) {
+      const fid = fixtureIds[i];
+      const score = myPickByFixture.get(fid);
+      if (score) return { fixtureId: fid, score };
+    }
+    return null;
+  }, [effectiveFixtureId, game?.fixtureIds, myPickByFixture]);
 
   useEffect(() => {
     if (!captainTurnNeedsFixtureChoice) {
@@ -471,11 +478,20 @@ export default function MiniGamePlayPage() {
 
   const totalTurns = Math.max(Number(game.totalTurns ?? 0), 1);
   const turnNumber = Math.min(totalTurns, Number(game.currentTurn ?? 0) + 1);
-  const fixtureTurnNumber = Math.max(1, Number(current?.fixtureIndex ?? 0) + 1);
   const fixtureTurnTotal = Math.max(1, game.fixtureIds?.length ?? 0);
+  const fixtureTurnNumber = Math.max(
+    1,
+    Math.min(
+      fixtureTurnTotal,
+      fixtureTurnTotal - remainingCaptainFixtureIds.length + 1,
+    ),
+  );
   const playerTurnNumber = Math.max(1, Number(current?.turnInFixture ?? 0) + 1);
   const playerTurnTotal = Math.max(1, game.order?.length ?? 0);
-  const captainIsChoosingFixture = isCaptainMode && !activeFixtureId;
+  const waitingForCaptainFixture =
+    isCaptainMode && !captainTurnNeedsFixtureChoice && effectiveFixtureId == null;
+  const captainIsChoosingFixture =
+    isCaptainMode && (captainTurnNeedsFixtureChoice || waitingForCaptainFixture);
   const currentTurnName = current?.uidTurn
     ? displayNamesByUid[current.uidTurn] || current.uidTurn.slice(0, 6)
     : "current player";
@@ -503,8 +519,6 @@ export default function MiniGamePlayPage() {
     1,
     Math.min(Math.max(sprintTotalTurns, 1), Number(game.currentTurn ?? 0) + 1),
   );
-  const waitingForCaptainFixture =
-    isCaptainMode && !captainTurnNeedsFixtureChoice && effectiveFixtureId == null;
 
   const stopPredictions = async () => {
     if (!user || !isLeader || gw == null || !seasonKey) return;

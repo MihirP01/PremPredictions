@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
@@ -66,20 +67,59 @@ type PowerupDoc = {
 };
 
 const BTN_3D = "btn-3d-accent";
+const TEAM_COLOR_BY_TLA: Record<string, string> = {
+  ARS: "#ef4444",
+  AVL: "#7c3aed",
+  BHA: "#3b82f6",
+  BOU: "#ef4444",
+  BRE: "#dc2626",
+  CHE: "#2563eb",
+  CRY: "#1d4ed8",
+  EVE: "#1e3a8a",
+  FUL: "#f3f4f6",
+  IPS: "#1d4ed8",
+  LEI: "#1d4ed8",
+  LIV: "#dc2626",
+  MCI: "#38bdf8",
+  MUN: "#dc2626",
+  NEW: "#94a3b8",
+  NFO: "#dc2626",
+  SOU: "#ef4444",
+  TOT: "#f8fafc",
+  WHU: "#7c3aed",
+  WOL: "#f59e0b",
+  SUN: "#ef4444",
+  BUR: "#7c3aed",
+  LEE: "#f8fafc",
+};
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : normalized.padEnd(6, "0");
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+  const key = String(tla || shortName || name || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  return TEAM_COLOR_BY_TLA[key] || "#475569";
+}
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
   return s.replace("-", "–");
-}
-
-function parseOutcome(score: string): "H" | "A" | "D" | null {
-  const m = String(score || "").trim().match(/^(\d+)\s*-\s*(\d+)$/);
-  if (!m) return null;
-  const home = Number(m[1]);
-  const away = Number(m[2]);
-  if (home > away) return "H";
-  if (away > home) return "A";
-  return "D";
 }
 
 function byDisplayName(
@@ -625,12 +665,21 @@ export default function RevealPage() {
         )}
 
         <SpecialBreak />
+        <div className="text-center">
+          <div className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-foreground shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
+            Gameweek {gw}
+          </div>
+        </div>
         <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
             const actual = f?.result ? fmtScore(f.result) : "TBD";
-            const actualRaw = String(f?.result || "").trim();
             const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
+            const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
+            const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
+            const clashBgStyle: React.CSSProperties = {
+              backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+            };
             const dayBoundary = dayBoundaryByIdx[idx];
             const showDayHeader = !!dayBoundary?.showDayHeader;
             const showDayFooter = !!dayBoundary?.showDayFooter;
@@ -667,7 +716,10 @@ export default function RevealPage() {
                     <span aria-hidden className="invisible w-full">_</span>
                   )}
                 </div>
-                <div className="border border-teal-500 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-[clamp(0.75rem,1.1vw,1.25rem)] bg-surface-2">
+                <div
+                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-[clamp(0.75rem,1.1vw,1.25rem)]"
+                  style={clashBgStyle}
+                >
                   <div className="space-y-2">
                   <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
                     {kickoffParts ? (
@@ -788,54 +840,75 @@ export default function RevealPage() {
                       const p = powerupsByUid[uid];
                       const powerupType =
                         p?.locked && p?.fixtureId === fid ? p.powerupType : null;
-                      const predNorm = String(sc || "").trim();
-                      const isExact =
-                        !!predNorm && !!actualRaw && predNorm === actualRaw;
-                      const isOutcomeOnly =
-                        !isExact &&
-                        !!predNorm &&
-                        !!actualRaw &&
-                        parseOutcome(predNorm) != null &&
-                        parseOutcome(predNorm) === parseOutcome(actualRaw);
-                      const toneClass = isExact
-                        ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
-                        : isOutcomeOnly
-                          ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
-                          : "bg-surface border-teal-500";
-                      const goldenToneClass =
-                        isExact || isOutcomeOnly
-                          ? isExact
-                            ? "key-chip key-chip-golden-exact bg-[linear-gradient(135deg,rgba(168,85,247,0.20)_0%,rgba(168,85,247,0.20)_48%,rgba(250,204,21,0.20)_52%,rgba(250,204,21,0.20)_100%)] border-yellow-300/60"
-                            : "key-chip key-chip-golden-result bg-[linear-gradient(45deg,rgba(250,204,21,0.20)_0%,rgba(250,204,21,0.20)_48%,rgba(16,185,129,0.20)_52%,rgba(16,185,129,0.20)_100%)] border-yellow-300/60"
-                          : "bg-yellow-300/10 border-yellow-300/60";
+                      const toneClass = "bg-surface border-teal-500";
+                      const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
+                      const goldenGlowClass = isGolden
+                        ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
+                        : "";
                       return (
                         <div
                           key={`${fid}-${uid}`}
                           className={[
-                            "rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center overflow-hidden border min-w-0 w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
-                            isGolden ? goldenToneClass : toneClass,
-                            powerupType === "ALL_IN"
-                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.5)]"
-                                : powerupType === "SAFETY_NET"
-                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.5)]"
-                                  : "",
+                            "relative min-w-0 !overflow-visible w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
                           ].join(" ")}
                         >
+                          {isGolden || powerupType ? (
+                            <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
+                              {isGolden ? (
+                                <Image
+                                  src="/icons/powerups/golden-pick-v2.svg"
+                                  alt=""
+                                  aria-hidden
+                                  width={16}
+                                  height={16}
+                                  className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                />
+                              ) : null}
+                              {powerupType ? (
+                                <Image
+                                  src={
+                                    powerupType === "ALL_IN"
+                                      ? "/icons/powerups/all-in-v2.svg"
+                                      : "/icons/powerups/safety-net-v2.svg"
+                                  }
+                                  alt=""
+                                  aria-hidden
+                                  width={16}
+                                  height={16}
+                                  className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                />
+                              ) : null}
+                            </span>
+                          ) : null}
                           <div
                             className={[
-                              "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
-                              "text-muted",
+                              "rounded-lg rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center border",
+                              toneClass,
+                              goldenBorderClass,
+                              goldenGlowClass,
+                              powerupType === "ALL_IN"
+                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
+                                : powerupType === "SAFETY_NET"
+                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                  : "",
                             ].join(" ")}
                           >
-                            {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                          </div>
-                          <div
-                            className={[
-                              "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap",
-                              "text-foreground",
-                            ].join(" ")}
-                          >
-                            {fmtScore(sc)}
+                            <div
+                              className={[
+                                "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
+                                "text-muted",
+                              ].join(" ")}
+                            >
+                              {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                            </div>
+                            <div
+                              className={[
+                                "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap",
+                                "text-foreground",
+                              ].join(" ")}
+                            >
+                              {fmtScore(sc)}
+                            </div>
                           </div>
                         </div>
                       );

@@ -19,7 +19,6 @@ import {
   subscribeRoomPicks,
   subscribeRoomPlayers,
 } from "@/lib/liveGameBus";
-import { formatDateWithOrdinal, formatTime24 } from "@/lib/dateDisplay";
 import {
   CaptainBanner,
   CaptainChooseFixturePanel,
@@ -643,8 +642,15 @@ export default function MiniGamePlayPage() {
                 {remainingCaptainFixtureIds.map((fid) => {
                   const f = fixtures.find((x) => x.fixtureId === fid);
                   const isSelected = captainFixtureChoice === fid;
-                  const kickoffDate = f ? formatDateWithOrdinal(f.kickoff) : null;
-                  const kickoffTime = f ? formatTime24(f.kickoff) : "";
+                  const homeColor = f
+                    ? colorForTeam(f.home.tla, f.home.shortName, f.home.name)
+                    : "#475569";
+                  const awayColor = f
+                    ? colorForTeam(f.away.tla, f.away.shortName, f.away.name)
+                    : "#475569";
+                  const clashBgStyle: React.CSSProperties = {
+                    backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+                  };
                   return (
                     <button
                       key={fid}
@@ -656,23 +662,8 @@ export default function MiniGamePlayPage() {
                           ? "scale-[1.02] text-foreground border-[color:rgba(var(--room-accent-rgb),0.85)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.18)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] shadow-[0_8px_22px_rgba(var(--room-accent-rgb),0.18),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.24)]"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                       ].join(" ")}
+                      style={clashBgStyle}
                     >
-                      <div className="text-[10px] text-muted mb-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-display">
-                            {kickoffDate ? (
-                              <>
-                                {kickoffDate.dayNum}
-                                <sup className="text-[8px] ml-[1px]">{kickoffDate.suffix}</sup>{" "}
-                                {kickoffDate.monthYear}
-                              </>
-                            ) : (
-                              `Fixture ${fid}`
-                            )}
-                          </span>
-                          <span className="font-display tabular-nums">{kickoffTime}</span>
-                        </div>
-                      </div>
                       {f ? (
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
                           <div className="flex flex-col items-center text-center min-w-0">
@@ -689,9 +680,9 @@ export default function MiniGamePlayPage() {
                               name={f.home.name}
                               tla={f.home.tla}
                               shortName={f.home.shortName}
+                              showFullName={false}
                               wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                               abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                               fullNameWindowPx={68}
                             />
                           </div>
@@ -710,9 +701,9 @@ export default function MiniGamePlayPage() {
                               name={f.away.name}
                               tla={f.away.tla}
                               shortName={f.away.shortName}
+                              showFullName={false}
                               wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
                               abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
                               fullNameWindowPx={68}
                             />
                           </div>
@@ -739,66 +730,54 @@ export default function MiniGamePlayPage() {
             </div>
           ) : null}
           {!captainTurnNeedsFixtureChoice && fixture && (
-            <div className="space-y-2 mb-2">
-              <div className="text-xs text-muted">
-                <div className="flex items-center justify-between gap-2">
-                  {(() => {
-                    const d = formatDateWithOrdinal(fixture.kickoff);
-                    return (
-                      <span className="font-display font-semibold">
-                        {d.dayNum}
-                        <sup className="text-[9px] ml-[1px]">{d.suffix}</sup>{" "}
-                        {d.monthYear}
-                      </span>
-                    );
-                  })()}
-                  <span className="font-display font-semibold tabular-nums">
-                    {formatTime24(fixture.kickoff)}
-                  </span>
-                </div>
-              </div>
+            <div
+              className="fixture-clash-bg mb-2 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-white/15 bg-surface-2 px-3 py-3"
+              style={{
+                backgroundImage: `linear-gradient(120deg, ${hexToRgba(colorForTeam(fixture.home.tla, fixture.home.shortName, fixture.home.name), 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(colorForTeam(fixture.away.tla, fixture.away.shortName, fixture.away.name), 0.2)} 100%)`,
+              }}
+            >
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div className="flex flex-col items-center text-center min-w-0">
-                <TeamBadge
-                  name={fixture.home.name}
-                  tla={fixture.home.tla}
-                  shortName={fixture.home.shortName}
-                  badge={fixture.home.badge}
-                  wrapperClassName="h-10 w-10 rounded-full"
-                  imageClassName="h-8 w-8 object-contain"
-                  fallbackClassName="text-[10px] font-bold text-foreground"
-                />
-                <TeamLabel
-                  name={fixture.home.name}
-                  tla={fixture.home.tla}
-                  shortName={fixture.home.shortName}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameClassName="font-display w-full text-[9px] sm:text-[9px] font-medium text-muted leading-tight"
-                  fullNameWindowPx={68}
-                />
-              </div>
-              <div className="font-display text-xs text-muted uppercase">vs</div>
-              <div className="flex flex-col items-center text-center min-w-0">
-                <TeamBadge
-                  name={fixture.away.name}
-                  tla={fixture.away.tla}
-                  shortName={fixture.away.shortName}
-                  badge={fixture.away.badge}
-                  wrapperClassName="h-10 w-10 rounded-full"
-                  imageClassName="h-8 w-8 object-contain"
-                  fallbackClassName="text-[10px] font-bold text-foreground"
-                />
-                <TeamLabel
-                  name={fixture.away.name}
-                  tla={fixture.away.tla}
-                  shortName={fixture.away.shortName}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameClassName="font-display w-full text-[9px] sm:text-[9px] font-medium text-muted leading-tight"
-                  fullNameWindowPx={68}
-                />
-              </div>
+                <div className="flex flex-col items-center text-center min-w-0">
+                  <TeamBadge
+                    name={fixture.home.name}
+                    tla={fixture.home.tla}
+                    shortName={fixture.home.shortName}
+                    badge={fixture.home.badge}
+                    wrapperClassName="h-10 w-10 rounded-full"
+                    imageClassName="h-8 w-8 object-contain"
+                    fallbackClassName="text-[10px] font-bold text-foreground"
+                  />
+                  <TeamLabel
+                    name={fixture.home.name}
+                    tla={fixture.home.tla}
+                    shortName={fixture.home.shortName}
+                    showFullName={false}
+                    wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                    fullNameWindowPx={68}
+                  />
+                </div>
+                <div className="font-display text-xs text-muted uppercase">vs</div>
+                <div className="flex flex-col items-center text-center min-w-0">
+                  <TeamBadge
+                    name={fixture.away.name}
+                    tla={fixture.away.tla}
+                    shortName={fixture.away.shortName}
+                    badge={fixture.away.badge}
+                    wrapperClassName="h-10 w-10 rounded-full"
+                    imageClassName="h-8 w-8 object-contain"
+                    fallbackClassName="text-[10px] font-bold text-foreground"
+                  />
+                  <TeamLabel
+                    name={fixture.away.name}
+                    tla={fixture.away.tla}
+                    shortName={fixture.away.shortName}
+                    showFullName={false}
+                    wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                    fullNameWindowPx={68}
+                  />
+                </div>
               </div>
             </div>
           )}

@@ -53,6 +53,55 @@ type Fixture = {
 
 type PickDoc = { uid?: string; fixtureId?: number; score?: string };
 const BTN_3D = "btn-3d-accent";
+const TEAM_COLOR_BY_TLA: Record<string, string> = {
+  ARS: "#ef4444",
+  AVL: "#7c3aed",
+  BHA: "#3b82f6",
+  BOU: "#ef4444",
+  BRE: "#dc2626",
+  CHE: "#2563eb",
+  CRY: "#1d4ed8",
+  EVE: "#1e3a8a",
+  FUL: "#f3f4f6",
+  IPS: "#1d4ed8",
+  LEI: "#1d4ed8",
+  LIV: "#dc2626",
+  MCI: "#38bdf8",
+  MUN: "#dc2626",
+  NEW: "#94a3b8",
+  NFO: "#dc2626",
+  SOU: "#ef4444",
+  TOT: "#f8fafc",
+  WHU: "#7c3aed",
+  WOL: "#f59e0b",
+  SUN: "#ef4444",
+  BUR: "#7c3aed",
+  LEE: "#f8fafc",
+};
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : normalized.padEnd(6, "0");
+  const int = Number.parseInt(full, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+  const key = String(tla || shortName || name || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  return TEAM_COLOR_BY_TLA[key] || "#475569";
+}
 
 function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);

@@ -5,7 +5,10 @@ import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey, seasonStartYear } from "../../season";
 import { FieldValue } from "firebase-admin/firestore";
-import { applyFixtureScoring } from "../../../../lib/powerupScoring";
+import {
+  applyFixtureScoring,
+  getBasePointsFromScores,
+} from "../../../../lib/powerupScoring";
 
 function isAuthorized(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -45,64 +48,57 @@ type PowerupDoc = {
   powerupType?: string;
 };
 
-function parseScore(s: string | null | undefined) {
-  if (!s) return null;
-  const m = String(s)
-    .trim()
-    .match(/^(\d+)\s*-\s*(\d+)$/);
-  if (!m) return null;
-  return { h: Number(m[1]), a: Number(m[2]) };
+type FixtureItem = {
+  fixtureId?: number;
+  status?: string | null;
+  result?: string | null;
+};
+
+function isFinalStatus(status: string | null | undefined) {
+  const s = String(status || "").trim().toUpperCase();
+  return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
 
-function outcome(h: number, a: number) {
-  if (h > a) return "H";
-  if (h < a) return "A";
-  return "D";
+function buildBaseUrl(req: Request) {
+  const host = req.headers.get("host");
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const proto =
+    forwardedProto ||
+    (host?.includes("localhost") ? "http" : "https");
+  return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
-function basePoints(pred: string, actual: string) {
-  const p = parseScore(pred);
-  const r = parseScore(actual);
-  if (!p || !r) return 0;
-  if (p.h === r.h && p.a === r.a) return 2;
-  if (outcome(p.h, p.a) === outcome(r.h, r.a)) return 1;
-  return 0;
-}
-
-async function fetchActualResultsForGw(gw: number, seasonKey: string) {
-  const apiKey = process.env.FOOTBALLDATA_KEY;
-  if (!apiKey) throw new Error("Missing env var: FOOTBALLDATA_KEY");
-
-  const season = seasonStartYear(seasonKey);
-  const url = `https://api.football-data.org/v4/competitions/PL/matches?season=${season}&matchday=${gw}`;
-  const res = await fetch(url, {
-    headers: { "X-Auth-Token": apiKey },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Football API fixtures error: ${res.status}`);
+async function fetchActualResultsForGw(baseUrl: string, gw: number, seasonKey: string) {
+  const res = await fetch(
+    `${baseUrl}/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}&refresh=1&t=${Date.now()}`,
+    {
+      cache: "no-store",
+    },
+  );
+  if (!res.ok) throw new Error(`Fixtures API error: ${res.status}`);
 
   const data = (await res.json().catch(() => ({}))) as {
-    matches?: Array<{
-      id?: number;
-      status?: string;
-      score?: { fullTime?: { home?: number; away?: number } };
-    }>;
+    fixtures?: FixtureItem[];
   };
 
   const actualByFixture = new Map<number, string>();
-  const matches = Array.isArray(data.matches) ? data.matches : [];
+  const matches = Array.isArray(data.fixtures) ? data.fixtures : [];
   for (const m of matches) {
-    const id = Number(m?.id);
-    const h = m?.score?.fullTime?.home;
-    const a = m?.score?.fullTime?.away;
-    const isFinished = m?.status === "FINISHED";
-    if (!Number.isFinite(id) || !Number.isFinite(h) || !Number.isFinite(a) || !isFinished) continue;
-    actualByFixture.set(id, `${h}-${a}`);
+    const id = Number(m?.fixtureId);
+    if (!Number.isFinite(id)) continue;
+    if (m?.result && isFinalStatus(m?.status)) {
+      actualByFixture.set(id, String(m.result));
+    }
   }
   return actualByFixture;
 }
 
-async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey: string): Promise<RecalcResult> {
+async function runCurrentGwRecalcForRoom(
+  baseUrl: string,
+  roomCode: string,
+  gw: number,
+  seasonKey: string,
+): Promise<RecalcResult> {
   try {
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
     const gameBase = `${seasonBase}/games/gw-${gw}`;
@@ -144,7 +140,7 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
       };
     }
 
-    const actualByFixture = await fetchActualResultsForGw(gw, seasonKey);
+    const actualByFixture = await fetchActualResultsForGw(baseUrl, gw, seasonKey);
     if (actualByFixture.size === 0) {
       return {
         roomCode,
@@ -224,7 +220,7 @@ async function runCurrentGwRecalcForRoom(roomCode: string, gw: number, seasonKey
         const actual = actualByFixture.get(fid);
         if (!actual) continue;
         const pred = pickMap.get(`${uid}|${fid}`) || "";
-        const base = pred ? basePoints(pred, actual) : 0;
+        const base = getBasePointsFromScores(pred, actual);
         const golden = goldenFixtureId === fid;
         const powerupType = powerupFixtureId === fid ? activePowerupType : null;
         const pts = applyFixtureScoring({
@@ -377,6 +373,7 @@ export async function GET(req: Request) {
 
   let stage = "init";
   try {
+    const baseUrl = buildBaseUrl(req);
     stage = "parse-url";
     const url = new URL(req.url);
     const seasonKey = resolveSeasonKey(url.searchParams.get("seasonKey"));
@@ -390,7 +387,7 @@ export async function GET(req: Request) {
     stage = "recalculate";
     const results: RecalcResult[] = [];
     for (const roomCode of roomCodes) {
-      results.push(await runCurrentGwRecalcForRoom(roomCode, gw, seasonKey));
+      results.push(await runCurrentGwRecalcForRoom(baseUrl, roomCode, gw, seasonKey));
     }
 
     const okCount = results.filter((r) => r.ok).length;

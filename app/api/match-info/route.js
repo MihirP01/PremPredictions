@@ -1,169 +1,464 @@
 import { NextResponse } from "next/server";
 
-function toScore(match) {
-  const h = match?.score?.fullTime?.home;
-  const a = match?.score?.fullTime?.away;
-  if (!Number.isFinite(h) || !Number.isFinite(a)) return "—";
-  return `${h}-${a}`;
+const FOTMOB_LEAGUE_ID = 47;
+const DEFAULT_HEADERS = {
+  "User-Agent": "Mozilla/5.0",
+  Accept: "text/html,application/json;q=0.9,*/*;q=0.8",
+};
+
+function normalizeSeasonKey(input) {
+  const raw = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (!raw) return null;
+  if (/^\d{4}$/.test(raw)) return raw;
+  const short = /^(\d{2})[/-](\d{2})$/.exec(raw);
+  if (short) return `${short[1]}${short[2]}`;
+  const long = /^(\d{4})[/-]?(\d{2,4})$/.exec(raw);
+  if (long) {
+    const startYY = String(Number(long[1]) % 100).padStart(2, "0");
+    const endYY = String(Number(long[2]) % 100).padStart(2, "0");
+    return `${startYY}${endYY}`;
+  }
+  return null;
 }
 
-function toFormResult(match, teamId) {
-  const winner = String(match?.score?.winner || "").toUpperCase();
-  if (winner === "DRAW") return "D";
-  if (winner === "HOME_TEAM") return Number(match?.homeTeam?.id) === teamId ? "W" : "L";
-  if (winner === "AWAY_TEAM") return Number(match?.awayTeam?.id) === teamId ? "W" : "L";
-  const h = Number(match?.score?.fullTime?.home);
-  const a = Number(match?.score?.fullTime?.away);
-  if (!Number.isFinite(h) || !Number.isFinite(a)) return "—";
-  if (h === a) return "D";
-  const isHome = Number(match?.homeTeam?.id) === teamId;
-  return (h > a) === isHome ? "W" : "L";
+function seasonStartYearFromKey(seasonKey) {
+  return 2000 + Number(String(seasonKey).slice(0, 2));
 }
 
-function mapMiniMatch(match) {
+function fotmobSeasonFromStartYear(startYear) {
+  return `${startYear}/${startYear + 1}`;
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bfc\b/g, "")
+    .replace(/\bac\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function teamCandidates(team) {
+  const base = [team?.name, team?.shortName, team?.tla]
+    .map((v) => normalizeName(v))
+    .filter(Boolean);
+
+  const aliasMap = {
+    "tottenham hotspur": ["tottenham", "spurs"],
+    "tottenham hotspur fc": ["tottenham", "spurs"],
+    "wolverhampton wanderers": ["wolves"],
+    "wolverhampton wanderers fc": ["wolves"],
+    "manchester united": ["man utd", "manchester utd"],
+    "manchester city": ["man city"],
+    "newcastle united": ["newcastle"],
+    "nottingham forest": ["forest"],
+    "brighton and hove albion": ["brighton"],
+    "west ham united": ["west ham"],
+    "afc bournemouth": ["bournemouth"],
+  };
+
+  const out = new Set(base);
+  for (const name of base) {
+    const aliases = aliasMap[name];
+    if (!aliases) continue;
+    for (const alias of aliases) out.add(normalizeName(alias));
+  }
+  return out;
+}
+
+function timeBucket(iso) {
+  const ms = Date.parse(String(iso || ""));
+  if (!Number.isFinite(ms)) return null;
+  return Math.round(ms / 60000);
+}
+
+function buildLeagueIndex(matches) {
+  const index = new Map();
+  for (const match of Array.isArray(matches) ? matches : []) {
+    const kick = timeBucket(match?.status?.utcTime);
+    const home = teamCandidates(match?.home);
+    const away = teamCandidates(match?.away);
+    const key = `${kick ?? "na"}`;
+    const row = {
+      id: Number(match?.id || 0) || null,
+      pageUrl: String(match?.pageUrl || ""),
+      home,
+      away,
+      status: match?.status || null,
+    };
+    const list = index.get(key);
+    if (list) list.push(row);
+    else index.set(key, [row]);
+  }
+  return index;
+}
+
+function matchesTeam(needles, haystack) {
+  for (const n of needles) {
+    if (haystack.has(n)) return true;
+  }
+  return false;
+}
+
+function findLeagueMatch(index, fixture) {
+  const kick = timeBucket(fixture?.kickoff);
+  const candidates = index.get(`${kick ?? "na"}`) || [];
+  const homeNeedle = teamCandidates(fixture?.homeTeam);
+  const awayNeedle = teamCandidates(fixture?.awayTeam);
+  return (
+    candidates.find(
+      (candidate) =>
+        matchesTeam(homeNeedle, candidate.home) &&
+        matchesTeam(awayNeedle, candidate.away),
+    ) || null
+  );
+}
+
+function cleanText(value) {
+  return String(value || "")
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeScore(value) {
+  const m = cleanText(value).match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (!m) return "—";
+  return `${m[1]}-${m[2]}`;
+}
+
+function parseNextData(html) {
+  const match = String(html || "").match(
+    /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/,
+  );
+  if (!match) throw new Error("FotMob page payload not found.");
+  return JSON.parse(match[1]);
+}
+
+function parseNextDataSafe(html) {
+  try {
+    return parseNextData(html);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url, {
+    headers: { ...DEFAULT_HEADERS, Accept: "application/json, text/plain, */*" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`FotMob JSON ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchHtml(url) {
+  const res = await fetch(url, {
+    headers: DEFAULT_HEADERS,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`FotMob HTML ${res.status}`);
+  }
+  return res.text();
+}
+
+function teamBadgeUrl(teamId) {
+  const id = Number(teamId || 0);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
+}
+
+function playerImageUrl(playerId) {
+  const id = Number(playerId || 0);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return `https://images.fotmob.com/image_resources/playerimages/${id}.png`;
+}
+
+function positionLabelFromId(positionId) {
+  const id = Number(positionId);
+  if (id === 0) return "GK";
+  if (id === 1) return "DEF";
+  if (id === 2) return "MID";
+  if (id === 3) return "FWD";
+  return "—";
+}
+
+function toMiniTeam(team, badge) {
   return {
-    id: Number(match?.id || 0) || null,
-    utcDate: String(match?.utcDate || ""),
-    homeTeam: {
-      id: Number(match?.homeTeam?.id || 0) || null,
-      name: String(match?.homeTeam?.name || "Home"),
-      tla: match?.homeTeam?.tla ? String(match.homeTeam.tla) : null,
-    },
-    awayTeam: {
-      id: Number(match?.awayTeam?.id || 0) || null,
-      name: String(match?.awayTeam?.name || "Away"),
-      tla: match?.awayTeam?.tla ? String(match.awayTeam.tla) : null,
-    },
-    competition: {
-      name: String(match?.competition?.name || ""),
-      code: match?.competition?.code ? String(match.competition.code) : null,
-    },
-    result: toScore(match),
-    status: String(match?.status || ""),
+    id: Number(team?.id || 0) || null,
+    name: String(team?.name || "Team"),
+    tla: team?.shortName ? String(team.shortName) : null,
+    shortName: team?.shortName ? String(team.shortName) : null,
+    badge: badge ? String(badge) : teamBadgeUrl(team?.id),
   };
 }
 
-function byMostRecent(a, b) {
-  const ta = Date.parse(String(a?.utcDate || ""));
-  const tb = Date.parse(String(b?.utcDate || ""));
-  if (!Number.isFinite(ta) && !Number.isFinite(tb)) return 0;
-  if (!Number.isFinite(ta)) return 1;
-  if (!Number.isFinite(tb)) return -1;
-  return tb - ta;
+function toMiniMatch(match) {
+  const competitionCode = cleanText(
+    match?.league?.shortName ||
+      match?.tournament?.shortName ||
+      match?.series?.shortName ||
+      "",
+  );
+  return {
+    id: Number(match?.id || match?.matchId || 0) || null,
+    utcDate: String(match?.status?.utcTime || match?.time?.utcTime || ""),
+    homeTeam: toMiniTeam(match?.home, null),
+    awayTeam: toMiniTeam(match?.away, null),
+    competition: {
+      name: String(match?.league?.name || match?.tournament?.name || ""),
+      code: competitionCode || null,
+      emblem: null,
+    },
+    result: normalizeScore(match?.status?.scoreStr),
+    status: cleanText(match?.status?.reason?.short || match?.status?.liveTime?.short || ""),
+  };
 }
 
-function toYmdUtc(d) {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function toFormResult(match, teamId) {
+  const h = Number(match?.home?.score);
+  const a = Number(match?.away?.score);
+  if (!Number.isFinite(h) || !Number.isFinite(a)) return "—";
+  if (h === a) return "D";
+  const winnerId = h > a ? Number(match?.home?.id) : Number(match?.away?.id);
+  return winnerId === teamId ? "W" : "L";
+}
+
+function mapPlayer(player) {
+  const tags = [];
+  const events = Array.isArray(player?.performance?.events) ? player.performance.events : [];
+  let goalCount = 0;
+  let assistCount = 0;
+  let yellowCardCount = 0;
+  let redCardCount = 0;
+  for (const event of events) {
+    const type = String(event?.type || "").trim();
+    if (!type) continue;
+    if (type === "yellowCard") yellowCardCount += 1;
+    else if (type === "redCard") redCardCount += 1;
+    else if (type === "yellowRedCard" || type === "secondYellowRedCard") {
+      yellowCardCount += 1;
+      redCardCount += 1;
+    } else if (type === "goal" || type === "penaltyGoal" || type === "ownGoal") goalCount += 1;
+    else if (type === "assist") assistCount += 1;
+    else tags.push(type);
+  }
+  return {
+    id: Number(player?.id || 0) || null,
+    name: String(player?.name || "Player"),
+    shirtNumber: player?.shirtNumber ? String(player.shirtNumber) : null,
+    positionId: Number.isFinite(Number(player?.positionId)) ? Number(player.positionId) : null,
+    photo: playerImageUrl(player?.id),
+    layout:
+      Number.isFinite(Number(player?.verticalLayout?.x)) &&
+      Number.isFinite(Number(player?.verticalLayout?.y))
+        ? {
+            x: Number(player.verticalLayout.x),
+            y: Number(player.verticalLayout.y),
+          }
+        : null,
+    positionLabel: positionLabelFromId(player?.usualPlayingPositionId),
+    rating:
+      Number.isFinite(Number(player?.performance?.rating))
+        ? Number(player.performance.rating)
+        : null,
+    goalCount,
+    assistCount,
+    yellowCardCount,
+    redCardCount,
+    countryCode: player?.countryCode ? String(player.countryCode) : null,
+    statusTags: tags,
+    substitutionEvents: Array.isArray(player?.performance?.substitutionEvents)
+      ? player.performance.substitutionEvents.map((event) => ({
+          time: Number.isFinite(Number(event?.time)) ? Number(event.time) : null,
+          type: cleanText(event?.type),
+        }))
+      : [],
+  };
+}
+
+function mapLineupTeam(team) {
+  return {
+    id: Number(team?.id || 0) || null,
+    name: String(team?.name || "Team"),
+    formation: team?.formation ? String(team.formation) : null,
+    coach: team?.coach?.name ? String(team.coach.name) : null,
+    starters: Array.isArray(team?.starters) ? team.starters.map(mapPlayer) : [],
+    subs: Array.isArray(team?.subs) ? team.subs.map(mapPlayer) : [],
+    unavailable: Array.isArray(team?.unavailable) ? team.unavailable.map(mapPlayer) : [],
+  };
+}
+
+function extractTopStats(statsRoot) {
+  const groups = Array.isArray(statsRoot?.Periods?.All?.stats) ? statsRoot.Periods.All.stats : [];
+  const preferred =
+    groups.find((group) => String(group?.key || "") === "top_stats") ||
+    groups[0] ||
+    null;
+  const stats = Array.isArray(preferred?.stats) ? preferred.stats : [];
+  return stats
+    .filter((row) => Array.isArray(row?.stats) && row.stats.length >= 2 && row?.type !== "title")
+    .slice(0, 8)
+    .map((row) => ({
+      label: String(row?.title || "Stat"),
+      home: String(row.stats[0] ?? "—"),
+      away: String(row.stats[1] ?? "—"),
+      highlighted:
+        row?.highlighted === "home" || row?.highlighted === "away" || row?.highlighted === "equal"
+          ? row.highlighted
+          : null,
+    }));
+}
+
+function extractTeamFallback(nextData, teamId) {
+  const fallback = nextData?.props?.pageProps?.fallback || {};
+  return fallback[`team-${teamId}`] || null;
+}
+
+function extractRecentForm(teamData, excludeMatchId, teamId) {
+  const list = teamData?.fixtures?.allFixtures?.fixtures;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((match) => Number(match?.id) !== excludeMatchId)
+    .filter((match) => Boolean(match?.status?.finished || match?.status?.awarded))
+    .sort(
+      (a, b) =>
+        Date.parse(String(b?.status?.utcTime || 0)) - Date.parse(String(a?.status?.utcTime || 0)),
+    )
+    .slice(0, 5)
+    .map((match) => ({
+      ...toMiniMatch(match),
+      form: toFormResult(match, teamId),
+    }));
+}
+
+function deriveLineupPhase(kickoff) {
+  const kickoffMs = Date.parse(String(kickoff || ""));
+  if (!Number.isFinite(kickoffMs)) return "confirmed";
+  const predictionWindowStartMs = kickoffMs - 75 * 60 * 1000;
+  return Date.now() < predictionWindowStartMs ? "predicted" : "confirmed";
 }
 
 export async function GET(req) {
-  const API_KEY = process.env.FOOTBALLDATA_KEY;
-  if (!API_KEY) {
-    return NextResponse.json({ error: "API key not configured" }, { status: 500 });
-  }
-
   const { searchParams } = new URL(req.url);
   const fixtureId = Number(searchParams.get("fixtureId"));
-  const homeTeamId = Number(searchParams.get("homeTeamId"));
-  const awayTeamId = Number(searchParams.get("awayTeamId"));
+  const seasonKey = normalizeSeasonKey(searchParams.get("seasonKey"));
+  const kickoff = String(searchParams.get("kickoff") || "");
+  const homeName = String(searchParams.get("homeName") || "");
+  const awayName = String(searchParams.get("awayName") || "");
+  const homeTla = searchParams.get("homeTla");
+  const awayTla = searchParams.get("awayTla");
+  const homeShortName = searchParams.get("homeShortName");
+  const awayShortName = searchParams.get("awayShortName");
 
   if (!Number.isFinite(fixtureId)) {
     return NextResponse.json({ error: "fixtureId is required" }, { status: 400 });
   }
-
-  if (!Number.isFinite(homeTeamId) || !Number.isFinite(awayTeamId)) {
+  if (!seasonKey || !kickoff || !homeName || !awayName) {
     return NextResponse.json(
-      { error: "homeTeamId and awayTeamId are required" },
+      { error: "seasonKey, kickoff, homeName and awayName are required" },
       { status: 400 },
     );
   }
 
-  const now = new Date();
-  const fiveYearsAgo = new Date(now);
-  fiveYearsAgo.setUTCFullYear(fiveYearsAgo.getUTCFullYear() - 5);
-  const dateFrom = toYmdUtc(fiveYearsAgo);
-  const dateTo = toYmdUtc(now);
+  try {
+    const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
+    const leagueData = await fetchJson(
+      `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`,
+    );
+    const leagueIndex = buildLeagueIndex(leagueData?.fixtures?.allMatches);
+    const leagueMatch = findLeagueMatch(leagueIndex, {
+      kickoff,
+      homeTeam: { name: homeName, tla: homeTla, shortName: homeShortName },
+      awayTeam: { name: awayName, tla: awayTla, shortName: awayShortName },
+    });
 
-  const [h2hDirectRes, h2hFromHomeRes, homeFormRes, awayFormRes] = await Promise.allSettled([
-    fetch(`https://api.football-data.org/v4/matches/${fixtureId}/head2head?limit=20`, {
-      headers: { "X-Auth-Token": API_KEY },
-      next: { revalidate: 900 },
-    }),
-    fetch(
-      `https://api.football-data.org/v4/teams/${homeTeamId}/matches?status=FINISHED&dateFrom=${dateFrom}&dateTo=${dateTo}&limit=120`,
+    if (!leagueMatch?.pageUrl) {
+      return NextResponse.json({ error: "Match not found on FotMob." }, { status: 404 });
+    }
+
+    const matchUrl = `https://www.fotmob.com${leagueMatch.pageUrl.split("#")[0]}`;
+    const matchHtml = await fetchHtml(matchUrl);
+    const matchData = parseNextData(matchHtml);
+    const pageProps = matchData?.props?.pageProps || {};
+    const header = pageProps?.header || {};
+    const content = pageProps?.content || {};
+    const headerTeams = Array.isArray(header?.teams) ? header.teams : [];
+    const homeHeaderTeam = headerTeams[0] || {};
+    const awayHeaderTeam = headerTeams[1] || {};
+
+    const teamResults = await Promise.allSettled(
+      headerTeams.slice(0, 2).map((team) =>
+        team?.pageUrl
+          ? fetchHtml(`https://www.fotmob.com${String(team.pageUrl).split("#")[0]}`)
+          : Promise.resolve(""),
+      ),
+    );
+
+    const homeTeamPage =
+      teamResults[0]?.status === "fulfilled" && teamResults[0].value
+        ? parseNextDataSafe(teamResults[0].value)
+        : null;
+    const awayTeamPage =
+      teamResults[1]?.status === "fulfilled" && teamResults[1].value
+        ? parseNextDataSafe(teamResults[1].value)
+        : null;
+
+    const homeTeamData = extractTeamFallback(homeTeamPage, Number(homeHeaderTeam?.id || 0));
+    const awayTeamData = extractTeamFallback(awayTeamPage, Number(awayHeaderTeam?.id || 0));
+
+    const headToHead = Array.isArray(content?.h2h?.matches)
+      ? content.h2h.matches.slice(0, 5).map(toMiniMatch)
+      : [];
+
+    const lineups = {
+      phase: deriveLineupPhase(kickoff),
+      home: mapLineupTeam(content?.lineup?.homeTeam),
+      away: mapLineupTeam(content?.lineup?.awayTeam),
+    };
+
+    const stats = extractTopStats(content?.stats);
+
+    const form = {
+      home: extractRecentForm(
+        homeTeamData,
+        Number(leagueMatch?.id || 0),
+        Number(homeHeaderTeam?.id || lineups.home.id || 0),
+      ),
+      away: extractRecentForm(
+        awayTeamData,
+        Number(leagueMatch?.id || 0),
+        Number(awayHeaderTeam?.id || lineups.away.id || 0),
+      ),
+    };
+
+    return NextResponse.json(
       {
-        headers: { "X-Auth-Token": API_KEY },
-        next: { revalidate: 900 },
+        fixtureId,
+        generatedAt: new Date().toISOString(),
+        lineups,
+        stats,
+        headToHead,
+        form,
       },
-    ),
-    fetch(`https://api.football-data.org/v4/teams/${homeTeamId}/matches?status=FINISHED&limit=7`, {
-      headers: { "X-Auth-Token": API_KEY },
-      next: { revalidate: 900 },
-    }),
-    fetch(`https://api.football-data.org/v4/teams/${awayTeamId}/matches?status=FINISHED&limit=7`, {
-      headers: { "X-Auth-Token": API_KEY },
-      next: { revalidate: 900 },
-    }),
-  ]);
-
-  let headToHead = [];
-  if (h2hDirectRes.status === "fulfilled" && h2hDirectRes.value?.ok) {
-    const body = await h2hDirectRes.value.json().catch(() => ({}));
-    const list = Array.isArray(body?.matches) ? body.matches : [];
-    headToHead = list
-      .filter((m) => Number(m?.id) !== fixtureId)
-      .sort(byMostRecent)
-      .slice(0, 5)
-      .map(mapMiniMatch);
+      {
+        headers: {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=120",
+        },
+      },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to load match info." },
+      { status: 502 },
+    );
   }
-
-  if (headToHead.length === 0 && h2hFromHomeRes.status === "fulfilled" && h2hFromHomeRes.value?.ok) {
-    const body = await h2hFromHomeRes.value.json().catch(() => ({}));
-    const list = Array.isArray(body?.matches) ? body.matches : [];
-    headToHead = list
-      .filter((m) => Number(m?.id) !== fixtureId)
-      .filter((m) => {
-        const hid = Number(m?.homeTeam?.id);
-        const aid = Number(m?.awayTeam?.id);
-        return hid === awayTeamId || aid === awayTeamId;
-      })
-      .sort(byMostRecent)
-      .slice(0, 5)
-      .map(mapMiniMatch);
-  }
-
-  const formFromResponse = async (resLike, teamId) => {
-    if (resLike.status !== "fulfilled") return [];
-    const response = resLike.value;
-    if (!response?.ok) return [];
-    const body = await response.json().catch(() => ({}));
-    const list = Array.isArray(body?.matches) ? body.matches : [];
-    return list
-      .filter((m) => Number(m?.id) !== fixtureId)
-      .slice(0, 5)
-      .map((m) => ({
-        ...mapMiniMatch(m),
-        form: toFormResult(m, teamId),
-      }))
-      .sort(byMostRecent);
-  };
-
-  const [home, away] = await Promise.all([
-    formFromResponse(homeFormRes, homeTeamId),
-    formFromResponse(awayFormRes, awayTeamId),
-  ]);
-
-  return NextResponse.json(
-    {
-      fixtureId,
-      generatedAt: new Date().toISOString(),
-      headToHead,
-      form: { home, away },
-    },
-    { headers: { "Cache-Control": "s-maxage=900, stale-while-revalidate=300" } },
-  );
 }
-

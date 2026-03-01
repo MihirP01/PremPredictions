@@ -68,9 +68,31 @@ function setStorage(key: string, data: FixturesCachedData) {
   }
 }
 
+function mergeFixtureResults(
+  previous: FixturesCachedData | null,
+  next: FixturesCachedData,
+): FixturesCachedData {
+  if (!previous?.fixtures?.length || !next.fixtures.length) return next;
+  const prevById = new Map(previous.fixtures.map((fixture) => [fixture.fixtureId, fixture]));
+  return {
+    ...next,
+    fixtures: next.fixtures.map((fixture) => {
+      if (fixture.result != null) return fixture;
+      const prev = prevById.get(fixture.fixtureId);
+      if (!prev?.result) return fixture;
+      return {
+        ...fixture,
+        result: prev.result,
+      };
+    }),
+  };
+}
+
 function setCached(key: string, data: FixturesCachedData) {
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
-  setStorage(key, data);
+  const previous = memCache.get(key)?.data ?? getStorageStale(key);
+  const merged = mergeFixtureResults(previous, data);
+  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data: merged });
+  setStorage(key, merged);
 }
 
 export async function getFixturesCached(
@@ -121,7 +143,7 @@ export async function refreshFixturesCached(
   if (!Number.isFinite(gw) || !sk) return { fixtures: [], generatedAt: null };
   const key = keyFor(gw, sk);
   const res = await fetch(
-    `/api/fixtures?gameweek=${encodeURIComponent(String(gw))}&seasonKey=${encodeURIComponent(sk)}&t=${Date.now()}`,
+    `/api/fixtures?gameweek=${encodeURIComponent(String(gw))}&seasonKey=${encodeURIComponent(sk)}&refresh=1&t=${Date.now()}`,
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error(`fixtures ${res.status}`);

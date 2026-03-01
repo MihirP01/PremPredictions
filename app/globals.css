@@ -741,6 +741,8 @@ select:-webkit-autofill:focus {
 
 .fixture-card-enter {
   animation: fixtureCardIn 320ms ease-out both;
+  contain: layout paint;
+  backface-visibility: hidden;
 }
 
 @keyframes fixture-clash-shift {
@@ -755,6 +757,18 @@ select:-webkit-autofill:focus {
 .fixture-clash-bg {
   background-size: 220% 220%;
   animation: fixture-clash-shift 8.5s ease-in-out infinite alternate;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .fixture-card-enter {
+    content-visibility: auto;
+    contain-intrinsic-size: 360px;
+  }
+
+  .fixture-clash-bg {
+    animation: none;
+    background-size: 100% 100%;
+  }
 }
 
 .key-chip {
@@ -1182,6 +1196,7 @@ select:-webkit-autofill:focus {
   .page-action-btn,
   .settings-panel-enter,
   .fixture-card-enter,
+  .fixture-clash-bg,
   .key-chip,
   .key-chip::after,
   .metal-glow,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useSyncExternalStore } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 type AnimatedModalProps = {
@@ -26,11 +26,21 @@ export default function AnimatedModal({
   panelClassName = "",
   children,
 }: AnimatedModalProps) {
+  const [shouldRender, setShouldRender] = useState(open);
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
   );
+
+  useEffect(() => {
+    if (open) {
+      setShouldRender(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setShouldRender(false), 220);
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !lockBackground || typeof document === "undefined") return;
@@ -133,6 +143,7 @@ export default function AnimatedModal({
     </div>
   );
 
+  if (!shouldRender) return null;
   if (!portal) return modalNode;
   if (!mounted || typeof document === "undefined") return null;
   return createPortal(modalNode, document.body);

@@ -5,7 +5,10 @@ import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { resolveSeasonKey } from "../../season";
-import { applyFixtureScoring } from "../../../../lib/powerupScoring";
+import {
+  applyFixtureScoring,
+  getBasePointsFromScores,
+} from "../../../../lib/powerupScoring";
 
 type GameDoc = {
   players?: string[];
@@ -14,6 +17,7 @@ type GameDoc = {
 
 type FixtureItem = {
   fixtureId?: number;
+  status?: string | null;
   result?: string | null;
 };
 
@@ -41,29 +45,48 @@ type GwRunResult = {
   message?: string;
 };
 
-function outcome(h: number, a: number) {
-  if (h > a) return "H";
-  if (h < a) return "A";
-  return "D";
+function isFinalStatus(status: string | null | undefined) {
+  const s = String(status || "").trim().toUpperCase();
+  return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
 
-function parseScore(s: string | null | undefined) {
-  if (!s) return null;
-  const m = String(s)
-    .trim()
-    .match(/^(\d+)\s*-\s*(\d+)$/);
-  if (!m) return null;
-  return { h: Number(m[1]), a: Number(m[2]) };
+function buildBaseUrl(req: Request) {
+  const host = req.headers.get("host");
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const proto =
+    forwardedProto ||
+    (host?.includes("localhost") ? "http" : "https");
+  return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
-function basePoints(pred: string, actual: string) {
-  const p = parseScore(pred);
-  const r = parseScore(actual);
-  if (!p || !r) return 0;
+async function fetchActualResultsForGw(
+  baseUrl: string,
+  gw: number,
+  seasonKey: string,
+) {
+  const fxRes = await fetch(
+    `${baseUrl}/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}&refresh=1&t=${Date.now()}`,
+    {
+      cache: "no-store",
+    },
+  );
+  if (!fxRes.ok) {
+    throw new Error(`Failed to load fixtures for GW${gw}`);
+  }
 
-  if (p.h === r.h && p.a === r.a) return 2; // exact
-  if (outcome(p.h, p.a) === outcome(r.h, r.a)) return 1; // correct result
-  return 0;
+  const fxData = (await fxRes.json()) as { fixtures?: FixtureItem[] };
+  const fixtures: FixtureItem[] = Array.isArray(fxData.fixtures)
+    ? fxData.fixtures
+    : [];
+
+  const actualByFixture = new Map<number, string>();
+  for (const f of fixtures) {
+    const id = Number(f.fixtureId);
+    if (!Number.isFinite(id)) continue;
+    if (f.result && isFinalStatus(f.status)) actualByFixture.set(id, String(f.result));
+  }
+
+  return actualByFixture;
 }
 
 async function scoreSingleGw(
@@ -94,28 +117,7 @@ async function scoreSingleGw(
     };
   }
 
-  const fxRes = await fetch(
-    `${baseUrl}/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}`,
-    {
-      cache: "no-store",
-    },
-  );
-  if (!fxRes.ok) {
-    throw new Error(`Failed to load fixtures for GW${gw}`);
-  }
-
-  const fxData = (await fxRes.json()) as { fixtures?: FixtureItem[] };
-  const fixtures: FixtureItem[] = Array.isArray(fxData.fixtures)
-    ? fxData.fixtures
-    : [];
-
-  // Build actual results map fixtureId -> "x-y" (only if finished)
-  const actualByFixture = new Map<number, string>();
-  for (const f of fixtures) {
-    const id = Number(f.fixtureId);
-    if (!Number.isFinite(id)) continue;
-    if (f.result) actualByFixture.set(id, String(f.result));
-  }
+  const actualByFixture = await fetchActualResultsForGw(baseUrl, gw, seasonKey);
 
   if (actualByFixture.size === 0) {
     return {
@@ -198,7 +200,7 @@ async function scoreSingleGw(
       if (!actual) continue;
 
       const pred = pickMap.get(`${uid}|${fid}`) || "";
-      const base = pred ? basePoints(pred, actual) : 0;
+      const base = getBasePointsFromScores(pred, actual);
       const isGolden = goldenFixtureId === fid;
       const powerupType = powerupFixtureId === fid ? activePowerupType : null;
       const pts = applyFixtureScoring({
@@ -270,9 +272,7 @@ export async function POST(req: Request) {
     if (!Number.isFinite(gwn) || gwn < 1 || gwn > 38)
       return NextResponse.json({ error: "Bad gw" }, { status: 400 });
 
-    const host = req.headers.get("host");
-    const proto = host?.includes("localhost") ? "http" : "https";
-    const baseUrl = host ? `${proto}://${host}` : "http://localhost:3000";
+    const baseUrl = buildBaseUrl(req);
 
     const targetGws = currentOnly ? [gwn] : [gwn, gwn - 1, gwn - 2].filter((n) => n >= 1);
     const results: GwRunResult[] = [];

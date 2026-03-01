@@ -3,7 +3,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronDown, Info, Loader2, RefreshCw } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpLeft,
+  ChevronDown,
+  CircleDot,
+  Crown,
+  Footprints,
+  Info,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
@@ -19,8 +29,16 @@ import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getTableCached, type TableRow } from "@/lib/tableClient";
-import { getMatchInfoCached, type MatchInfoData } from "@/lib/matchInfoClient";
+import {
+  getMatchInfoCached,
+  type MatchInfoData,
+  type MatchInfoPlayer,
+} from "@/lib/matchInfoClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
+import {
+  classifyPredictionTier,
+  getPowerupVisualState,
+} from "@/lib/powerupScoring";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import {
   fixtureDayKey,
@@ -44,6 +62,7 @@ type Fixture = {
   home: { id?: number; name: string; tla?: string | null; shortName?: string; badge?: string | null };
   away: { id?: number; name: string; tla?: string | null; shortName?: string; badge?: string | null };
   result?: string | null; // "2-1" if finished
+  redCards?: { home: number; away: number } | null;
 };
 
 type Player = { uid: string; displayName: string };
@@ -60,7 +79,7 @@ type PowerupByUid = Record<
 type RoomPlayerDoc = { displayName?: string; nickName?: string };
 type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
-type MatchInfoTab = "h2h" | "form";
+type MatchInfoTab = "lineups" | "stats" | "h2h" | "form";
 
 const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
   { key: "HOME", label: "Home" },
@@ -78,7 +97,7 @@ function seasonLabel(seasonKey: string) {
 
 const MIN_GW = 1;
 const MAX_GW = 38;
-const SHOW_MATCH_INFO = false;
+const SHOW_MATCH_INFO = true;
 const TEAM_COLOR_BY_TLA: Record<string, string> = {
   ARS: "#ef4444",
   AVL: "#7c3aed",
@@ -135,38 +154,15 @@ function fmtScore(s?: string | null) {
   return String(s).replace("-", "–");
 }
 
-function parseOutcome(score?: string | null) {
-  if (!score) return null;
-  const m = String(score).trim().match(/^(\d+)\s*-\s*(\d+)$/);
-  if (!m) return null;
-  const home = Number(m[1]);
-  const away = Number(m[2]);
-  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
-  if (home > away) return "H";
-  if (home < away) return "A";
-  return "D";
-}
-
-function powerupHitState(
-  powerupType: "ALL_IN" | "SAFETY_NET" | null,
-  pred: string,
-  actual: string | null,
-): boolean | null {
-  if (!powerupType) return null;
-  const predNorm = String(pred || "").trim();
-  const actualNorm = String(actual || "").trim();
-  if (!actualNorm) return null;
-
-  const exact = !!predNorm && predNorm === actualNorm;
-  const outcomeOnly =
-    !exact &&
-    !!predNorm &&
-    parseOutcome(predNorm) != null &&
-    parseOutcome(predNorm) === parseOutcome(actualNorm);
-
-  if (powerupType === "ALL_IN") return exact;
-  // Safety Net "hits" only when base score would be 0 (miss on result/exact)
-  return !exact && !outcomeOnly;
+function normalizeTeamNameForCompare(value?: string | null) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\butd\b/g, "united")
+    .replace(/\bman\b/g, "manchester")
+    .replace(/\b(fc|afc|cf|sc)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function displayResult(status: string, actual: string | null) {
@@ -182,6 +178,18 @@ function displayResult(status: string, actual: string | null) {
   return inPlay ? "LIVE" : "TBD";
 }
 
+function statusHeading(status: string) {
+  const raw = String(status || "").trim();
+  const s = raw.toUpperCase();
+  if (!raw || s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") {
+    return "Scheduled";
+  }
+  if (s === "FINISHED" || s === "FT" || s === "AWARDED") return "FT";
+  if (s === "CANCELLED" || s === "POSTPONED") return "Postponed";
+  if (raw.toUpperCase() === "LIVE") return "Live";
+  return `Live - ${raw}`;
+}
+
 function asDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -192,20 +200,40 @@ function asDate(value: unknown): Date | null {
   return null;
 }
 
+function mergeFixtureResults(prev: Fixture[] | null, next: Fixture[]) {
+  if (!prev?.length) return next;
+  const prevById = new Map(prev.map((fixture) => [fixture.fixtureId, fixture]));
+  return next.map((fixture) => {
+    if (fixture.result != null) return fixture;
+    const previous = prevById.get(fixture.fixtureId);
+    if (!previous?.result) return fixture;
+    return {
+      ...fixture,
+      result: previous.result,
+    };
+  });
+}
+
 function toInt(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
 function competitionAbbr(name?: string | null, code?: string | null) {
-  const n = String(name || "").toLowerCase();
   const c = String(code || "").toUpperCase();
-  if (n.includes("champions")) return "UCL";
-  if (n.includes("fa cup")) return "FA";
-  if (n.includes("carabao") || n.includes("league cup") || n.includes("efl")) return "EFL";
-  if (n.includes("premier") || c === "PL") return "PL";
   if (c) return c;
-  return "PL";
+  const words = String(name || "")
+    .replace(/[^A-Za-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !["the", "and", "of"].includes(word.toLowerCase()));
+  if (words.length === 0) return "—";
+  if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
+  return words
+    .slice(0, 4)
+    .map((word) => word[0]?.toUpperCase() || "")
+    .join("");
 }
 
 function formatShortKickoff(iso: string) {
@@ -218,6 +246,305 @@ function formatShortKickoff(iso: string) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function isFixtureStartedForLineups(status?: string | null) {
+  const s = String(status || "").trim().toUpperCase();
+  if (!s) return false;
+  if (
+    s === "TIMED" ||
+    s === "SCHEDULED" ||
+    s === "NOT_STARTED" ||
+    s === "TBD" ||
+    s === "POSTPONED" ||
+    s === "CANCELLED"
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function playerMetaValue(player: MatchInfoPlayer, showRating: boolean) {
+  if (showRating && player.rating != null) return player.rating.toFixed(1);
+  return player.positionLabel || "—";
+}
+
+function substitutionSummary(player: MatchInfoPlayer) {
+  const items = Array.isArray(player.substitutionEvents) ? player.substitutionEvents : [];
+  if (!items.length) return null;
+  return items
+    .map((event) => {
+      const type = String(event?.type || "").toLowerCase();
+      const label = type === "subin" ? "ON" : type === "subout" ? "OFF" : type.toUpperCase();
+      const time = Number.isFinite(Number(event?.time)) ? `${Number(event?.time)}'` : "";
+      return [label, time].filter(Boolean).join(" ");
+    })
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function latestSubstitution(player: MatchInfoPlayer) {
+  const items = Array.isArray(player.substitutionEvents) ? player.substitutionEvents : [];
+  if (!items.length) return null;
+  const event = items[items.length - 1];
+  const type = String(event?.type || "").toLowerCase();
+  return {
+    type,
+    time: Number.isFinite(Number(event?.time)) ? Number(event?.time) : null,
+  };
+}
+
+function pitchDisplayName(name: string) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "Player";
+  const last = parts[parts.length - 1];
+  if (last.length <= 12) return last;
+  if (parts.length >= 2) {
+    const firstInitial = parts[0][0]?.toUpperCase() || "";
+    return `${firstInitial}. ${last}`;
+  }
+  return last;
+}
+
+function parseFormationRows(formation?: string | null) {
+  const nums = String(formation || "")
+    .match(/\d+/g)
+    ?.map((part) => Number(part))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return nums && nums.length ? nums : null;
+}
+
+function comparePitchSlot(a: MatchInfoPlayer, b: MatchInfoPlayer) {
+  const aPos = Number(a.positionId);
+  const bPos = Number(b.positionId);
+  const aHasPos = Number.isFinite(aPos);
+  const bHasPos = Number.isFinite(bPos);
+  if (aHasPos && bHasPos && aPos !== bPos) return aPos - bPos;
+  if (aHasPos !== bHasPos) return aHasPos ? -1 : 1;
+
+  const aY = Number.isFinite(Number(a.layout?.y)) ? Number(a.layout?.y) : 0.5;
+  const bY = Number.isFinite(Number(b.layout?.y)) ? Number(b.layout?.y) : 0.5;
+  if (aY !== bY) return aY - bY;
+
+  const aX = Number.isFinite(Number(a.layout?.x)) ? Number(a.layout?.x) : 0.5;
+  const bX = Number.isFinite(Number(b.layout?.x)) ? Number(b.layout?.x) : 0.5;
+  return aX - bX;
+}
+
+function buildFormationRows(players: MatchInfoPlayer[], formation?: string | null) {
+  const formationRows = parseFormationRows(formation);
+  const sorted = [...players].sort(comparePitchSlot);
+
+  const keeperIndex = sorted.findIndex((player) => player.positionLabel === "GK");
+  const keeper =
+    keeperIndex >= 0 ? sorted[keeperIndex] : sorted.length ? sorted[0] : null;
+  const outfield = sorted.filter((player) => player !== keeper);
+
+  if (formationRows?.length) {
+    const expectedOutfield = Math.max(0, players.length - (keeper ? 1 : 0));
+    const formationTotal = formationRows.reduce((sum, value) => sum + value, 0);
+
+    if (formationTotal === expectedOutfield) {
+      const outRows: MatchInfoPlayer[][] = [];
+      let cursor = 0;
+
+      formationRows.forEach((count) => {
+        const row = outfield
+          .slice(cursor, cursor + count)
+          .sort((a, b) => {
+            const aX = Number.isFinite(Number(a.layout?.x)) ? Number(a.layout?.x) : 0.5;
+            const bX = Number.isFinite(Number(b.layout?.x)) ? Number(b.layout?.x) : 0.5;
+            if (aX !== bX) return aX - bX;
+            return comparePitchSlot(a, b);
+          });
+        cursor += count;
+        outRows.push(row);
+      });
+
+      const rows = keeper ? [[keeper], ...outRows] : outRows;
+      return rows.filter((row) => row.length > 0);
+    }
+  }
+
+  const fallbackRows: MatchInfoPlayer[][] = [];
+  if (keeper) fallbackRows.push([keeper]);
+  const chunkSize = Math.max(2, Math.ceil(outfield.length / 3));
+  for (let i = 0; i < outfield.length; i += chunkSize) {
+    fallbackRows.push(outfield.slice(i, i + chunkSize));
+  }
+  return fallbackRows.filter((row) => row.length > 0);
+}
+
+function formationGridClasses(rowCount: number) {
+  if (rowCount <= 1) return "grid-rows-1";
+  if (rowCount === 2) return "grid-rows-2";
+  if (rowCount === 3) return "grid-rows-3";
+  if (rowCount === 4) return "grid-rows-4";
+  if (rowCount === 5) return "grid-rows-5";
+  return "grid-rows-6";
+}
+
+function formationRowRole(row: MatchInfoPlayer[]) {
+  const counts = row.reduce<Record<string, number>>((acc, player) => {
+    const role = String(player.positionLabel || "").toUpperCase();
+    if (!role) return acc;
+    acc[role] = (acc[role] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (["DEF", "MID", "FWD", "GK"] as const).reduce<string | null>((best, role) => {
+    if ((counts[role] || 0) === 0) return best;
+    if (!best) return role;
+    return (counts[role] || 0) > (counts[best] || 0) ? role : best;
+  }, null);
+}
+
+function formationFanOffsetPx(
+  row: MatchInfoPlayer[],
+  idx: number,
+  side: "home" | "away",
+  axis: "x" | "y",
+) {
+  if (row.length !== 5) return 0;
+  if (idx !== 0 && idx !== row.length - 1) return 0;
+  const role = formationRowRole(row);
+  if (role !== "DEF" && role !== "MID") return 0;
+  const magnitude = axis === "y" ? 14 : 12;
+  return side === "home" ? magnitude : -magnitude;
+}
+
+function PitchMarker({
+  player,
+  showLiveRatings,
+  isManOfTheMatch = false,
+  crowded = false,
+  size = "mobile",
+}: {
+  player: MatchInfoPlayer;
+  showLiveRatings: boolean;
+  isManOfTheMatch?: boolean;
+  crowded?: boolean;
+  size?: "mobile" | "desktop";
+}) {
+  const subEvent = latestSubstitution(player);
+  const isCrowdedMobile = size === "mobile" && crowded;
+  const markerSize = isCrowdedMobile ? "h-9 w-9" : size === "mobile" ? "h-10 w-10" : "h-11 w-11";
+  const valueMinWidth = isCrowdedMobile
+    ? "min-w-[34px]"
+    : size === "mobile"
+      ? "min-w-[40px]"
+      : "min-w-[42px]";
+  const shellWidthClass = isCrowdedMobile ? "w-[54px]" : "w-[66px] sm:w-[72px]";
+  const nameTextClass = isCrowdedMobile ? "text-[8px]" : "text-[9px]";
+  const tagTextClass = isCrowdedMobile ? "text-[7px]" : "text-[8px]";
+  const ratingPillPosClass = isCrowdedMobile ? "-right-1.5 -top-1" : "-right-2 -top-1";
+  const disciplinePosClass = isCrowdedMobile ? "-right-1 top-1/2" : "-right-1.5 top-1/2";
+  const assistPosClass = isCrowdedMobile ? "-left-1.5 -bottom-1" : "-left-2 -bottom-1";
+  const goalPosClass = isCrowdedMobile ? "-right-1.5 -bottom-1" : "-right-2 -bottom-1";
+  const yellowCards = Math.max(0, Number(player.yellowCardCount || 0));
+  const redCards = Math.max(0, Number(player.redCardCount || 0));
+  const disciplinaryCards = [
+    ...Array.from({ length: Math.min(2, redCards) }, () => "red" as const),
+    ...Array.from(
+      { length: Math.min(3 - Math.min(2, redCards), Math.min(2, yellowCards)) },
+      () => "yellow" as const,
+    ),
+  ];
+
+  return (
+    <div className={`${shellWidthClass} text-center`}>
+      <div
+        className={[
+          "relative mx-auto flex items-center justify-center rounded-full border border-subtle bg-surface shadow-[0_8px_18px_rgba(0,0,0,0.18)]",
+          markerSize,
+        ].join(" ")}
+      >
+        <span className="font-display text-sm font-semibold text-foreground tabular-nums">
+          {player.shirtNumber || "—"}
+        </span>
+        <span
+          className={[
+            `absolute ${ratingPillPosClass} inline-flex items-center justify-center gap-0.5 rounded-full border px-1.5 py-0.5 font-display text-[9px] font-semibold tabular-nums`,
+            isManOfTheMatch && showLiveRatings
+              ? "border-sky-400/80 bg-sky-500/15 text-sky-200"
+              : "border-subtle bg-surface-2 text-foreground",
+            valueMinWidth,
+          ].join(" ")}
+        >
+          {playerMetaValue(player, showLiveRatings)}
+          {isManOfTheMatch && showLiveRatings ? <Crown size={8} strokeWidth={2.2} /> : null}
+        </span>
+        {disciplinaryCards.length ? (
+          <span className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 flex-col items-center gap-0.5`}>
+            {disciplinaryCards.map((cardType, idx) => (
+              <span
+                key={`card-${player.id ?? player.name}-${cardType}-${idx}`}
+                className={[
+                  "inline-flex h-3 w-2 items-center justify-center rounded-[2px] border shadow-[0_2px_6px_rgba(0,0,0,0.2)]",
+                  cardType === "red"
+                    ? "border-red-300/75 bg-red-500/90"
+                    : "border-yellow-200/80 bg-yellow-300/90",
+                ].join(" ")}
+                aria-label={cardType === "red" ? "Red card" : "Yellow card"}
+                title={cardType === "red" ? "Red card" : "Yellow card"}
+              />
+            ))}
+          </span>
+        ) : null}
+        {subEvent ? (
+          <span className="absolute -left-2 -top-2 inline-flex flex-col items-center gap-0.5">
+            {subEvent.time != null ? (
+              <span className="font-display text-[8px] text-foreground tabular-nums">
+                {subEvent.time}'
+              </span>
+            ) : null}
+            <span
+              className={[
+                "inline-flex h-4 w-4 items-center justify-center rounded-full border",
+                subEvent.type === "subin"
+                  ? "border-emerald-400/80 bg-emerald-500/15 text-emerald-300"
+                  : "border-red-400/80 bg-red-500/15 text-red-300",
+              ].join(" ")}
+            >
+              {subEvent.type === "subin" ? (
+                <ArrowDownLeft size={9} strokeWidth={2.5} />
+              ) : (
+                <ArrowUpLeft size={9} strokeWidth={2.5} />
+              )}
+            </span>
+          </span>
+        ) : null}
+        {Number(player.assistCount || 0) > 0 ? (
+          <span className={`absolute ${assistPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-sky-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
+            <span className="tabular-nums">{player.assistCount}</span>
+            <Footprints size={7} strokeWidth={2.1} />
+          </span>
+        ) : null}
+        {Number(player.goalCount || 0) > 0 ? (
+          <span className={`absolute ${goalPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-yellow-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
+            <CircleDot size={7} strokeWidth={2.1} />
+            <span className="tabular-nums">{player.goalCount}</span>
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-1">
+        <div className={`font-display ${nameTextClass} leading-tight text-foreground truncate`}>
+          {pitchDisplayName(player.name)}
+        </div>
+        {player.statusTags?.slice(0, 1).map((tag) => (
+          <div
+            key={`tag-${player.id ?? player.name}-${tag}`}
+            className={`mt-0.5 font-display ${tagTextClass} text-muted`}
+          >
+            {tag}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function FixturesPage() {
@@ -250,6 +577,8 @@ export default function FixturesPage() {
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
+  const [mountedPredictions, setMountedPredictions] = useState<Record<number, boolean>>({});
+  const [gameDataEnabled, setGameDataEnabled] = useState(true);
   const [bootstrapped, setBootstrapped] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
@@ -269,6 +598,10 @@ export default function FixturesPage() {
   const [matchInfoLoading, setMatchInfoLoading] = useState(false);
   const [matchInfoError, setMatchInfoError] = useState<string | null>(null);
   const [matchInfoByFixture, setMatchInfoByFixture] = useState<Record<number, MatchInfoData>>({});
+  const initialFixturesLoadDoneRef = useRef(false);
+  const fixturesLoadSeqRef = useRef(0);
+  const fixturesLoadTimerRef = useRef<number | null>(null);
+  const predictionMountTimersRef = useRef<Record<number, number>>({});
 
   const scheduleTableSwap = useCallback((apply: () => void) => {
     if (tableSwapTimerRef.current) {
@@ -305,18 +638,35 @@ export default function FixturesPage() {
   );
 
   const openMatchInfo = useCallback(
-    async (fixtureId: number, homeTeamId?: number, awayTeamId?: number) => {
+    async (fixture: Fixture) => {
+      const fixtureId = fixture.fixtureId;
       setMatchInfoFixtureId(fixtureId);
-      setMatchInfoTab("h2h");
+      setMatchInfoTab("lineups");
       setMatchInfoOpen(true);
       setMatchInfoError(null);
 
       if (matchInfoByFixture[fixtureId]) return;
-      if (!seasonKey || !Number.isFinite(Number(homeTeamId)) || !Number.isFinite(Number(awayTeamId))) return;
+      if (!seasonKey) return;
 
       setMatchInfoLoading(true);
       try {
-        const data = await getMatchInfoCached(fixtureId, seasonKey, homeTeamId, awayTeamId);
+        const data = await getMatchInfoCached({
+          fixtureId,
+          seasonKey,
+          kickoff: fixture.kickoff,
+          homeTeam: {
+            id: fixture.home?.id,
+            name: fixture.home.name,
+            tla: fixture.home?.tla || null,
+            shortName: fixture.home?.shortName || null,
+          },
+          awayTeam: {
+            id: fixture.away?.id,
+            name: fixture.away.name,
+            tla: fixture.away?.tla || null,
+            shortName: fixture.away?.shortName || null,
+          },
+        });
         setMatchInfoByFixture((prev) => ({ ...prev, [fixtureId]: data }));
       } catch (e: unknown) {
         setMatchInfoError(e instanceof Error ? e.message : "Failed to load match info.");
@@ -337,8 +687,8 @@ export default function FixturesPage() {
 
   const h2hSummary = useMemo(() => {
     const rows = currentMatchInfo?.headToHead ?? [];
-    const homeId = Number(selectedMatchFixture?.home?.id);
-    const awayId = Number(selectedMatchFixture?.away?.id);
+    const homeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
+    const awayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
     let homeWins = 0;
     let awayWins = 0;
     let draws = 0;
@@ -355,15 +705,91 @@ export default function FixturesPage() {
         continue;
       }
 
-      const matchHomeId = Number(m.homeTeam?.id);
-      const matchAwayId = Number(m.awayTeam?.id);
-      const matchWinnerId = h > a ? matchHomeId : matchAwayId;
-      if (Number.isFinite(homeId) && matchWinnerId === homeId) homeWins += 1;
-      else if (Number.isFinite(awayId) && matchWinnerId === awayId) awayWins += 1;
+      const winnerName = normalizeTeamNameForCompare(
+        h > a ? m.homeTeam?.name : m.awayTeam?.name,
+      );
+      if (homeName && winnerName === homeName) homeWins += 1;
+      else if (awayName && winnerName === awayName) awayWins += 1;
     }
 
     return { homeWins, draws, awayWins };
-  }, [currentMatchInfo?.headToHead, selectedMatchFixture?.away?.id, selectedMatchFixture?.home?.id]);
+  }, [currentMatchInfo?.headToHead, selectedMatchFixture?.away?.name, selectedMatchFixture?.home?.name]);
+
+  const h2hTeamLabel = useCallback(
+    (team: { name: string; tla?: string | null }) => {
+      const teamName = normalizeTeamNameForCompare(team.name);
+      const selectedHomeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
+      const selectedAwayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
+
+      if (teamName && teamName === selectedHomeName) {
+        return teamAbbr({
+          name: selectedMatchFixture?.home?.name || team.name,
+          tla: selectedMatchFixture?.home?.tla || null,
+          shortName: selectedMatchFixture?.home?.shortName || null,
+        });
+      }
+
+      if (teamName && teamName === selectedAwayName) {
+        return teamAbbr({
+          name: selectedMatchFixture?.away?.name || team.name,
+          tla: selectedMatchFixture?.away?.tla || null,
+          shortName: selectedMatchFixture?.away?.shortName || null,
+        });
+      }
+
+      return teamAbbr({
+        name: team.name,
+        tla: team.tla,
+        shortName: null,
+      });
+    },
+    [
+      selectedMatchFixture?.away?.name,
+      selectedMatchFixture?.away?.shortName,
+      selectedMatchFixture?.away?.tla,
+      selectedMatchFixture?.home?.name,
+      selectedMatchFixture?.home?.shortName,
+      selectedMatchFixture?.home?.tla,
+    ],
+  );
+
+  const formTeamLabel = useCallback(
+    (team: { name: string; tla?: string | null; shortName?: string | null }) => {
+      const teamName = normalizeTeamNameForCompare(team.name);
+      const selectedHomeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
+      const selectedAwayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
+
+      if (teamName && teamName === selectedHomeName) {
+        return teamAbbr({
+          name: selectedMatchFixture?.home?.name || team.name,
+          tla: selectedMatchFixture?.home?.tla || null,
+          shortName: selectedMatchFixture?.home?.shortName || null,
+        });
+      }
+
+      if (teamName && teamName === selectedAwayName) {
+        return teamAbbr({
+          name: selectedMatchFixture?.away?.name || team.name,
+          tla: selectedMatchFixture?.away?.tla || null,
+          shortName: selectedMatchFixture?.away?.shortName || null,
+        });
+      }
+
+      return teamAbbr({
+        name: team.name,
+        tla: team.tla,
+        shortName: team.shortName,
+      });
+    },
+    [
+      selectedMatchFixture?.away?.name,
+      selectedMatchFixture?.away?.shortName,
+      selectedMatchFixture?.away?.tla,
+      selectedMatchFixture?.home?.name,
+      selectedMatchFixture?.home?.shortName,
+      selectedMatchFixture?.home?.tla,
+    ],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -414,42 +840,31 @@ export default function FixturesPage() {
 
   useEffect(() => {
     if (!fixtures?.length) return;
+    const timers = predictionMountTimersRef.current;
+    for (const key of Object.keys(timers)) {
+      window.clearTimeout(timers[Number(key)]);
+    }
+    predictionMountTimersRef.current = {};
     const next: Record<number, boolean> = {};
     for (const fx of fixtures) next[fx.fixtureId] = !compactMode;
     setExpandedFixtures(next);
+    const nextMounted: Record<number, boolean> = {};
+    for (const fx of fixtures) nextMounted[fx.fixtureId] = !compactMode;
+    setMountedPredictions(nextMounted);
   }, [compactMode, fixtures]);
+
+  useEffect(() => {
+    setGameDataEnabled(true);
+    setPicksByFixture({});
+    setGoldenByUid({});
+    setPowerupByUid({});
+  }, [roomCode, gw, seasonKey]);
 
   useEffect(() => {
     if (refreshLockedUntil <= nowMs) return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [refreshLockedUntil, nowMs]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!tableOpen) return;
-    const scrollY = window.scrollY;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyPosition = document.body.style.position;
-    const prevBodyTop = document.body.style.top;
-    const prevBodyWidth = document.body.style.width;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
-
-    return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.position = prevBodyPosition;
-      document.body.style.top = prevBodyTop;
-      document.body.style.width = prevBodyWidth;
-      window.scrollTo(0, scrollY);
-    };
-  }, [tableOpen]);
 
   // Load room players (names)
   useEffect(() => {
@@ -500,27 +915,34 @@ export default function FixturesPage() {
     async (opts?: { force?: boolean; showSpinner?: boolean }) => {
       const force = !!opts?.force;
       const showSpinner = opts?.showSpinner ?? true;
+      const loadSeq = ++fixturesLoadSeqRef.current;
 
       if (showSpinner) setFixtures(null);
       setFixturesLoading(true);
       setError(null);
 
       if (!seasonKey) {
-        setFixtures([]);
-        setFixturesGeneratedAt(null);
-        setFixturesRefreshedAt(new Date());
+        if (loadSeq === fixturesLoadSeqRef.current) {
+          setFixtures([]);
+          setFixturesGeneratedAt(null);
+          setFixturesRefreshedAt(new Date());
+          setFixturesLoading(false);
+        }
         return;
       }
       try {
         const data = force
           ? await refreshFixturesCached(gw, seasonKey)
           : await getFixturesCached(gw, seasonKey);
+        if (loadSeq !== fixturesLoadSeqRef.current) return;
         const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
-        setFixtures(fx);
+        setFixtures((prev) => mergeFixtureResults(prev, fx));
         setFixturesGeneratedAt(asDate(data.generatedAt));
         setFixturesRefreshedAt(new Date());
       } finally {
-        setFixturesLoading(false);
+        if (loadSeq === fixturesLoadSeqRef.current) {
+          setFixturesLoading(false);
+        }
       }
     },
     [gw, seasonKey],
@@ -532,8 +954,14 @@ export default function FixturesPage() {
     let cancelled = false;
     setFixtures(null);
     setFixturesLoading(true);
-    const timeoutId = window.setTimeout(() => {
+    if (fixturesLoadTimerRef.current) {
+      window.clearTimeout(fixturesLoadTimerRef.current);
+      fixturesLoadTimerRef.current = null;
+    }
+    const delayMs = initialFixturesLoadDoneRef.current ? 1000 : 0;
+    fixturesLoadTimerRef.current = window.setTimeout(() => {
       if (cancelled) return;
+      initialFixturesLoadDoneRef.current = true;
       (async () => {
         try {
           await loadFixtures({ showSpinner: false });
@@ -545,11 +973,15 @@ export default function FixturesPage() {
           }
         }
       })();
-    }, 1000);
+      fixturesLoadTimerRef.current = null;
+    }, delayMs);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timeoutId);
+      if (fixturesLoadTimerRef.current) {
+        window.clearTimeout(fixturesLoadTimerRef.current);
+        fixturesLoadTimerRef.current = null;
+      }
     };
   }, [bootstrapped, gw, loadFixtures]);
 
@@ -558,12 +990,11 @@ export default function FixturesPage() {
     let cancelled = false;
 
     (async () => {
+      if (!gameDataEnabled || !seasonKey) return;
       setError(null);
       setPicksByFixture({});
       setGoldenByUid({});
       setPowerupByUid({});
-
-      if (!seasonKey) return;
       const gameData = await getGameDataCached(roomCode, seasonKey, gw);
 
       const byFx: PicksByFixture = {};
@@ -608,7 +1039,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomCode, gw, seasonKey]);
+  }, [gameDataEnabled, roomCode, gw, seasonKey]);
 
   const isLoading = fixtures === null || fixturesLoading;
   const navLoading = !bootstrapped;
@@ -619,6 +1050,10 @@ export default function FixturesPage() {
 
   async function refreshFixtures() {
     if (refreshingFixtures || refreshLockSeconds > 0) return;
+    if (fixturesLoadTimerRef.current) {
+      window.clearTimeout(fixturesLoadTimerRef.current);
+      fixturesLoadTimerRef.current = null;
+    }
     setRefreshLockedUntil(Date.now() + 10_000);
     setNowMs(Date.now());
     setRefreshingFixtures(true);
@@ -640,11 +1075,47 @@ export default function FixturesPage() {
   }
 
   function toggleFixtureExpanded(fixtureId: number) {
+    const currentExpanded = expandedFixtures[fixtureId] ?? !compactMode;
+    const nextExpanded = !currentExpanded;
+    const existingTimer = predictionMountTimersRef.current[fixtureId];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete predictionMountTimersRef.current[fixtureId];
+    }
+
+    if (nextExpanded) {
+      setGameDataEnabled(true);
+      predictionMountTimersRef.current[fixtureId] = window.setTimeout(() => {
+        setMountedPredictions((prev) =>
+          prev[fixtureId] ? prev : { ...prev, [fixtureId]: true },
+        );
+        delete predictionMountTimersRef.current[fixtureId];
+      }, 90);
+    } else {
+      predictionMountTimersRef.current[fixtureId] = window.setTimeout(() => {
+        setMountedPredictions((prev) => {
+          if (!prev[fixtureId]) return prev;
+          return { ...prev, [fixtureId]: false };
+        });
+        delete predictionMountTimersRef.current[fixtureId];
+      }, 180);
+    }
+
     setExpandedFixtures((prev) => ({
       ...prev,
-      [fixtureId]: !prev[fixtureId],
+      [fixtureId]: nextExpanded,
     }));
   }
+
+  useEffect(() => {
+    return () => {
+      const timers = predictionMountTimersRef.current;
+      for (const key of Object.keys(timers)) {
+        window.clearTimeout(timers[Number(key)]);
+      }
+      predictionMountTimersRef.current = {};
+    };
+  }, []);
 
   async function onSeasonChange(nextSeason: string) {
     setSeasonKey(nextSeason);
@@ -925,8 +1396,10 @@ export default function FixturesPage() {
                 dayLabel: string,
               ) => {
               const actual = f.result ?? null;
+              const fixtureStatusHeading = statusHeading(f.status);
               const kickoffParts = formatKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
+              const showPredictions = mountedPredictions[f.fixtureId] ?? !compactMode;
               const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
               const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
               const clashBgStyle: React.CSSProperties = {
@@ -964,7 +1437,7 @@ export default function FixturesPage() {
                     )}
                   </div>
                 <div
-                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.58rem,0.92vw,0.95rem)] page-action-btn cursor-pointer"
+                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.42rem,0.76vw,0.72rem)] page-action-btn cursor-pointer"
                   style={clashBgStyle}
                   role="button"
                   tabIndex={0}
@@ -1079,18 +1552,32 @@ export default function FixturesPage() {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Result</div>
-                      <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                        {displayResult(f.status, actual)}
+                      <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
+                        {fixtureStatusHeading}
+                      </div>
+                      <div className="relative mx-auto mt-1 flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
+                        {Number(f.redCards?.home || 0) > 0 ? (
+                          <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                            <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                            <span>{f.redCards?.home}</span>
+                          </span>
+                        ) : null}
+                        <span className="inline-block text-center">{displayResult(f.status, actual)}</span>
+                        {Number(f.redCards?.away || 0) > 0 ? (
+                          <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                            <span>{f.redCards?.away}</span>
+                            <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                     {SHOW_MATCH_INFO ? (
                       <div className="flex items-center justify-center text-xs text-muted">
-                        <button
-                          type="button"
+                          <button
+                            type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openMatchInfo(f.fixtureId, f.home?.id, f.away?.id);
+                            openMatchInfo(f);
                           }}
                           className="inline-flex items-center gap-1 rounded-md border border-teal-500 px-2 py-1 bg-surface text-foreground hover:bg-surface-2"
                         >
@@ -1110,24 +1597,29 @@ export default function FixturesPage() {
 
                   <div
                     className={[
-                      "grid transition-all duration-400 ease-out",
+                      "grid overflow-hidden -mx-[clamp(0.75rem,1.1vw,1.25rem)] transition-[grid-template-rows,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                       isExpanded
-                        ? "grid-rows-[1fr] opacity-100 mt-4 overflow-visible"
-                        : "grid-rows-[0fr] opacity-0 mt-0 overflow-hidden",
+                        ? "grid-rows-[1fr] mt-1"
+                        : "grid-rows-[0fr] mt-0",
                     ].join(" ")}
                   >
-                    <div className="min-h-0">
-                    <div className="text-[clamp(0.85rem,1.1vw,1rem)] font-semibold mb-2 text-muted text-center">
-                      Predictions
-                    </div>
-
-                    {players.length === 0 ? (
-                      <div className="text-sm text-muted">
-                        No players found.
-                      </div>
-                    ) : (
-                      <div className="w-full flex flex-wrap justify-center gap-2">
-                        {players.map((p) => {
+                    <div className="min-h-0 overflow-visible px-[clamp(0.75rem,1.1vw,1.25rem)] pt-3 pb-2">
+                    {showPredictions ? (
+                      <div
+                        className={[
+                          "-mt-1 transition-opacity duration-220 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          isExpanded
+                            ? "opacity-100 delay-75"
+                            : "opacity-0 delay-0 pointer-events-none",
+                        ].join(" ")}
+                      >
+                      {players.length === 0 ? (
+                        <div className="text-sm text-muted">
+                          No players found.
+                        </div>
+                      ) : (
+                        <div className="w-full flex flex-wrap justify-center gap-2">
+                          {players.map((p) => {
                           const pred =
                             picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
                           const golden = goldenByUid[p.uid];
@@ -1142,40 +1634,44 @@ export default function FixturesPage() {
                               : null;
                           const powerupTypeClass =
                             powerupType === "ALL_IN"
-                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
+                                ? "!border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
                                 : powerupType === "SAFETY_NET"
-                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                  ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
                                   : "";
                           const predNorm = String(pred || "").trim();
                           const actualNorm = String(actual || "").trim();
-                          const isExact =
-                            !!predNorm && !!actualNorm && predNorm === actualNorm;
-                          const isOutcomeOnly =
-                            !isExact &&
-                            !!predNorm &&
-                            !!actualNorm &&
-                            parseOutcome(predNorm) != null &&
-                            parseOutcome(predNorm) === parseOutcome(actualNorm);
-                          const isPowerupHit = powerupHitState(powerupType, predNorm, actualNorm);
-                          const powerupOutcomeClass =
-                            powerupType && isPowerupHit === true
-                              ? "shadow-[inset_0_0_0_1px_rgba(251,146,60,0.55),0_6px_14px_rgba(251,146,60,0.18)]"
-                              : powerupType && isPowerupHit === false
-                                ? "shadow-[inset_0_0_0_1px_rgba(148,163,184,0.5),0_6px_14px_rgba(100,116,139,0.18)]"
-                                : "";
-
-                          const toneClass = isExact
-                            ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
-                            : isOutcomeOnly
-                              ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
-                              : "bg-surface border-teal-500";
+                          const predictionTier = classifyPredictionTier(predNorm, actualNorm);
+                          const isExact = predictionTier === "exact";
+                          const isOutcomeOnly = predictionTier === "result";
+                          const powerupVisualState = getPowerupVisualState({
+                            powerupType,
+                            predictionTier,
+                          });
+                          const powerupHitToneClass =
+                            "key-chip bg-orange-500/20 border-orange-400/80 shadow-[0_0_0_1px_rgba(251,146,60,0.18)_inset,0_0_10px_rgba(251,146,60,0.12)]";
+                          const powerupMissToneClass =
+                            "key-chip bg-slate-500/20 border-slate-400/80 shadow-[0_0_0_1px_rgba(148,163,184,0.18)_inset,0_0_10px_rgba(148,163,184,0.1)]";
+                          const toneClass =
+                            powerupType === "ALL_IN"
+                              ? powerupVisualState === "powerup_hit"
+                                ? powerupHitToneClass
+                                : powerupVisualState === "powerup_miss"
+                                  ? powerupMissToneClass
+                                  : "bg-surface border-teal-500"
+                              : powerupVisualState === "powerup_hit"
+                                ? powerupHitToneClass
+                                : isExact
+                                  ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
+                                  : isOutcomeOnly
+                                    ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
+                                    : "bg-surface border-teal-500";
                           const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
                           const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
                           const goldenGlowClass = isGolden
-                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
+                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
                             : "";
                           const goldenIndicatorClass = isGoldenScored
-                            ? "ring-1 ring-yellow-300/65 shadow-[0_8px_20px_rgba(250,204,21,0.22),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
+                            ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
                             : "";
 
                           return (
@@ -1221,7 +1717,6 @@ export default function FixturesPage() {
                                   goldenGlowClass,
                                   goldenIndicatorClass,
                                   powerupTypeClass,
-                                  powerupOutcomeClass,
                                 ].join(" ")}
                               >
                                 <div
@@ -1247,10 +1742,12 @@ export default function FixturesPage() {
                               </div>
                             </div>
                           );
-                        })}
-                      </div>
-                    )}
+                          })}
+                        </div>
+                      )}
 
+                      </div>
+                    ) : null}
                     </div>
                   </div>
                 </div>
@@ -1293,7 +1790,7 @@ export default function FixturesPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-2xl h-[min(88vh,760px)] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
+        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
       >
         <div className="h-full p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -1324,8 +1821,10 @@ export default function FixturesPage() {
 
           <SliderSwitch
             options={[
-              { value: "h2h", label: "Head to Head" },
-              { value: "form", label: "Team Form" },
+              { value: "lineups", label: "Lineups" },
+              { value: "stats", label: "Stats" },
+              { value: "h2h", label: "H2H" },
+              { value: "form", label: "Form" },
             ]}
             value={matchInfoTab}
             onChange={(v) => setMatchInfoTab(v as MatchInfoTab)}
@@ -1347,6 +1846,433 @@ export default function FixturesPage() {
                 {matchInfoError}
               </div>
             )}
+            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "lineups" && (
+              <div className="space-y-3">
+                {(() => {
+                  const lineupPhase =
+                    currentMatchInfo.lineups.phase === "predicted" ? "predicted" : "confirmed";
+                  const showLiveRatings =
+                    lineupPhase === "confirmed" &&
+                    isFixtureStartedForLineups(selectedMatchFixture?.status);
+                  const lineupHeading =
+                    lineupPhase === "predicted" ? "Predicted Lineup" : "Confirmed Lineup";
+                  const startingXiHeading =
+                    lineupPhase === "predicted" ? "Predicted XI" : "Starting XI";
+                  const emptyLineupLabel =
+                    lineupPhase === "predicted"
+                      ? "No predicted lineup available yet."
+                      : "Lineup not confirmed yet.";
+                  const lineupBlocks = [
+                    {
+                      side: "home" as const,
+                      lineup: currentMatchInfo.lineups.home,
+                      badge: selectedMatchFixture?.home?.badge || null,
+                      tla: selectedMatchFixture?.home?.tla || null,
+                    },
+                    {
+                      side: "away" as const,
+                      lineup: currentMatchInfo.lineups.away,
+                      badge: selectedMatchFixture?.away?.badge || null,
+                      tla: selectedMatchFixture?.away?.tla || null,
+                    },
+                  ];
+                  const lineupBlocksWithRows = lineupBlocks.map((block) => ({
+                    ...block,
+                    starterRows: buildFormationRows(block.lineup.starters, block.lineup.formation),
+                  }));
+                  const motmRating = showLiveRatings
+                    ? lineupBlocks
+                        .flatMap((block) => [...block.lineup.starters, ...block.lineup.subs])
+                        .reduce<number | null>((best, player) => {
+                          const rating = Number(player.rating);
+                          if (!Number.isFinite(rating)) return best;
+                          return best == null || rating > best ? rating : best;
+                        }, null)
+                    : null;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.55)] bg-[color:rgba(var(--room-accent-rgb),0.08)] px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                          {lineupHeading}
+                        </div>
+                        <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                          {startingXiHeading}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {lineupBlocksWithRows.map((block) => (
+                          <div
+                            key={`lineup-head-${block.side}`}
+                            className="rounded-xl border border-teal-500 bg-surface-2 px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-display text-sm font-semibold text-foreground truncate">
+                                  {block.lineup.name}
+                                </div>
+                                <div className="text-[11px] text-muted">
+                                  {block.lineup.formation || "TBD"}
+                                  {block.lineup.coach ? ` • ${block.lineup.coach}` : ""}
+                                </div>
+                              </div>
+                              <div className="h-9 w-9 rounded-md border border-subtle bg-surface flex items-center justify-center overflow-hidden shrink-0">
+                                {block.badge ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={block.badge}
+                                    alt={block.lineup.name}
+                                    className="h-7 w-7 object-contain"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <span className="font-display text-[10px] font-bold text-foreground">
+                                    {teamAbbr({
+                                      name: block.lineup.name,
+                                      tla: block.tla,
+                                      shortName: block.lineup.name,
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {lineupBlocksWithRows.every((block) => block.lineup.starters.length === 0) ? (
+                        <div className="rounded-md border border-subtle bg-surface px-2.5 py-2 text-xs text-muted">
+                          {emptyLineupLabel}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="sm:hidden rounded-xl border border-subtle bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_100%)] px-3 py-3">
+                            <div className="relative h-[960px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
+                              <div className="absolute inset-x-3 top-3 h-[calc(50%-12px)] rounded-t-xl border border-white/8 border-b-0" />
+                              <div className="absolute inset-x-3 bottom-3 h-[calc(50%-12px)] rounded-b-xl border border-white/8 border-t-0" />
+                              <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-white/8" />
+                              <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
+                              <div className="absolute left-1/2 top-3 h-10 w-[34%] -translate-x-1/2 rounded-b-xl border border-white/8 border-t-0" />
+                              <div className="absolute left-1/2 bottom-3 h-10 w-[34%] -translate-x-1/2 rounded-t-xl border border-white/8 border-b-0" />
+                              <div className="absolute inset-x-5 top-7 bottom-[calc(50%+32px)] flex flex-col justify-evenly">
+                                {lineupBlocksWithRows
+                                  .filter((block) => block.side === "home")
+                                  .map((block) => (
+                                    <div
+                                      key={`mobile-home-rows-${block.side}`}
+                                      className={[
+                                        "grid h-full gap-1",
+                                        formationGridClasses(block.starterRows.length),
+                                      ].join(" ")}
+                                    >
+                                      {block.starterRows.map((row, rowIdx) => (
+                                        <div
+                                          key={`mobile-home-row-${rowIdx}`}
+                                          className="flex items-center justify-evenly gap-1"
+                                        >
+                                          {row.map((player) => (
+                                            <div
+                                              key={`mobile-home-player-${player.id ?? player.name}`}
+                                              className="transition-transform duration-200 ease-out"
+                                              style={{
+                                                transform: `translateY(${formationFanOffsetPx(row, row.indexOf(player), block.side, "y")}px)`,
+                                              }}
+                                            >
+                                              <PitchMarker
+                                                player={player}
+                                                showLiveRatings={showLiveRatings}
+                                                isManOfTheMatch={
+                                                  motmRating != null &&
+                                                  Number.isFinite(Number(player.rating)) &&
+                                                  Number(player.rating) === motmRating
+                                                }
+                                                crowded={row.length >= 5}
+                                                size="mobile"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                              </div>
+                              <div className="absolute inset-x-5 top-[calc(50%+32px)] bottom-7 flex flex-col justify-evenly">
+                                {lineupBlocksWithRows
+                                  .filter((block) => block.side === "away")
+                                  .map((block) => (
+                                    <div
+                                      key={`mobile-away-rows-${block.side}`}
+                                      className={[
+                                        "grid h-full gap-1",
+                                        formationGridClasses(block.starterRows.length),
+                                      ].join(" ")}
+                                    >
+                                      {[...block.starterRows].reverse().map((row, rowIdx) => (
+                                        <div
+                                          key={`mobile-away-row-${rowIdx}`}
+                                          className="flex items-center justify-evenly gap-1"
+                                        >
+                                          {[...row].reverse().map((player, playerIdx) => (
+                                            <div
+                                              key={`mobile-away-player-${player.id ?? player.name}`}
+                                              className="transition-transform duration-200 ease-out"
+                                              style={{
+                                                transform: `translateY(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "y")}px)`,
+                                              }}
+                                            >
+                                              <PitchMarker
+                                                player={player}
+                                                showLiveRatings={showLiveRatings}
+                                                isManOfTheMatch={
+                                                  motmRating != null &&
+                                                  Number.isFinite(Number(player.rating)) &&
+                                                  Number(player.rating) === motmRating
+                                                }
+                                                crowded={row.length >= 5}
+                                                size="mobile"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="hidden sm:block rounded-xl border border-subtle bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(var(--room-accent-rgb),0.08)_100%)] px-3 py-3">
+                            <div className="relative h-[620px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
+                              <div className="absolute inset-y-3 left-3 w-[calc(50%-12px)] rounded-l-xl border border-white/8 border-r-0" />
+                              <div className="absolute inset-y-3 right-3 w-[calc(50%-12px)] rounded-r-xl border border-white/8 border-l-0" />
+                              <div className="absolute top-3 bottom-3 left-1/2 w-px -translate-x-1/2 bg-white/8" />
+                              <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
+                              <div className="absolute left-3 top-1/2 h-[34%] w-10 -translate-y-1/2 rounded-r-xl border border-white/8 border-l-0" />
+                              <div className="absolute right-3 top-1/2 h-[34%] w-10 -translate-y-1/2 rounded-l-xl border border-white/8 border-r-0" />
+                              <div className="absolute inset-y-5 left-5 right-[calc(50%+18px)]">
+                                {lineupBlocksWithRows
+                                  .filter((block) => block.side === "home")
+                                  .map((block) => (
+                                    <div
+                                      key={`desktop-home-rows-${block.side}`}
+                                      className="grid h-full gap-2"
+                                      style={{
+                                        gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
+                                      }}
+                                    >
+                                      {block.starterRows.map((row, rowIdx) => (
+                                        <div
+                                          key={`desktop-home-row-${rowIdx}`}
+                                          className="flex h-full flex-col items-center justify-evenly gap-2"
+                                        >
+                                          {row.map((player) => (
+                                            <div
+                                              key={`desktop-home-player-${player.id ?? player.name}`}
+                                              className="transition-transform duration-200 ease-out"
+                                              style={{
+                                                transform: `translateX(${formationFanOffsetPx(row, row.indexOf(player), block.side, "x")}px)`,
+                                              }}
+                                            >
+                                              <PitchMarker
+                                                player={player}
+                                                showLiveRatings={showLiveRatings}
+                                                isManOfTheMatch={
+                                                  motmRating != null &&
+                                                  Number.isFinite(Number(player.rating)) &&
+                                                  Number(player.rating) === motmRating
+                                                }
+                                                size="desktop"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                              </div>
+                              <div className="absolute inset-y-5 left-[calc(50%+18px)] right-5">
+                                {lineupBlocksWithRows
+                                  .filter((block) => block.side === "away")
+                                  .map((block) => (
+                                    <div
+                                      key={`desktop-away-rows-${block.side}`}
+                                      className="grid h-full gap-2"
+                                      style={{
+                                        gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
+                                      }}
+                                    >
+                                      {[...block.starterRows].reverse().map((row, rowIdx) => (
+                                        <div
+                                          key={`desktop-away-row-${rowIdx}`}
+                                          className="flex h-full flex-col items-center justify-evenly gap-2"
+                                        >
+                                          {[...row].reverse().map((player, playerIdx) => (
+                                            <div
+                                              key={`desktop-away-player-${player.id ?? player.name}`}
+                                              className="transition-transform duration-200 ease-out"
+                                              style={{
+                                                transform: `translateX(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "x")}px)`,
+                                              }}
+                                            >
+                                              <PitchMarker
+                                                player={player}
+                                                showLiveRatings={showLiveRatings}
+                                                isManOfTheMatch={
+                                                  motmRating != null &&
+                                                  Number.isFinite(Number(player.rating)) &&
+                                                  Number(player.rating) === motmRating
+                                                }
+                                                size="desktop"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {lineupBlocksWithRows.map((block) => (
+                          <div
+                            key={`bench-${block.side}`}
+                            className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-3"
+                          >
+                            <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                              {block.side === "home" ? "Home Bench" : "Away Bench"}
+                            </div>
+                            <div className="space-y-2">
+                              {block.lineup.subs.length ? (
+                                block.lineup.subs.map((player) => (
+                                  <div
+                                    key={`${block.side}-sub-${player.id ?? player.name}`}
+                                    className="rounded-xl border border-subtle bg-surface px-2.5 py-2"
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <div className="h-9 w-9 rounded-lg border border-subtle bg-surface-2 flex items-center justify-center shrink-0">
+                                        <span className="font-display text-[10px] font-semibold text-foreground tabular-nums">
+                                          {player.shirtNumber || "—"}
+                                        </span>
+                                      </div>
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <div className="font-display text-xs text-foreground truncate">
+                                              {player.name}
+                                            </div>
+                                            <div className="font-display text-[10px] text-muted">
+                                              {showLiveRatings
+                                                ? substitutionSummary(player) || "Unused sub"
+                                                : player.positionLabel || "Bench"}
+                                            </div>
+                                          </div>
+                                          <span
+                                            className={[
+                                              "inline-flex min-w-[48px] items-center justify-center gap-0.5 rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
+                                              motmRating != null &&
+                                              Number.isFinite(Number(player.rating)) &&
+                                              Number(player.rating) === motmRating &&
+                                              showLiveRatings
+                                                ? "border-sky-400/80 bg-sky-500/15 text-sky-200"
+                                                : "border-subtle bg-surface-2 text-foreground",
+                                            ].join(" ")}
+                                          >
+                                            {playerMetaValue(player, showLiveRatings)}
+                                            {motmRating != null &&
+                                            Number.isFinite(Number(player.rating)) &&
+                                            Number(player.rating) === motmRating &&
+                                            showLiveRatings ? (
+                                              <Crown size={9} strokeWidth={2.2} />
+                                            ) : null}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          {Number(player.assistCount || 0) > 0 ? (
+                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-sky-300">
+                                              <Footprints size={9} strokeWidth={2.1} />
+                                              <span>{player.assistCount}</span>
+                                            </span>
+                                          ) : null}
+                                          {Number(player.goalCount || 0) > 0 ? (
+                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-yellow-300">
+                                              <CircleDot size={9} strokeWidth={2.1} />
+                                              <span>{player.goalCount}</span>
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted">No bench data.</span>
+                              )}
+                            </div>
+                            {block.lineup.unavailable.length ? (
+                              <div className="space-y-2">
+                                <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                                  Unavailable
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {block.lineup.unavailable.map((player) => (
+                                    <span
+                                      key={`${block.side}-out-${player.id ?? player.name}`}
+                                      className="inline-flex items-center gap-1 rounded-full border border-subtle bg-surface px-2 py-1"
+                                    >
+                                      <span className="font-display text-[10px] text-foreground">
+                                        {player.name}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "stats" && (
+              <div className="space-y-2">
+                {currentMatchInfo.stats.length ? currentMatchInfo.stats.map((row) => (
+                  <div
+                    key={`stat-${row.label}`}
+                    className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 rounded-lg border border-teal-500 bg-surface-2 px-3 py-2"
+                  >
+                    <span
+                      className={[
+                        "font-display text-sm text-left tabular-nums",
+                        row.highlighted === "home" ? "text-foreground" : "text-muted",
+                      ].join(" ")}
+                    >
+                      {row.home}
+                    </span>
+                    <span className="text-[11px] text-muted text-center leading-tight">
+                      {row.label}
+                    </span>
+                    <span
+                      className={[
+                        "font-display text-sm text-right tabular-nums",
+                        row.highlighted === "away" ? "text-foreground" : "text-muted",
+                      ].join(" ")}
+                    >
+                      {row.away}
+                    </span>
+                  </div>
+                )) : (
+                  <div className="rounded-lg border border-teal-500 bg-surface-2 p-3 text-sm text-muted">
+                    No live match stats found.
+                  </div>
+                )}
+              </div>
+            )}
             {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "h2h" && (
               <div className="space-y-2">
                 {currentMatchInfo.headToHead.length ? currentMatchInfo.headToHead.map((m) => (
@@ -1363,25 +2289,23 @@ export default function FixturesPage() {
                           );
                         })()}
                       </span>
-                      <span className="font-display text-sm text-foreground inline-flex min-w-0 items-center justify-center gap-1.5">
-                        <span className="inline-flex w-[3.4ch] justify-end">
-                          {teamAbbr({
+                        <span className="font-display text-sm text-foreground inline-flex min-w-0 items-center justify-center gap-1.5">
+                          <span className="inline-flex w-[3.4ch] justify-end">
+                          {h2hTeamLabel({
                             name: m.homeTeam.name,
                             tla: m.homeTeam.tla,
-                            shortName: null,
                           })}
-                        </span>
-                        <span className="inline-flex min-w-[3.2ch] justify-center tabular-nums text-foreground">
-                          {fmtScore(m.result)}
-                        </span>
-                        <span className="inline-flex w-[3.4ch] justify-start">
-                          {teamAbbr({
+                          </span>
+                          <span className="inline-flex min-w-[3.2ch] justify-center tabular-nums text-foreground">
+                            {fmtScore(m.result)}
+                          </span>
+                          <span className="inline-flex w-[3.4ch] justify-start">
+                          {h2hTeamLabel({
                             name: m.awayTeam.name,
                             tla: m.awayTeam.tla,
-                            shortName: null,
                           })}
+                          </span>
                         </span>
-                      </span>
                       <span className="inline-flex h-5 min-w-[30px] rounded-full border border-subtle bg-surface items-center justify-center px-1 justify-self-end">
                         <span className="font-display text-[9px] text-muted leading-none">
                           {competitionAbbr(m.competition?.name, m.competition?.code)}
@@ -1468,9 +2392,9 @@ export default function FixturesPage() {
                     {block.list.length ? block.list.map((m) => (
                       <div
                         key={`${block.side}-${m.id ?? m.utcDate}`}
-                        className="grid grid-cols-[84px_minmax(0,1fr)_56px] items-center gap-2 text-xs"
+                        className="grid grid-cols-[minmax(0,1fr)_56px] sm:grid-cols-[84px_minmax(0,1fr)_56px] items-center gap-x-2 gap-y-1.5 text-xs"
                       >
-                        <span className="font-display text-muted whitespace-nowrap text-left">
+                        <span className="col-span-full sm:col-span-1 font-display text-muted whitespace-nowrap text-left">
                           {(() => {
                             const d = formatDateWithOrdinal(m.utcDate);
                             return (
@@ -1481,26 +2405,78 @@ export default function FixturesPage() {
                             );
                           })()}
                         </span>
-                        <span className="font-display text-foreground inline-flex min-w-0 items-center justify-center gap-1.5">
-                          <span className="inline-flex w-[3.4ch] justify-end">
-                            {teamAbbr({
-                              name: m.homeTeam.name,
-                              tla: m.homeTeam.tla,
-                              shortName: null,
-                            })}
+                        <span className="min-w-0 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-foreground">
+                          <span className="min-w-0 flex items-center justify-end gap-1.5 text-right">
+                            <div className="min-w-0">
+                              <div className="font-display text-[10px] font-semibold text-foreground truncate">
+                                {formTeamLabel({
+                                  name: m.homeTeam.name,
+                                  tla: m.homeTeam.tla,
+                                  shortName: m.homeTeam.shortName,
+                                })}
+                              </div>
+                              <div className="text-[9px] text-muted truncate">
+                                {m.homeTeam.name}
+                              </div>
+                            </div>
+                            <span className="h-5 w-5 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-subtle bg-surface">
+                              {m.homeTeam.badge ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={m.homeTeam.badge}
+                                  alt={m.homeTeam.name}
+                                  className="h-4 w-4 object-contain"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="font-display text-[8px] font-bold text-foreground">
+                                  {formTeamLabel({
+                                    name: m.homeTeam.name,
+                                    tla: m.homeTeam.tla,
+                                    shortName: m.homeTeam.shortName,
+                                  })}
+                                </span>
+                              )}
+                            </span>
                           </span>
-                          <span className="inline-flex min-w-[3.2ch] justify-center tabular-nums text-foreground">
+                          <span className="inline-flex min-w-[3.2ch] justify-center font-display tabular-nums text-foreground">
                             {fmtScore(m.result)}
                           </span>
-                          <span className="inline-flex w-[3.4ch] justify-start">
-                            {teamAbbr({
-                              name: m.awayTeam.name,
-                              tla: m.awayTeam.tla,
-                              shortName: null,
-                            })}
+                          <span className="min-w-0 flex items-center justify-start gap-1.5 text-left">
+                            <span className="h-5 w-5 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-subtle bg-surface">
+                              {m.awayTeam.badge ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={m.awayTeam.badge}
+                                  alt={m.awayTeam.name}
+                                  className="h-4 w-4 object-contain"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="font-display text-[8px] font-bold text-foreground">
+                                  {formTeamLabel({
+                                    name: m.awayTeam.name,
+                                    tla: m.awayTeam.tla,
+                                    shortName: m.awayTeam.shortName,
+                                  })}
+                                </span>
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-display text-[10px] font-semibold text-foreground truncate">
+                                {formTeamLabel({
+                                  name: m.awayTeam.name,
+                                  tla: m.awayTeam.tla,
+                                  shortName: m.awayTeam.shortName,
+                                })}
+                              </div>
+                              <div className="text-[9px] text-muted truncate">
+                                {m.awayTeam.name}
+                              </div>
+                            </div>
                           </span>
                         </span>
-                        <span className="inline-flex items-center justify-end gap-1.5">
+                        <span className="inline-flex items-center justify-end gap-1.5 justify-self-end">
                           <span className="h-5 min-w-[30px] rounded-full border border-subtle bg-surface inline-flex items-center justify-center px-1 shrink-0">
                             <span className="font-display text-[9px] text-muted leading-none">
                               {competitionAbbr(m.competition?.name, m.competition?.code)}

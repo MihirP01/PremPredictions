@@ -122,6 +122,32 @@ function fmtScore(s?: string | null) {
   return s.replace("-", "–");
 }
 
+function displayResult(status: string, actual: string | null) {
+  if (actual) return actual.replace("-", " – ");
+  const s = String(status || "").toUpperCase();
+  const inPlay =
+    s.includes("IN_PLAY") ||
+    s.includes("LIVE") ||
+    s.includes("PAUSED") ||
+    s === "1H" ||
+    s === "2H" ||
+    s === "HT" ||
+    /^\d/.test(s);
+  return inPlay ? "LIVE" : "TBD";
+}
+
+function statusHeading(status: string) {
+  const raw = String(status || "").trim();
+  const s = raw.toUpperCase();
+  if (!raw || s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") {
+    return "Scheduled";
+  }
+  if (s === "FINISHED" || s === "FT" || s === "AWARDED") return "FT";
+  if (s === "CANCELLED" || s === "POSTPONED") return "Postponed";
+  if (s === "LIVE") return "Live";
+  return `Live - ${raw}`;
+}
+
 function byDisplayName(
   uidA: string,
   uidB: string,
@@ -673,7 +699,9 @@ export default function RevealPage() {
         <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
-            const actual = f?.result ? fmtScore(f.result) : "TBD";
+            const actualRaw = f?.result ?? null;
+            const actual = displayResult(f?.status ?? "", actualRaw);
+            const fixtureStatusHeading = statusHeading(f?.status ?? "");
             const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
             const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
             const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
@@ -825,7 +853,9 @@ export default function RevealPage() {
                   )}
 
                   <div className="text-center">
-                    <div className="text-[clamp(0.85rem,1.1vw,1rem)] text-muted">Actual</div>
+                    <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
+                      {fixtureStatusHeading}
+                    </div>
                     <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
                       {actual}
                     </div>

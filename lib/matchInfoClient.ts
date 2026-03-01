@@ -2,6 +2,8 @@ export type MatchInfoMiniTeam = {
   id: number | null;
   name: string;
   tla?: string | null;
+  shortName?: string | null;
+  badge?: string | null;
 };
 
 export type MatchInfoMiniMatch = {
@@ -19,9 +21,56 @@ export type MatchInfoMiniMatch = {
   form?: "W" | "D" | "L" | "—";
 };
 
+export type MatchInfoPlayer = {
+  id: number | null;
+  name: string;
+  shirtNumber?: string | null;
+  positionId?: number | null;
+  photo?: string | null;
+  layout?: {
+    x?: number | null;
+    y?: number | null;
+  } | null;
+  positionLabel?: string | null;
+  rating?: number | null;
+  goalCount?: number | null;
+  assistCount?: number | null;
+  yellowCardCount?: number | null;
+  redCardCount?: number | null;
+  countryCode?: string | null;
+  statusTags?: string[];
+  substitutionEvents?: Array<{
+    time?: number | null;
+    type?: string | null;
+  }>;
+};
+
+export type MatchInfoLineupTeam = {
+  id: number | null;
+  name: string;
+  formation?: string | null;
+  coach?: string | null;
+  starters: MatchInfoPlayer[];
+  subs: MatchInfoPlayer[];
+  unavailable: MatchInfoPlayer[];
+};
+
+export type MatchInfoStat = {
+  label: string;
+  home: string;
+  away: string;
+  highlighted?: "home" | "away" | "equal" | null;
+};
+
 export type MatchInfoData = {
   fixtureId: number;
   generatedAt: string;
+  lineups: {
+    phase?: "predicted" | "confirmed";
+    home: MatchInfoLineupTeam;
+    away: MatchInfoLineupTeam;
+  };
+  stats: MatchInfoStat[];
   headToHead: MatchInfoMiniMatch[];
   form: {
     home: MatchInfoMiniMatch[];
@@ -43,6 +92,32 @@ function normalize(payload: unknown): MatchInfoData {
   return {
     fixtureId: Number(p.fixtureId ?? 0),
     generatedAt: String(p.generatedAt || ""),
+    lineups: {
+      phase: p.lineups?.phase === "predicted" ? "predicted" : "confirmed",
+      home: {
+        id: Number(p.lineups?.home?.id ?? 0) || null,
+        name: String(p.lineups?.home?.name || "Home"),
+        formation: p.lineups?.home?.formation ? String(p.lineups.home.formation) : null,
+        coach: p.lineups?.home?.coach ? String(p.lineups.home.coach) : null,
+        starters: Array.isArray(p.lineups?.home?.starters) ? p.lineups!.home.starters : [],
+        subs: Array.isArray(p.lineups?.home?.subs) ? p.lineups!.home.subs : [],
+        unavailable: Array.isArray(p.lineups?.home?.unavailable)
+          ? p.lineups!.home.unavailable
+          : [],
+      },
+      away: {
+        id: Number(p.lineups?.away?.id ?? 0) || null,
+        name: String(p.lineups?.away?.name || "Away"),
+        formation: p.lineups?.away?.formation ? String(p.lineups.away.formation) : null,
+        coach: p.lineups?.away?.coach ? String(p.lineups.away.coach) : null,
+        starters: Array.isArray(p.lineups?.away?.starters) ? p.lineups!.away.starters : [],
+        subs: Array.isArray(p.lineups?.away?.subs) ? p.lineups!.away.subs : [],
+        unavailable: Array.isArray(p.lineups?.away?.unavailable)
+          ? p.lineups!.away.unavailable
+          : [],
+      },
+    },
+    stats: Array.isArray(p.stats) ? p.stats : [],
     headToHead: Array.isArray(p.headToHead) ? p.headToHead : [],
     form: {
       home: Array.isArray(p.form?.home) ? p.form!.home : [],
@@ -86,13 +161,16 @@ function setCached(key: string, data: MatchInfoData) {
 }
 
 export async function getMatchInfoCached(
-  fixtureId: number,
-  seasonKey: string,
-  homeTeamId?: number | null,
-  awayTeamId?: number | null,
+  args: {
+    fixtureId: number;
+    seasonKey: string;
+    kickoff: string;
+    homeTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
+    awayTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
+  },
 ): Promise<MatchInfoData> {
-  const id = Number(fixtureId);
-  const sk = String(seasonKey || "");
+  const id = Number(args.fixtureId);
+  const sk = String(args.seasonKey || "");
   if (!Number.isFinite(id) || !sk) {
     throw new Error("Invalid fixture/season.");
   }
@@ -114,9 +192,14 @@ export async function getMatchInfoCached(
     const params = new URLSearchParams({
       fixtureId: String(id),
       seasonKey: sk,
+      kickoff: String(args.kickoff || ""),
+      homeName: String(args.homeTeam?.name || ""),
+      awayName: String(args.awayTeam?.name || ""),
     });
-    if (Number.isFinite(Number(homeTeamId))) params.set("homeTeamId", String(homeTeamId));
-    if (Number.isFinite(Number(awayTeamId))) params.set("awayTeamId", String(awayTeamId));
+    if (args.homeTeam?.tla) params.set("homeTla", String(args.homeTeam.tla));
+    if (args.homeTeam?.shortName) params.set("homeShortName", String(args.homeTeam.shortName));
+    if (args.awayTeam?.tla) params.set("awayTla", String(args.awayTeam.tla));
+    if (args.awayTeam?.shortName) params.set("awayShortName", String(args.awayTeam.shortName));
     const res = await fetch(
       `/api/match-info?${params.toString()}`,
       { cache: "no-store" },

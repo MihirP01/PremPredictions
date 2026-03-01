@@ -98,6 +98,7 @@ export default function LeaderboardMatrixPage() {
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [leaderToolBusy, setLeaderToolBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leaderUid, setLeaderUid] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -273,7 +274,7 @@ export default function LeaderboardMatrixPage() {
     );
   }, [roomCode]);
 
-  const loadSavedScores = useCallback(async () => {
+  const loadSavedScores = useCallback(async (opts?: { force?: boolean }) => {
     if (players.length === 0 || !seasonKey) return;
 
     setBusy(true);
@@ -289,7 +290,9 @@ export default function LeaderboardMatrixPage() {
     }
 
     try {
-      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
+      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey, {
+        force: opts?.force === true,
+      });
       const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
       let currentGwComputedAt: Date | null = null;
       const currentWeek = weekByGw.get(currentGw);
@@ -557,7 +560,7 @@ export default function LeaderboardMatrixPage() {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to recalculate scores.");
 
-      await loadSavedScores();
+      await loadSavedScores({ force: true });
     } catch (e) {
       setError(toErrorMessage(e, "Failed to recalculate saved scores."));
     } finally {
@@ -566,10 +569,21 @@ export default function LeaderboardMatrixPage() {
   }
 
   async function refreshLeaderboard() {
-    if (busy || refreshLockSeconds > 0) return;
+    if (busy || refreshing || refreshLockSeconds > 0) return;
+    const startedAt = Date.now();
+    setRefreshing(true);
     setRefreshLockedUntil(Date.now() + 10_000);
     setNowMs(Date.now());
-    await loadSavedScores();
+    try {
+      await loadSavedScores({ force: true });
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      const minSpinMs = 450;
+      if (elapsed < minSpinMs) {
+        await new Promise((resolve) => window.setTimeout(resolve, minSpinMs - elapsed));
+      }
+      setRefreshing(false);
+    }
   }
 
   return (
@@ -604,7 +618,7 @@ export default function LeaderboardMatrixPage() {
                 )}
                 <button
                   onClick={refreshLeaderboard}
-                  disabled={busy || refreshLockSeconds > 0}
+                  disabled={busy || refreshing || refreshLockSeconds > 0}
                   className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex sm:hidden items-center justify-center page-action-btn disabled:opacity-60"
                   aria-label="Refresh leaderboard"
                   title={
@@ -613,7 +627,7 @@ export default function LeaderboardMatrixPage() {
                       : "Refresh leaderboard"
                   }
                 >
-                  <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
+                  <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
                 </button>
                 <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
               </div>
@@ -668,7 +682,7 @@ export default function LeaderboardMatrixPage() {
               )}
               <button
                 onClick={refreshLeaderboard}
-                disabled={busy || refreshLockSeconds > 0}
+                disabled={busy || refreshing || refreshLockSeconds > 0}
                 className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn disabled:opacity-60"
                 aria-label="Refresh leaderboard"
                 title={
@@ -677,7 +691,7 @@ export default function LeaderboardMatrixPage() {
                     : "Refresh leaderboard"
                 }
               >
-                <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
+                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
           </div>

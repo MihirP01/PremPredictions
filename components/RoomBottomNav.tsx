@@ -21,6 +21,7 @@ export default function RoomBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
+  const [mounted, setMounted] = useState(false);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
   const [navFxTick, setNavFxTick] = useState<Record<NavItem["key"], number>>({
@@ -29,7 +30,11 @@ export default function RoomBottomNav() {
     home: 0,
     leaderboard: 0,
     stats: 0,
-  });
+    });
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -164,7 +169,9 @@ export default function RoomBottomNav() {
     router.push(href);
   };
 
-  if (!roomCode || hideForActiveGamePhase || typeof document === "undefined") return null;
+  if (!mounted || !roomCode || hideForActiveGamePhase || typeof document === "undefined") {
+    return null;
+  }
 
   const navNode = (
     <nav

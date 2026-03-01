@@ -440,10 +440,10 @@ function PitchMarker({
   const shellWidthClass = isCrowdedMobile ? "w-[54px]" : "w-[66px] sm:w-[72px]";
   const nameTextClass = isCrowdedMobile ? "text-[8px]" : "text-[9px]";
   const tagTextClass = isCrowdedMobile ? "text-[7px]" : "text-[8px]";
-  const ratingPillPosClass = isCrowdedMobile ? "-right-1.5 -top-1" : "-right-2 -top-1";
-  const disciplinePosClass = isCrowdedMobile ? "-right-1 top-1/2" : "-right-1.5 top-1/2";
-  const assistPosClass = isCrowdedMobile ? "-left-1.5 -bottom-1" : "-left-2 -bottom-1";
-  const goalPosClass = isCrowdedMobile ? "-right-1.5 -bottom-1" : "-right-2 -bottom-1";
+  const ratingPillPosClass = isCrowdedMobile ? "-right-1.5 -top-[10px]" : "-right-2 -top-[10px]";
+  const disciplinePosClass = isCrowdedMobile ? "-right-1 top-[42%]" : "-right-1.5 top-[42%]";
+  const assistPosClass = isCrowdedMobile ? "-left-2.5 -bottom-1.5" : "-left-3 -bottom-1.5";
+  const goalPosClass = isCrowdedMobile ? "-right-2.5 -bottom-1.5" : "-right-3 -bottom-1.5";
   const yellowCards = Math.max(0, Number(player.yellowCardCount || 0));
   const redCards = Math.max(0, Number(player.redCardCount || 0));
   const disciplinaryCards = [
@@ -453,6 +453,7 @@ function PitchMarker({
       () => "yellow" as const,
     ),
   ];
+  const fallbackShirtNumber = String(player.shirtNumber || "—");
 
   return (
     <div className={`${shellWidthClass} text-center`}>
@@ -462,20 +463,36 @@ function PitchMarker({
           markerSize,
         ].join(" ")}
       >
-        <span className="font-display text-sm font-semibold text-foreground tabular-nums">
-          {player.shirtNumber || "—"}
-        </span>
+        {player.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={player.photo}
+            alt={player.name}
+            className="h-full w-full rounded-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span className="font-display text-[10px] font-semibold text-foreground">
+            {fallbackShirtNumber}
+          </span>
+        )}
         <span
           className={[
-            `absolute ${ratingPillPosClass} inline-flex items-center justify-center gap-0.5 rounded-full border px-1.5 py-0.5 font-display text-[9px] font-semibold tabular-nums`,
+            `absolute ${ratingPillPosClass} inline-flex items-center justify-center rounded-full border px-1.5 py-0.5 font-display text-[9px] font-semibold tabular-nums`,
             isManOfTheMatch && showLiveRatings
-              ? "border-sky-400/80 bg-sky-500/15 text-sky-200"
+              ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
               : "border-subtle bg-surface-2 text-foreground",
             valueMinWidth,
           ].join(" ")}
         >
-          {playerMetaValue(player, showLiveRatings)}
-          {isManOfTheMatch && showLiveRatings ? <Crown size={8} strokeWidth={2.2} /> : null}
+          <span className="relative inline-flex items-center justify-center overflow-visible">
+            {playerMetaValue(player, showLiveRatings)}
+            {isManOfTheMatch && showLiveRatings ? (
+              <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
+                <Crown size={8} strokeWidth={2.2} />
+              </span>
+            ) : null}
+          </span>
         </span>
         {disciplinaryCards.length ? (
           <span className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 flex-col items-center gap-0.5`}>
@@ -524,15 +541,19 @@ function PitchMarker({
           </span>
         ) : null}
         {Number(player.goalCount || 0) > 0 ? (
-          <span className={`absolute ${goalPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-yellow-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
+          <span className={`absolute ${goalPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-emerald-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
             <CircleDot size={7} strokeWidth={2.1} />
             <span className="tabular-nums">{player.goalCount}</span>
           </span>
         ) : null}
       </div>
       <div className="mt-1">
-        <div className={`font-display ${nameTextClass} leading-tight text-foreground truncate`}>
-          {pitchDisplayName(player.name)}
+        <div className="relative min-h-[1.1em]">
+          <div
+            className={`font-display ${nameTextClass} absolute left-1/2 top-0 w-max max-w-none -translate-x-1/2 leading-tight text-center text-foreground whitespace-nowrap overflow-visible`}
+          >
+            {pitchDisplayName(player.name)}
+          </div>
         </div>
         {player.statusTags?.slice(0, 1).map((tag) => (
           <div
@@ -2153,10 +2174,20 @@ export default function FixturesPage() {
                                     className="rounded-xl border border-subtle bg-surface px-2.5 py-2"
                                   >
                                     <div className="flex items-start gap-2">
-                                      <div className="h-9 w-9 rounded-lg border border-subtle bg-surface-2 flex items-center justify-center shrink-0">
-                                        <span className="font-display text-[10px] font-semibold text-foreground tabular-nums">
-                                          {player.shirtNumber || "—"}
-                                        </span>
+                                      <div className="h-9 w-9 rounded-lg border border-subtle bg-surface-2 flex items-center justify-center overflow-hidden shrink-0">
+                                        {player.photo ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img
+                                            src={player.photo}
+                                            alt={player.name}
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <span className="font-display text-[10px] font-semibold text-foreground tabular-nums">
+                                            {player.shirtNumber || "—"}
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="min-w-0 flex-1 space-y-1">
                                         <div className="flex items-start justify-between gap-2">
@@ -2172,22 +2203,26 @@ export default function FixturesPage() {
                                           </div>
                                           <span
                                             className={[
-                                              "inline-flex min-w-[48px] items-center justify-center gap-0.5 rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
+                                              "inline-flex min-w-[48px] items-center justify-center rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
                                               motmRating != null &&
                                               Number.isFinite(Number(player.rating)) &&
                                               Number(player.rating) === motmRating &&
                                               showLiveRatings
-                                                ? "border-sky-400/80 bg-sky-500/15 text-sky-200"
+                                                ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
                                                 : "border-subtle bg-surface-2 text-foreground",
                                             ].join(" ")}
                                           >
-                                            {playerMetaValue(player, showLiveRatings)}
-                                            {motmRating != null &&
-                                            Number.isFinite(Number(player.rating)) &&
-                                            Number(player.rating) === motmRating &&
-                                            showLiveRatings ? (
-                                              <Crown size={9} strokeWidth={2.2} />
-                                            ) : null}
+                                            <span className="relative inline-flex items-center justify-center overflow-visible">
+                                              {playerMetaValue(player, showLiveRatings)}
+                                              {motmRating != null &&
+                                              Number.isFinite(Number(player.rating)) &&
+                                              Number(player.rating) === motmRating &&
+                                              showLiveRatings ? (
+                                                <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
+                                                  <Crown size={9} strokeWidth={2.2} />
+                                                </span>
+                                              ) : null}
+                                            </span>
                                           </span>
                                         </div>
                                         <div className="flex items-center gap-1">
@@ -2198,7 +2233,7 @@ export default function FixturesPage() {
                                             </span>
                                           ) : null}
                                           {Number(player.goalCount || 0) > 0 ? (
-                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-yellow-300">
+                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-emerald-300">
                                               <CircleDot size={9} strokeWidth={2.1} />
                                               <span>{player.goalCount}</span>
                                             </span>

@@ -107,6 +107,7 @@ export default function RoomScopedLayout({
   );
   const [accentKey, setAccentKey] = useState<string>("teal");
   const [showBootOverlay, setShowBootOverlay] = useState(false);
+  const [bootProgress, setBootProgress] = useState(0);
   const [bootHint, setBootHint] = useState<{
     seasonKey: string;
     gw: number;
@@ -119,6 +120,8 @@ export default function RoomScopedLayout({
   const warmInFlightRef = useRef<Promise<void> | null>(null);
   const prefetchedKeyRef = useRef<string>("");
   const idleTasksRef = useRef<number[]>([]);
+  const bootHideTimerRef = useRef<number | null>(null);
+  const bootProgressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (loading || !user || !roomCode) return;
@@ -226,7 +229,14 @@ export default function RoomScopedLayout({
         } finally {
           bootedRef.current = true;
           if (overlayTimer != null) window.clearTimeout(overlayTimer);
-          if (!cancelled) setShowBootOverlay(false);
+          if (!cancelled) {
+            setBootProgress(100);
+            if (bootHideTimerRef.current) window.clearTimeout(bootHideTimerRef.current);
+            bootHideTimerRef.current = window.setTimeout(() => {
+              if (!cancelled) setShowBootOverlay(false);
+              bootHideTimerRef.current = null;
+            }, 240);
+          }
         }
       })();
       warmInFlightRef.current = run;
@@ -249,6 +259,10 @@ export default function RoomScopedLayout({
     return () => {
       cancelled = true;
       if (overlayTimer != null) window.clearTimeout(overlayTimer);
+      if (bootHideTimerRef.current) {
+        window.clearTimeout(bootHideTimerRef.current);
+        bootHideTimerRef.current = null;
+      }
       const w = window as Window & {
         cancelIdleCallback?: (id: number) => void;
       };
@@ -261,6 +275,35 @@ export default function RoomScopedLayout({
       window.removeEventListener("focus", onFocus);
     };
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!showBootOverlay) {
+      if (bootProgressTimerRef.current) {
+        window.clearInterval(bootProgressTimerRef.current);
+        bootProgressTimerRef.current = null;
+      }
+      setBootProgress(0);
+      return;
+    }
+
+    setBootProgress((prev) => Math.max(prev, 8));
+    if (bootProgressTimerRef.current) window.clearInterval(bootProgressTimerRef.current);
+    bootProgressTimerRef.current = window.setInterval(() => {
+      setBootProgress((prev) => {
+        if (prev >= 92) return prev;
+        if (prev < 40) return Math.min(92, prev + 9);
+        if (prev < 68) return Math.min(92, prev + 5);
+        return Math.min(92, prev + 2);
+      });
+    }, 110);
+
+    return () => {
+      if (bootProgressTimerRef.current) {
+        window.clearInterval(bootProgressTimerRef.current);
+        bootProgressTimerRef.current = null;
+      }
+    };
+  }, [showBootOverlay]);
 
   // Phase 17: route prefetch from bootstrap hint for snappier first nav taps.
   useEffect(() => {
@@ -338,9 +381,21 @@ export default function RoomScopedLayout({
       }
     >
       {showBootOverlay && !isMinigamePath ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none">
-          <div className="rounded-xl border border-subtle bg-surface px-4 py-3 text-sm text-foreground shadow-card">
-            Getting app ready...
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[rgba(3,8,20,0.78)] px-6 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.42)] bg-[rgba(7,12,22,0.9)] px-6 py-7 text-center shadow-[0_22px_80px_rgba(0,0,0,0.4)]">
+            <div
+              className="relative mx-auto w-fit font-display text-[clamp(3.4rem,16vw,5.8rem)] font-semibold leading-none tracking-[-0.03em]"
+              style={
+                {
+                  "--boot-fill": `${Math.max(0, 100 - bootProgress)}%`,
+                } as React.CSSProperties
+              }
+            >
+              <span className="select-none text-white/10">{bootProgress}%</span>
+              <span className="boot-liquid-fill absolute inset-0 select-none">
+                {bootProgress}%
+              </span>
+            </div>
           </div>
         </div>
       ) : null}

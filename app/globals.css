@@ -1243,6 +1243,38 @@ select:-webkit-autofill:focus {
   bottom: calc(env(safe-area-inset-bottom) + 5.5rem) !important;
 }
 
+.boot-liquid-fill {
+  color: transparent;
+  background-image:
+    radial-gradient(circle at 18% 18%, rgba(255,255,255,0.32) 0 10%, transparent 11%),
+    radial-gradient(circle at 74% 30%, rgba(255,255,255,0.22) 0 9%, transparent 10%),
+    linear-gradient(
+      180deg,
+      rgba(var(--room-accent-rgb), 0.98) 0%,
+      rgba(var(--room-accent-rgb), 0.86) 38%,
+      rgba(255,255,255,0.92) 100%
+    );
+  background-size: 160% 160%, 130% 130%, 100% 180%;
+  background-position: 0% 35%, 100% 70%, 50% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  clip-path: inset(var(--boot-fill, 100%) 0 0 0);
+  filter: drop-shadow(0 0 14px rgba(var(--room-accent-rgb), 0.3));
+  animation: bootLiquidShift 2.2s linear infinite;
+}
+
+@keyframes bootLiquidShift {
+  0% {
+    background-position: 0% 35%, 100% 70%, 50% 100%;
+  }
+  50% {
+    background-position: 60% 18%, 30% 56%, 50% 86%;
+  }
+  100% {
+    background-position: 100% 35%, 0% 70%, 50% 100%;
+  }
+}
+
 @media (min-width: 640px) {
   .room-has-bottom-nav {
     padding-bottom: 0;

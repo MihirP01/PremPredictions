@@ -10,6 +10,7 @@ import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
+import TopActionRow from "../../../../../components/TopActionRow";
 import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
@@ -576,24 +577,17 @@ export default function RevealPage() {
 
   return (
     <PageShell width="wide">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-foreground">
-              Final Overview
-            </h1>
-            <div className="font-display text-sm text-muted">
-              {roomCode} • GW {gw}
-            </div>
-          </div>
-
-          <div className="ml-auto flex gap-2 page-actions-enter">
+        <TopActionRow
+          title="Final Overview"
+          subtitle={`${roomCode} • GW ${gw}`}
+          actions={
             <PageBackButton
               label="Exit"
               className={BTN_3D}
               onClick={() => router.push(`/room/${roomCode}`)}
             />
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">

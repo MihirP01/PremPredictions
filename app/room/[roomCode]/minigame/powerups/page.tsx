@@ -9,6 +9,7 @@ import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
+import TopActionRow from "../../../../../components/TopActionRow";
 import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -497,12 +498,10 @@ export default function PowerupsPage() {
   const orderedFixtureIds = game.fixtureIds?.length ? game.fixtureIds : fixtures.map((f) => f.fixtureId);
   return (
     <PageShell width="wide" innerClassName="border border-subtle shadow-[0_10px_28px_rgba(var(--room-accent-rgb),0.1)]">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-foreground">Power-Ups</h1>
-          <div className="font-display text-sm text-muted">
-            {roomCode} • GW {gw}
-          </div>
-        </div>
+        <TopActionRow
+          title="Power-Ups"
+          subtitle={`${roomCode} • GW ${gw}`}
+        />
 
         {error && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">

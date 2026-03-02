@@ -9,6 +9,7 @@ import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
+import TopActionRow from "../../../../../components/TopActionRow";
 import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
@@ -641,38 +642,36 @@ export default function MiniGamePlayPage() {
 
   return (
     <PageShell width="tight" contentClassName="mx-auto max-w-[960px] space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-foreground">
-              {game.gameModeStyle === "captain"
-                ? "Captain"
-                : isParallelDraft
-                  ? "Sprint"
-                  : "Round-Robin"}
-            </h1>
-            <div className="font-display text-sm text-muted">
-              {roomCode} • GW {gw}
+        <TopActionRow
+          title={
+            game.gameModeStyle === "captain"
+              ? "Captain"
+              : isParallelDraft
+                ? "Sprint"
+                : "Round-Robin"
+          }
+          subtitle={`${roomCode} • GW ${gw}`}
+          actions={
+            <div className="text-right">
+              {isCaptainMode ? (
+                <CaptainTurnIndicator
+                  captainIsChoosingFixture={captainIsChoosingFixture}
+                  fixtureTurnNumber={fixtureTurnNumber}
+                  fixtureTurnTotal={fixtureTurnTotal}
+                  playerTurnNumber={isCaptainParallelMode ? 1 : playerTurnNumber}
+                  playerTurnTotal={isCaptainParallelMode ? 1 : playerTurnTotal}
+                />
+              ) : isParallelDraft ? (
+                <SprintTurnIndicator
+                  turnNumber={sprintTurnNumber}
+                  totalTurns={Math.max(sprintTotalTurns, 1)}
+                />
+              ) : (
+                <RoundRobinTurnIndicator turnNumber={turnNumber} totalTurns={totalTurns} />
+              )}
             </div>
-          </div>
-          <div className="text-right -mt-1">
-            {isCaptainMode ? (
-              <CaptainTurnIndicator
-                captainIsChoosingFixture={captainIsChoosingFixture}
-                fixtureTurnNumber={fixtureTurnNumber}
-                fixtureTurnTotal={fixtureTurnTotal}
-                playerTurnNumber={isCaptainParallelMode ? 1 : playerTurnNumber}
-                playerTurnTotal={isCaptainParallelMode ? 1 : playerTurnTotal}
-              />
-            ) : isParallelDraft ? (
-              <SprintTurnIndicator
-                turnNumber={sprintTurnNumber}
-                totalTurns={Math.max(sprintTotalTurns, 1)}
-              />
-            ) : (
-              <RoundRobinTurnIndicator turnNumber={turnNumber} totalTurns={totalTurns} />
-            )}
-          </div>
-        </div>
+          }
+        />
         {isCaptainMode && captainName && (
           <CaptainBanner captainName={captainName} />
         )}

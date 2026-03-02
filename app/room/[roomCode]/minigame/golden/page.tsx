@@ -8,6 +8,7 @@ import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
+import TopActionRow from "../../../../../components/TopActionRow";
 import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -440,16 +441,10 @@ export default function GoldenPage() {
 
   return (
     <PageShell width="wide" innerClassName="border border-subtle shadow-[0_10px_28px_rgba(250,204,21,0.10)]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-foreground">
-              Golden Pick Selection
-            </h1>
-            <div className="font-display text-sm text-muted">
-              {roomCode} • GW {gw}
-            </div>
-          </div>
-        </div>
+        <TopActionRow
+          title="Golden Pick Selection"
+          subtitle={`${roomCode} • GW ${gw}`}
+        />
 
         {error && (
           <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">

@@ -1,6 +1,8 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
+const SCORE_OPTIONS = Array.from({ length: 10 }, (_, idx) => String(idx));
+
 type TurnProps = {
   turnNumber: number;
   totalTurns: number;
@@ -10,6 +12,10 @@ type ActionProps = {
   amITurn: boolean;
   currentTurnName: string;
   waitingText?: React.ReactNode;
+  latestLockedPick: {
+    fixtureId: number;
+    score: string;
+  } | null;
   homeScore: string;
   awayScore: string;
   onHomeChange: (next: string) => void;
@@ -36,6 +42,7 @@ export function RoundRobinActionPanel({
   amITurn,
   currentTurnName,
   waitingText,
+  latestLockedPick,
   homeScore,
   awayScore,
   onHomeChange,
@@ -48,8 +55,8 @@ export function RoundRobinActionPanel({
 }: ActionProps) {
   if (!amITurn) {
     return (
-      <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground">
-        <span className="inline-flex items-center gap-2 text-muted">
+      <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3">
+        <div className="inline-flex items-center gap-2 text-muted">
           <Loader2 size={14} className="animate-spin" />
           <span>
             {waitingText ?? (
@@ -58,7 +65,15 @@ export function RoundRobinActionPanel({
               </>
             )}
           </span>
-        </span>
+        </div>
+        {latestLockedPick ? (
+          <div className="rounded-lg border border-subtle bg-surface px-3 py-2 text-center">
+            <div className="text-[11px] uppercase tracking-wide text-muted">Your pick</div>
+            <div className="font-display text-base font-semibold text-foreground tabular-nums">
+              {latestLockedPick.score.replace("-", "–")}
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -68,21 +83,29 @@ export function RoundRobinActionPanel({
       <div className="font-semibold text-foreground text-center">Your turn</div>
 
       <div className="flex items-center justify-center gap-3">
-        <input
+        <select
           value={homeScore}
           onChange={(e) => onHomeChange(e.target.value)}
-          className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-          placeholder="0"
-          inputMode="numeric"
-        />
+          className="font-display h-16 w-16 rounded-lg border border-teal-500 bg-input text-center text-2xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent appearance-none [text-align-last:center]"
+        >
+          {SCORE_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
         <span className="text-2xl text-muted">-</span>
-        <input
+        <select
           value={awayScore}
           onChange={(e) => onAwayChange(e.target.value)}
-          className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-          placeholder="0"
-          inputMode="numeric"
-        />
+          className="font-display h-16 w-16 rounded-lg border border-teal-500 bg-input text-center text-2xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent appearance-none [text-align-last:center]"
+        >
+          {SCORE_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
 
       <button

@@ -41,7 +41,8 @@ type PlayerStats = {
   resultOnlyCount: number;
   totalGradedPicks: number;
   goldenBonusPoints: number;
-  powerupBonusPoints: number;
+  powerupPointsGained: number;
+  powerupPointsLost: number;
   powerupUsage: { ALL_IN: number; SAFETY_NET: number };
   goldenPickCount: number;
   goalDisparity: number;
@@ -58,7 +59,8 @@ type PlayerStats = {
       resultOnlyCount: number;
       totalGradedPicks: number;
       goldenBonusPoints: number;
-      powerupBonusPoints: number;
+      powerupPointsGained: number;
+      powerupPointsLost: number;
       powerupUsage: { ALL_IN: number; SAFETY_NET: number };
       goldenPickCount: number;
       goalDisparity: number;
@@ -83,7 +85,8 @@ function projectStatsForGw(
     resultOnlyCount: gwStats?.resultOnlyCount ?? 0,
     totalGradedPicks: gwStats?.totalGradedPicks ?? 0,
     goldenBonusPoints: gwStats?.goldenBonusPoints ?? 0,
-    powerupBonusPoints: gwStats?.powerupBonusPoints ?? 0,
+    powerupPointsGained: gwStats?.powerupPointsGained ?? 0,
+    powerupPointsLost: gwStats?.powerupPointsLost ?? 0,
     powerupUsage: gwStats?.powerupUsage ?? { ALL_IN: 0, SAFETY_NET: 0 },
     goldenPickCount: gwStats?.goldenPickCount ?? 0,
     goalDisparity: gwStats?.goalDisparity ?? 0,
@@ -279,7 +282,8 @@ export default function RoomStatsPage() {
         resultOnlyCount: 0,
         totalGradedPicks: 0,
         goldenBonusPoints: 0,
-        powerupBonusPoints: 0,
+        powerupPointsGained: 0,
+        powerupPointsLost: 0,
         powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
         goldenPickCount: 0,
         goalDisparity: 0,
@@ -337,7 +341,8 @@ export default function RoomStatsPage() {
               resultOnlyCount: 0,
               totalGradedPicks: 0,
               goldenBonusPoints: 0,
-              powerupBonusPoints: 0,
+              powerupPointsGained: 0,
+              powerupPointsLost: 0,
               powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
               goldenPickCount: 0,
               goalDisparity: 0,
@@ -383,8 +388,14 @@ export default function RoomStatsPage() {
             const powerupType = item.powerupType ?? null;
             if (powerupType === "ALL_IN" || powerupType === "SAFETY_NET") {
               const delta = fixtureTotalPoints - nonPowerupPoints;
-              s.powerupBonusPoints += delta;
-              gwStats.powerupBonusPoints += delta;
+              if (delta > 0) {
+                s.powerupPointsGained += delta;
+                gwStats.powerupPointsGained += delta;
+              } else if (delta < 0) {
+                const loss = Math.abs(delta);
+                s.powerupPointsLost += loss;
+                gwStats.powerupPointsLost += loss;
+              }
               s.powerupUsage[powerupType] += 1;
               gwStats.powerupUsage[powerupType] += 1;
             }
@@ -490,7 +501,8 @@ export default function RoomStatsPage() {
       }),
       goalDisparity: competitionRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
       goldenBonus: competitionRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
-      powerupBonus: competitionRank((uid) => displayByUid[uid]?.powerupBonusPoints ?? 0),
+      powerupGain: competitionRank((uid) => displayByUid[uid]?.powerupPointsGained ?? 0),
+      powerupLoss: competitionRank((uid) => displayByUid[uid]?.powerupPointsLost ?? 0, true),
     };
   }, [players, statsByUid, selectedGwNumber]);
   const recentGws =
@@ -585,7 +597,7 @@ export default function RoomStatsPage() {
           <div className="text-sm text-muted">No player stats available yet.</div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-10 gap-2">
               <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Room Ranking</div>
                 <div className="font-display text-xl font-semibold text-foreground">
@@ -621,12 +633,20 @@ export default function RoomStatsPage() {
                   {displayStats.goldenBonusPoints}
                 </div>
               </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupBonus[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Power-up Bonus Points</div>
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupGain[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Power-up Points Gained</div>
                 <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.powerupBonusPoints > 0
-                    ? `+${displayStats.powerupBonusPoints}`
-                    : displayStats.powerupBonusPoints}
+                  {displayStats.powerupPointsGained > 0
+                    ? `+${displayStats.powerupPointsGained}`
+                    : displayStats.powerupPointsGained}
+                </div>
+              </div>
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupLoss[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Power-up Points Lost</div>
+                <div className="font-display text-xl font-semibold text-foreground">
+                  {displayStats.powerupPointsLost > 0
+                    ? `-${displayStats.powerupPointsLost}`
+                    : displayStats.powerupPointsLost}
                 </div>
               </div>
               <div className="rounded-xl p-3 border border-teal-500 bg-surface-2">

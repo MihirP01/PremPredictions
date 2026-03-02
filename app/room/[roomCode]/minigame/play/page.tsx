@@ -725,7 +725,7 @@ export default function MiniGamePlayPage() {
             <div className="mb-3 space-y-2">
               <div className="text-xs text-muted text-center">Captain: choose fixture</div>
               <SpecialBreak />
-              <div className="grid items-start gap-2 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid items-start gap-2 grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {remainingCaptainFixtureIds.map((fid) => {
                   const f = fixtures.find((x) => x.fixtureId === fid);
                   const isSelected = captainFixtureChoice === fid;
@@ -744,17 +744,18 @@ export default function MiniGamePlayPage() {
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "relative w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
+                        "relative w-full overflow-hidden rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
                         isSelected
-                          ? "scale-[1.035] text-foreground border-[color:rgba(var(--room-accent-rgb),0.95)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.24)_0%,rgba(var(--room-accent-rgb),0.1)_100%)] shadow-[0_12px_28px_rgba(var(--room-accent-rgb),0.24),0_0_0_1px_rgba(var(--room-accent-rgb),0.24),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.32)]"
-                          : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                          ? "-translate-y-0.5 text-foreground border-[color:rgba(var(--room-accent-rgb),0.95)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.12)_0%,rgba(8,12,20,0.92)_34%,rgba(8,12,20,0.98)_100%)] shadow-[0_14px_28px_rgba(var(--room-accent-rgb),0.22),0_0_0_1px_rgba(var(--room-accent-rgb),0.22),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.16)]"
+                          : "bg-surface border-white/12 text-foreground hover:border-[color:rgba(var(--room-accent-rgb),0.45)] hover:bg-surface-2",
                       ].join(" ")}
                       style={clashBgStyle}
                     >
                       {isSelected ? (
-                        <span className="absolute right-2 top-2 inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.9)] bg-[color:rgba(var(--room-accent-rgb),0.16)] px-2 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wide text-foreground shadow-[0_0_10px_rgba(var(--room-accent-rgb),0.22)]">
-                          Selected
-                        </span>
+                        <>
+                          <span className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.95)_0%,rgba(var(--room-accent-rgb),0.35)_100%)] shadow-[0_0_18px_rgba(var(--room-accent-rgb),0.35)]" />
+                          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0)_0%,rgba(var(--room-accent-rgb),0.22)_100%)]" />
+                        </>
                       ) : null}
                       {f ? (
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
@@ -764,8 +765,8 @@ export default function MiniGamePlayPage() {
                               tla={f.home.tla}
                               shortName={f.home.shortName}
                               badge={f.home.badge}
-                              wrapperClassName="h-10 w-10 rounded-full"
-                              imageClassName="h-8 w-8 object-contain"
+                              wrapperClassName="h-9 w-9 rounded-full"
+                              imageClassName="h-7 w-7 object-contain"
                               fallbackClassName="text-[10px] font-bold text-foreground"
                             />
                             <TeamLabel
@@ -773,9 +774,9 @@ export default function MiniGamePlayPage() {
                               tla={f.home.tla}
                               shortName={f.home.shortName}
                               showFullName={false}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameWindowPx={68}
+                              wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameWindowPx={58}
                             />
                           </div>
                           <span className="font-display text-[9px] uppercase">vs</span>
@@ -785,8 +786,8 @@ export default function MiniGamePlayPage() {
                               tla={f.away.tla}
                               shortName={f.away.shortName}
                               badge={f.away.badge}
-                              wrapperClassName="h-10 w-10 rounded-full"
-                              imageClassName="h-8 w-8 object-contain"
+                              wrapperClassName="h-9 w-9 rounded-full"
+                              imageClassName="h-7 w-7 object-contain"
                               fallbackClassName="text-[10px] font-bold text-foreground"
                             />
                             <TeamLabel
@@ -794,19 +795,15 @@ export default function MiniGamePlayPage() {
                               tla={f.away.tla}
                               shortName={f.away.shortName}
                               showFullName={false}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameWindowPx={68}
+                              wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameWindowPx={58}
                             />
                           </div>
                         </div>
                       ) : null}
                       {isSelected ? (
-                        <div className="mt-2 text-center">
-                          <span className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-black/20 px-2 py-0.5 font-display text-[9px] text-foreground/90">
-                            Tap “Lock selected fixture” below
-                          </span>
-                        </div>
+                        <span className="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0)_0%,rgba(var(--room-accent-rgb),0.9)_18%,rgba(var(--room-accent-rgb),0.9)_82%,rgba(var(--room-accent-rgb),0)_100%)]" />
                       ) : null}
                     </button>
                   );
@@ -881,7 +878,12 @@ export default function MiniGamePlayPage() {
             </div>
           )}
 
-          {!isParallelDraft && game.sameResultLock !== false && (
+          {!isParallelDraft &&
+            game.sameResultLock !== false &&
+            amITurn &&
+            !captainTurnNeedsFixtureChoice &&
+            !waitingForCaptainFixture &&
+            effectiveFixtureId != null && (
             <div className="mt-3 text-sm text-center">
               <div className="font-semibold mb-2 text-foreground">
                 Taken scores
@@ -949,6 +951,7 @@ export default function MiniGamePlayPage() {
                 </>
               ) : undefined
             }
+            latestLockedPick={latestLockedPick}
             homeScore={homeScore}
             awayScore={awayScore}
             onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}

@@ -1,6 +1,8 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
+const SCORE_OPTIONS = Array.from({ length: 10 }, (_, idx) => String(idx));
+
 type TurnProps = {
   turnNumber: number;
   totalTurns: number;
@@ -90,21 +92,29 @@ export function SprintActionPanel({
     <div className="border border-teal-500 rounded-xl p-4 space-y-3 bg-surface-2">
       <div className="font-semibold text-foreground">Submit your pick</div>
       <div className="flex items-center justify-center gap-3">
-        <input
+        <select
           value={homeScore}
           onChange={(e) => onHomeChange(e.target.value)}
-          className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-          placeholder="0"
-          inputMode="numeric"
-        />
+          className="font-display h-16 w-16 rounded-lg border border-teal-500 bg-input text-center text-2xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent appearance-none [text-align-last:center]"
+        >
+          {SCORE_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
         <span className="text-2xl text-muted">-</span>
-        <input
+        <select
           value={awayScore}
           onChange={(e) => onAwayChange(e.target.value)}
-          className="font-display w-16 h-16 text-center text-2xl rounded-lg bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-          placeholder="0"
-          inputMode="numeric"
-        />
+          className="font-display h-16 w-16 rounded-lg border border-teal-500 bg-input text-center text-2xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent appearance-none [text-align-last:center]"
+        >
+          {SCORE_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
       <button
         disabled={submitting || isLocked || !hasFixture}

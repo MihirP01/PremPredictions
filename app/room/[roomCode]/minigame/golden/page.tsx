@@ -611,7 +611,7 @@ export default function GoldenPage() {
 	                    className={[
 	                      "fixture-clash-bg no-3d w-full text-left rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border p-[clamp(0.75rem,1.1vw,1.25rem)] transition-all duration-200 page-action-btn",
 	                      isSelected
-	                        ? "golden-selected border-yellow-300/65 shadow-[0_10px_22px_rgba(250,204,21,0.20)] scale-[1.02] origin-center"
+	                        ? "golden-selected border-yellow-300/65 ring-1 ring-inset ring-yellow-300/75 shadow-[0_10px_22px_rgba(250,204,21,0.20),0_0_0_1px_rgba(253,224,71,0.26)] scale-[1.02] origin-center"
 	                        : "border-white/15",
 	                      !myScore
 	                        ? "opacity-60 cursor-not-allowed"

@@ -9,14 +9,12 @@ import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
 import {
   getRoomBootstrapCached,
-  refreshRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { prewarmSeasonScoresSnapshot } from "@/lib/seasonScoresClient";
 
 type AccentTheme = {
   hex: string;
@@ -119,6 +117,7 @@ export default function RoomScopedLayout({
   const lastWarmAtRef = useRef(0);
   const warmInFlightRef = useRef<Promise<void> | null>(null);
   const prefetchedKeyRef = useRef<string>("");
+  const warmedDataKeyRef = useRef<string>("");
   const idleTasksRef = useRef<number[]>([]);
   const bootHideTimerRef = useRef<number | null>(null);
   const bootProgressTimerRef = useRef<number | null>(null);
@@ -170,14 +169,16 @@ export default function RoomScopedLayout({
     if (!roomCode) return;
     let cancelled = false;
     let overlayTimer: number | null = null;
+    const RESUME_WARM_COOLDOWN_MS = 2 * 60 * 1000;
 
-    const warm = async (force = false) => {
+    const warm = async () => {
       if (warmInFlightRef.current) {
         await warmInFlightRef.current;
         return;
       }
-      if (!force && Date.now() - lastWarmAtRef.current < 30_000) return;
-      if (force && Date.now() - lastWarmAtRef.current < 8_000) return;
+      if (bootedRef.current && Date.now() - lastWarmAtRef.current < RESUME_WARM_COOLDOWN_MS) {
+        return;
+      }
       if (!bootedRef.current) {
         overlayTimer = window.setTimeout(() => {
           if (!cancelled) setShowBootOverlay(true);
@@ -185,43 +186,44 @@ export default function RoomScopedLayout({
       }
       const run = (async () => {
         try {
-          const bootstrap = force
-            ? await refreshRoomBootstrapCached(roomCode)
-            : await getRoomBootstrapCached(roomCode);
+          const bootstrap = await getRoomBootstrapCached(roomCode);
           // Warm current-GW caches for faster navigation between tabs.
           if (bootstrap?.seasonKey && Number.isFinite(bootstrap?.currentGameweek)) {
             const gw = bootstrap.currentGameweek;
             const season = bootstrap.seasonKey;
             const gameState = String(bootstrap.gameState || "").trim().toUpperCase();
             if (!cancelled) setBootHint({ seasonKey: season, gw, gameState });
-            // Critical prewarm first (fast first render/nav)
-            void getFixturesCached(gw, season).catch(() => {});
-            void getRoomGameStateCached(
-              roomCode,
-              season,
-              gw,
-            ).catch(() => {});
+            const warmKey = `${roomCode}:${season}:gw-${gw}`;
+            if (warmedDataKeyRef.current !== warmKey) {
+              warmedDataKeyRef.current = warmKey;
+              // Critical prewarm first (fast first render/nav)
+              void getFixturesCached(gw, season).catch(() => {});
+              void getRoomGameStateCached(
+                roomCode,
+                season,
+                gw,
+              ).catch(() => {});
 
-            const scheduleIdle = (fn: () => void) => {
-              const w = window as Window & {
-                requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-              };
-              if (w.requestIdleCallback) {
-                const id = w.requestIdleCallback(fn, { timeout: 1200 });
+              const scheduleIdle = (fn: () => void) => {
+                const w = window as Window & {
+                  requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+                };
+                if (w.requestIdleCallback) {
+                  const id = w.requestIdleCallback(fn, { timeout: 1200 });
+                  idleTasksRef.current.push(id);
+                  return;
+                }
+                const id = window.setTimeout(fn, 180);
                 idleTasksRef.current.push(id);
-                return;
-              }
-              const id = window.setTimeout(fn, 180);
-              idleTasksRef.current.push(id);
-            };
+              };
 
-            // Non-critical prewarm on idle to reduce startup jank
-            scheduleIdle(() => {
-              void getGameDataCached(roomCode, season, gw).catch(() => {});
-              void getTableCached(season).catch(() => {});
-              void getRoomPlayersCached(roomCode).catch(() => {});
-              prewarmSeasonScoresSnapshot(roomCode, season);
-            });
+              // Non-critical prewarm on idle to reduce startup jank
+              scheduleIdle(() => {
+                void getGameDataCached(roomCode, season, gw).catch(() => {});
+                void getTableCached(season).catch(() => {});
+                void getRoomPlayersCached(roomCode).catch(() => {});
+              });
+            }
           }
           lastWarmAtRef.current = Date.now();
         } catch {
@@ -244,14 +246,14 @@ export default function RoomScopedLayout({
       if (warmInFlightRef.current === run) warmInFlightRef.current = null;
     };
 
-    void warm(false);
+    void warm();
 
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void warm(true);
+      void warm();
     };
     const onFocus = () => {
-      void warm(true);
+      void warm();
     };
 
     document.addEventListener("visibilitychange", onVisible);

@@ -61,25 +61,21 @@ export async function POST(req: Request) {
     const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}`);
     const picksCol = adminDb.collection(`${seasonBase}/games/gw-${gwn}/picks`);
 
-    const preGameSnap = await gameRef.get();
-    if (!preGameSnap.exists) {
-      return NextResponse.json({ error: "Game not started" }, { status: 400 });
-    }
-
     await adminDb.runTransaction(async (tx) => {
       // -------- READS FIRST --------
       const gameSnap = await tx.get(gameRef);
       if (!gameSnap.exists) throw new Error("Game not started");
-      const roomSnap = await tx.get(roomRef);
-
       const game = gameSnap.data() as GameDoc;
       if (game.state !== "DRAFT") throw new Error("Game not in DRAFT");
       const gameSameResultLock = (game as GameDoc).sameResultLock;
-      const sameResultLock =
-        typeof gameSameResultLock === "boolean"
-          ? gameSameResultLock
-          : (roomSnap.data() as RoomDoc | undefined)?.settings?.sameResultLock !==
-            false;
+      let sameResultLock: boolean;
+      if (typeof gameSameResultLock === "boolean") {
+        sameResultLock = gameSameResultLock;
+      } else {
+        const roomSnap = await tx.get(roomRef);
+        sameResultLock =
+          (roomSnap.data() as RoomDoc | undefined)?.settings?.sameResultLock !== false;
+      }
 
       const order: string[] = Array.isArray(game.order) ? game.order : [];
       const fixtureIds: number[] = Array.isArray(game.fixtureIds)
@@ -130,13 +126,10 @@ export async function POST(req: Request) {
             throw new Error("Fixture not part of this game");
           }
 
-          const picksForCaptainSnap = await tx.get(picksCol);
-          const usedFixtureIds = new Set(
-            picksForCaptainSnap.docs
-              .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
-              .filter((id) => Number.isFinite(id)),
+          const fixtureAlreadyUsedSnap = await tx.get(
+            picksCol.where("fixtureId", "==", reqFixtureId).limit(1),
           );
-          if (usedFixtureIds.has(reqFixtureId)) {
+          if (!fixtureAlreadyUsedSnap.empty) {
             throw new Error("Fixture already completed");
           }
 
@@ -183,13 +176,10 @@ export async function POST(req: Request) {
               throw new Error("Fixture not part of this game");
 
             if (!hasStoredFixture) {
-              const picksForCaptainSnap = await tx.get(picksCol);
-              const usedFixtureIds = new Set(
-                picksForCaptainSnap.docs
-                  .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
-                  .filter((id) => Number.isFinite(id)),
+              const fixtureAlreadyUsedSnap = await tx.get(
+                picksCol.where("fixtureId", "==", reqFixtureId).limit(1),
               );
-              if (usedFixtureIds.has(reqFixtureId))
+              if (!fixtureAlreadyUsedSnap.empty)
                 throw new Error("Fixture already completed");
               fixtureIdToPick = reqFixtureId;
               shouldWritePick = false;

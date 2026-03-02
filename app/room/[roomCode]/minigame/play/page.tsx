@@ -690,7 +690,7 @@ export default function MiniGamePlayPage() {
             onClose={() => setStopConfirmOpen(false)}
             zIndexClassName="z-[90]"
             overlayClassName="bg-black/50"
-            panelClassName="w-full max-w-sm rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+            panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
           >
             <div className="text-lg font-semibold text-foreground">Stop Mini-game</div>
             <div className="text-sm text-muted">

@@ -37,7 +37,7 @@ export default function ModalExitButton({
         handlePress();
       }}
       className={[
-        "inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.18)] transition hover:border-white/16 hover:bg-white/[0.06]",
+        "inline-flex h-10 items-center justify-center rounded-2xl border border-white/8 bg-black/15 px-4 text-sm text-foreground shadow-[0_12px_26px_rgba(3,8,20,0.16)] transition hover:border-white/14 hover:bg-black/20",
         className,
       ].join(" ")}
       aria-label={ariaLabel}

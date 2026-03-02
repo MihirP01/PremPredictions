@@ -38,7 +38,7 @@ export default function LogoutButton() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-[rgba(4,12,24,0.62)] backdrop-blur-sm"
-        panelClassName="w-full max-w-sm rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+        panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
         <div className="space-y-3 rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
           <div className="font-display text-lg font-semibold text-foreground">Log Out</div>

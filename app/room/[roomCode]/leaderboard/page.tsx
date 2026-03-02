@@ -595,7 +595,7 @@ export default function LeaderboardMatrixPage() {
             actions={
               <div className="ml-auto flex items-center gap-2">
                 {isLeader && (
-                  <div ref={settingsWrapMobileRef} className="relative sm:hidden">
+                  <div ref={settingsWrapMobileRef} className="relative z-[80] sm:hidden">
                     <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
                     <SettingsDropdownPanel open={settingsOpen}>
                       <div className="font-display font-semibold text-foreground">Leader Tools</div>
@@ -636,7 +636,7 @@ export default function LeaderboardMatrixPage() {
 
           <div className="flex items-center justify-between gap-2">
             {!!seasonOptions.length && (
-              <div className="w-[132px] sm:w-[140px] relative">
+              <div className="relative z-0 w-[132px] sm:w-[140px]">
                 <label className="sr-only" htmlFor="season-select">
                   Select season
                 </label>
@@ -659,7 +659,7 @@ export default function LeaderboardMatrixPage() {
             )}
             <div className="ml-auto hidden sm:flex items-center gap-2 page-actions-enter">
               {isLeader && (
-                <div ref={settingsWrapDesktopRef} className="relative">
+                <div ref={settingsWrapDesktopRef} className="relative z-[80]">
                   <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
                   <SettingsDropdownPanel open={settingsOpen}>
                     <div className="font-display font-semibold text-foreground">Leader Tools</div>

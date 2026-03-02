@@ -1529,8 +1529,8 @@ export default function FixturesPage() {
               ]}
               value={compactMode ? "compact" : "full"}
               onChange={(v) => setCompactModeValue(v === "compact")}
-              className="relative grid rounded-lg border border-teal-500 bg-surface-2 p-1 overflow-hidden min-w-[152px]"
-              buttonClassName="font-display relative z-10 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors text-foreground"
+              className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] min-w-[152px]"
+              buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
             />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 text-[11px] text-muted">
@@ -2060,8 +2060,8 @@ export default function FixturesPage() {
             ]}
             value={matchInfoTab}
             onChange={(v) => setMatchInfoTab(v as MatchInfoTab)}
-            className="relative grid rounded-lg border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-surface-2 p-1 overflow-hidden"
-            buttonClassName="relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors text-foreground"
+            className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
           />
 
           <SpecialBreak />
@@ -2804,8 +2804,8 @@ export default function FixturesPage() {
                         }))}
                         value={tableMode}
                         onChange={selectTableMode}
-                        className="relative grid rounded-lg border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-surface-2 p-1 overflow-hidden"
-                        buttonClassName="relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors text-foreground"
+                        className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
                       />
                     </div>
                     <div className="mb-1">
@@ -2816,8 +2816,8 @@ export default function FixturesPage() {
                         ]}
                         value={tableView}
                         onChange={selectTableView}
-                        className="relative grid rounded-lg border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-surface-2 p-1 overflow-hidden"
-                        buttonClassName="relative z-10 rounded-md px-3 py-2 text-xs font-semibold transition-colors text-foreground"
+                        className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
                       />
                     </div>
                   </div>

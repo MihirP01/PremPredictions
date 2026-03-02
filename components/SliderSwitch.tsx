@@ -20,11 +20,15 @@ export default function SliderSwitch<T extends string>({
   onChange,
   className = "relative grid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
   indicatorClassName = "absolute bottom-1 top-1 rounded-[14px] bg-[rgba(var(--room-accent-rgb),0.18)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300",
-  buttonClassName = "relative z-10 flex w-full min-w-0 items-center justify-center overflow-hidden text-ellipsis whitespace-nowrap text-center rounded-[14px] px-2.5 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] leading-none text-white/60 transition-colors",
+  buttonClassName = "rounded-[14px] px-2.5 py-2 text-white/60 transition-colors",
   activeButtonClassName = "text-foreground",
 }: SliderSwitchProps<T>) {
   const count = Math.max(options.length, 1);
   const activeIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
+  const baseButtonClass =
+    "relative z-10 flex w-full min-w-0 items-center justify-center overflow-hidden text-center";
+  const baseLabelClass =
+    "block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-display text-[0.64rem] font-semibold uppercase tracking-[0.08em] leading-none";
 
   return (
     <div className={className} style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
@@ -41,9 +45,9 @@ export default function SliderSwitch<T extends string>({
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`${buttonClassName} ${value === opt.value ? activeButtonClassName : ""}`.trim()}
+          className={`${baseButtonClass} ${buttonClassName} ${value === opt.value ? activeButtonClassName : ""}`.trim()}
         >
-          {opt.label}
+          <span className={baseLabelClass}>{opt.label}</span>
         </button>
       ))}
     </div>

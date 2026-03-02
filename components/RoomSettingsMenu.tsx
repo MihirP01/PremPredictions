@@ -42,7 +42,7 @@ export function SettingsDropdownPanel({
     <div
       className={[
         "absolute right-0 top-full mt-2",
-        "z-20 w-[min(18rem,calc(100vw-2rem))] rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.98))] p-3 shadow-[0_20px_44px_rgba(3,8,20,0.35)] backdrop-blur-xl",
+        "z-[70] w-[min(18rem,calc(100vw-2rem))] rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.98))] p-3 shadow-[0_20px_44px_rgba(3,8,20,0.35)] backdrop-blur-xl",
         "origin-top-right transition-all duration-150 ease-out",
         open
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"

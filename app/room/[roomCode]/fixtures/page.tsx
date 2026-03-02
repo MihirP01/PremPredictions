@@ -2140,25 +2140,32 @@ export default function FixturesPage() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <div className="font-display text-sm font-semibold text-foreground truncate">
-                                  {block.lineup.name}
+                                <div className="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                                  {teamAbbr({
+                                    name: block.lineup.name,
+                                    tla: block.tla,
+                                    shortName: block.lineup.name,
+                                  })}{" "}
+                                  - {block.side === "home" ? "Home" : "Away"}
                                 </div>
-                                <div className="text-[11px] text-muted">
+                                <div className="font-display text-sm font-semibold text-foreground">
                                   {block.lineup.formation || "TBD"}
-                                  {block.lineup.coach ? ` • ${block.lineup.coach}` : ""}
+                                </div>
+                                <div className="text-[11px] text-muted truncate">
+                                  {block.lineup.coach || "Manager TBD"}
                                 </div>
                               </div>
-                              <div className="h-9 w-9 rounded-md border border-subtle bg-surface flex items-center justify-center overflow-hidden shrink-0">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface">
                                 {block.badge ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
                                     src={block.badge}
                                     alt={block.lineup.name}
-                                    className="h-7 w-7 object-contain"
+                                    className="h-9 w-9 object-contain"
                                     loading="lazy"
                                   />
                                 ) : (
-                                  <span className="font-display text-[10px] font-bold text-foreground">
+                                  <span className="font-display text-xs font-bold text-foreground">
                                     {teamAbbr({
                                       name: block.lineup.name,
                                       tla: block.tla,

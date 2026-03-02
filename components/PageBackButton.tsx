@@ -31,3 +31,5 @@ export default function PageBackButton({
     </button>
   );
 }
+
+(PageBackButton as typeof PageBackButton & { hidesOnMobile?: boolean }).hidesOnMobile = true;

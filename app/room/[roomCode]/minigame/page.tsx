@@ -661,7 +661,7 @@ export default function MiniGameLobbyPage() {
 
   return (
     <>
-      <PageShell innerClassName="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <PageShell width="standard">
         <TopActionRow
           title="Mini-Game Lobby"
           subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}

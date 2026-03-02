@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import AnimatedModal from "../../../../../components/AnimatedModal";
+import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
@@ -452,13 +453,12 @@ export default function MiniGamePlayPage() {
 
   if (gw == null || fixtures == null) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
+      <PageShell width="tight" contentClassName="mx-auto max-w-[960px] space-y-4">
         <div className="text-sm text-muted inline-flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" />
           <span>Loading…</span>
         </div>
-      </div>
+      </PageShell>
     );
   }
   if (!game) {
@@ -480,20 +480,18 @@ export default function MiniGamePlayPage() {
     }
     if (!bootstrapResolved || bootstrapState === "DRAFT") {
       return (
-        <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
+        <PageShell width="tight" contentClassName="mx-auto max-w-[960px] space-y-4">
           <div className="text-sm text-muted inline-flex items-center gap-2">
             <Loader2 size={14} className="animate-spin" />
             <span>Loading…</span>
           </div>
-        </div>
+        </PageShell>
       );
     }
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
+      <PageShell width="tight" contentClassName="mx-auto max-w-[960px] space-y-4">
         <div className="text-sm text-muted">Game not started yet.</div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -642,9 +640,7 @@ export default function MiniGamePlayPage() {
   };
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-      <div className="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+    <PageShell width="tight" contentClassName="mx-auto max-w-[960px] space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-2xl font-semibold text-foreground">
@@ -963,7 +959,6 @@ export default function MiniGamePlayPage() {
             btnClassName={BTN_3D}
           />
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

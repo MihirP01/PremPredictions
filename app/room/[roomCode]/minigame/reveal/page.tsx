@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import PageBackButton from "../../../../../components/PageBackButton";
+import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
@@ -538,8 +539,8 @@ export default function RevealPage() {
 
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-        <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <PageShell width="wide">
+        <div className="space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">Final Overview</h1>
@@ -555,29 +556,26 @@ export default function RevealPage() {
             </div>
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   const state = String(game.state ?? "").toUpperCase();
   if (state !== "REVEAL") {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-        <div className="w-full max-w-[900px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-3 border border-teal-500">
+      <PageShell width="standard">
+        <div className="rounded-[22px] border border-white/8 bg-black/10 p-4 sm:p-5 space-y-3">
           <div className="text-xl font-semibold text-foreground">
             Reveal not ready
           </div>
           <div className="text-sm text-muted">Current state: {game.state}</div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+    <PageShell width="wide">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold text-foreground">
@@ -939,7 +937,6 @@ export default function RevealPage() {
             );
           })}
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 }

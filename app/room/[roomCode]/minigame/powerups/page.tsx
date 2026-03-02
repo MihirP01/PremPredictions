@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
+import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
@@ -473,30 +474,29 @@ export default function PowerupsPage() {
   if (loading || !user) return null;
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
+      <PageShell width="wide">
         <div className="text-sm text-muted inline-flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" />
           <span>Loading power-ups…</span>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (String(game.state).toUpperCase() !== "POWERUPS") {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-        <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
+      <PageShell width="wide">
+        <div className="rounded-[22px] border border-white/8 bg-black/10 p-4 sm:p-5">
           <div className="text-lg font-semibold text-foreground">Not in Power-Ups phase</div>
           <div className="text-sm text-muted mt-1">Current state: {game.state}</div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   const orderedFixtureIds = game.fixtureIds?.length ? game.fixtureIds : fixtures.map((f) => f.fixtureId);
   return (
-    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle shadow-[0_10px_28px_rgba(var(--room-accent-rgb),0.1)]">
+    <PageShell width="wide" innerClassName="border border-subtle shadow-[0_10px_28px_rgba(var(--room-accent-rgb),0.1)]">
         <div>
           <h1 className="font-display text-2xl font-semibold text-foreground">Power-Ups</h1>
           <div className="font-display text-sm text-muted">
@@ -800,7 +800,6 @@ export default function PowerupsPage() {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

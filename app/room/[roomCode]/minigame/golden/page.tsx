@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
+import PageShell from "../../../../../components/PageShell";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
@@ -408,21 +409,19 @@ export default function GoldenPage() {
   if (loading || !user) return null;
   if (gw == null || fixtures == null || !game) {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
+      <PageShell width="wide">
         <div className="text-sm text-muted inline-flex items-center gap-2">
           <Loader2 size={14} className="animate-spin" />
           <span>Loading golden…</span>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (String(game.state).toUpperCase() !== "GOLDEN") {
     return (
-      <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-        <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 border border-teal-500">
+      <PageShell width="wide">
+        <div className="rounded-[22px] border border-white/8 bg-black/10 p-4 sm:p-5">
           <div className="text-lg font-semibold text-foreground">
             Not in Golden phase
           </div>
@@ -430,7 +429,7 @@ export default function GoldenPage() {
             Current state: {game.state}
           </div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -440,9 +439,7 @@ export default function GoldenPage() {
   const isLocked = false;
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle shadow-[0_10px_28px_rgba(250,204,21,0.10)]">
+    <PageShell width="wide" innerClassName="border border-subtle shadow-[0_10px_28px_rgba(250,204,21,0.10)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold text-foreground">
@@ -800,7 +797,6 @@ export default function GoldenPage() {
             </button>
           </>
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

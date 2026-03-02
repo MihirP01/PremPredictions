@@ -19,11 +19,13 @@ import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
 import PageBackButton from "../../../../components/PageBackButton";
 import GameweekNavigator from "../../../../components/GameweekNavigator";
+import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import TeamBadge from "../../../../components/TeamBadge";
 import TeamLabel from "../../../../components/TeamLabel";
+import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
@@ -1419,19 +1421,13 @@ export default function FixturesPage() {
   }, [seasonKey]);
 
   return (
-    <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
-
-      <div className="w-full max-w-[1400px] mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        {/* Header */}
-        <div className="relative z-30 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="font-display text-[clamp(1.5rem,2.2vw,2.1rem)] font-semibold text-foreground">Fixtures</h1>
-              <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
-                {roomCode} • {seasonLabel(seasonKey || "----")} • GW {gw} 
-              </div>
-            </div>
-            <div className="ml-auto flex gap-2 page-actions-enter">
+    <PageShell width="wide">
+      <div className="relative z-30 space-y-3">
+        <TopActionRow
+          title="Fixtures"
+          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")} • GW ${gw}`}
+          actions={
+            <div className="ml-auto flex gap-2">
               <button
                 onClick={refreshFixtures}
                 disabled={refreshingFixtures || refreshLockSeconds > 0}
@@ -1453,8 +1449,10 @@ export default function FixturesPage() {
                 className={BTN_3D}
               />
             </div>
-          </div>
+          }
+        />
 
+        <SectionCard className="rounded-[22px] border border-white/8 bg-black/10 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             {!!seasonOptions.length && (
               <div className="w-[132px] sm:w-[140px] relative">
@@ -1497,7 +1495,8 @@ export default function FixturesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </SectionCard>
+      </div>
 
         {/* GW nav */}
         <GameweekNavigator
@@ -2015,7 +2014,6 @@ export default function FixturesPage() {
             )}
           </div>
         )}
-      </div>
 
       <AnimatedModal
         open={matchInfoOpen}
@@ -2950,6 +2948,6 @@ export default function FixturesPage() {
               </div>
             </div>
       </AnimatedModal>
-    </div>
+    </PageShell>
   );
 }

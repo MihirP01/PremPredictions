@@ -700,7 +700,7 @@ export default function RoomPage() {
 
   return (
     <>
-      <PageShell innerClassName="max-w-2xl mx-auto bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
+      <PageShell width="standard">
         <div className="relative z-30">
           <TopActionRow
             title="Hub"

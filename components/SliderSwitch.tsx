@@ -20,7 +20,7 @@ export default function SliderSwitch<T extends string>({
   onChange,
   className = "relative grid overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
   indicatorClassName = "absolute bottom-1 top-1 rounded-[14px] bg-[rgba(var(--room-accent-rgb),0.18)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300",
-  buttonClassName = "relative z-10 rounded-[14px] px-3 py-2 text-xs font-semibold text-white/60 transition-colors",
+  buttonClassName = "relative z-10 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-[14px] px-2.5 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] leading-none text-white/60 transition-colors",
   activeButtonClassName = "text-foreground",
 }: SliderSwitchProps<T>) {
   const count = Math.max(options.length, 1);

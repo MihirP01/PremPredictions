@@ -13,8 +13,12 @@ import { useAuth } from "../../../components/AuthProvider";
 import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../components/RoomSettingsMenu";
 import SpecialBreak from "../../../components/SpecialBreak";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  peekRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { getTableCached, type TableRow } from "@/lib/tableClient";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -97,6 +101,10 @@ export default function RoomPage() {
   const [createCode, setCreateCode] = useState("");
   const [nickNameDraft, setNickNameDraft] = useState("");
   const [nickNameBusy, setNickNameBusy] = useState(false);
+  const [seasonKey, setSeasonKey] = useState("");
+  const [tableRows, setTableRows] = useState<TableRow[]>([]);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [tableError, setTableError] = useState<string | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
   const activePhaseRedirectedRef = useRef(false);
 
@@ -173,6 +181,66 @@ export default function RoomPage() {
       cancelled = true;
     };
   }, [loading, user, router, roomCode]);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const bootstrap = await getRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        const season = String(bootstrap?.seasonKey || "");
+        setSeasonKey(season);
+        if (!season) return;
+        setTableLoading(true);
+        setTableError(null);
+        try {
+          const table = await getTableCached(season);
+          if (cancelled) return;
+          setTableRows(Array.isArray(table?.standingsTotal) ? table.standingsTotal : []);
+        } catch (e) {
+          if (!cancelled) {
+            setTableRows([]);
+            setTableError(e instanceof Error ? e.message : "Failed to load table.");
+          }
+        } finally {
+          if (!cancelled) setTableLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setSeasonKey("");
+          setTableRows([]);
+          setTableError("Failed to load table.");
+          setTableLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, roomCode]);
+
+  const predictionsRouteForState = (state: string) =>
+    String(state || "").trim().toUpperCase() === "REVEAL"
+      ? `/room/${roomCode}/minigame/reveal`
+      : `/room/${roomCode}/minigame`;
+
+  async function openPredictionsTarget() {
+    const cachedBootstrap = peekRoomBootstrapCached(roomCode);
+    const immediateHref = predictionsRouteForState(cachedBootstrap?.gameState || "");
+    router.push(immediateHref);
+    if (cachedBootstrap) return;
+    void getRoomBootstrapCached(roomCode)
+      .then((bootstrap) => {
+        const nextHref = predictionsRouteForState(bootstrap?.gameState || "");
+        if (nextHref !== immediateHref) {
+          router.replace(nextHref);
+        }
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -722,7 +790,7 @@ export default function RoomPage() {
             {
               label: "Predictions",
               hint: "Mini-game",
-              href: `/room/${roomCode}/minigame`,
+              href: "#",
               icon: Gamepad2,
             },
             {
@@ -742,7 +810,9 @@ export default function RoomPage() {
             return (
               <button
                 key={item.label}
-                onClick={() => router.push(item.href)}
+                onClick={() =>
+                  item.label === "Predictions" ? void openPredictionsTarget() : router.push(item.href)
+                }
                 className="group rounded-xl border border-teal-500 bg-surface p-3 text-left hover:bg-surface-2"
               >
                 <div className="flex items-center justify-between">
@@ -758,6 +828,61 @@ export default function RoomPage() {
         </div>
 
         {error && <div className="text-sm text-danger">{error}</div>}
+
+        <SectionCard>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <div className="font-semibold text-foreground">PL Table</div>
+              <div className="text-xs text-muted">
+                {seasonKey ? seasonKey.slice(0, 2) + "/" + seasonKey.slice(2) : "Current season"}
+              </div>
+            </div>
+            {tableLoading ? (
+              <span className="inline-flex items-center gap-2 text-xs text-muted">
+                <Loader2 size={12} className="animate-spin" />
+                <span>Loading…</span>
+              </span>
+            ) : null}
+          </div>
+          {tableError ? (
+            <div className="text-sm text-danger">{tableError}</div>
+          ) : (
+            <div className="max-h-[420px] overflow-auto no-scrollbar rounded-xl border border-subtle">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-surface-2 text-muted">
+                  <tr className="border-b border-subtle">
+                    <th className="px-3 py-2 text-left">#</th>
+                    <th className="px-3 py-2 text-left">Club</th>
+                    <th className="px-3 py-2 text-center">P</th>
+                    <th className="px-3 py-2 text-center">GD</th>
+                    <th className="px-3 py-2 text-center">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((row) => (
+                    <tr key={`${row.position}-${row.team.name}`} className="border-b border-subtle last:border-0">
+                      <td className="px-3 py-2 text-foreground">{row.position}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 shrink-0 overflow-hidden rounded-md border border-subtle bg-surface-2 flex items-center justify-center">
+                            {row.team.badge ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={row.team.badge} alt={row.team.name} className="h-5 w-5 object-contain" />
+                            ) : null}
+                          </div>
+                          <span className="font-display text-foreground">{row.team.tla || row.team.shortName || row.team.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center text-foreground">{row.playedGames}</td>
+                      <td className="px-3 py-2 text-center text-foreground">{row.goalDifference}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-foreground">{row.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
 
         <SectionCard>
           <div className="mb-2 flex items-center justify-between gap-2">

@@ -9,7 +9,7 @@ import PageBackButton from "../../../../../components/PageBackButton";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -245,6 +245,7 @@ export default function RevealPage() {
         const st = String(gameData?.state ?? "")
           .trim()
           .toUpperCase();
+        if (st) patchRoomBootstrapCached(roomCode, { gameState: st });
 
         if (routedRef.current) return;
 
@@ -699,9 +700,6 @@ export default function RevealPage() {
         <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
-            const actualRaw = f?.result ?? null;
-            const actual = displayResult(f?.status ?? "", actualRaw);
-            const fixtureStatusHeading = statusHeading(f?.status ?? "");
             const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
             const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
             const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
@@ -851,15 +849,6 @@ export default function RevealPage() {
                       </div>
                     </>
                   )}
-
-                  <div className="text-center">
-                    <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
-                      {fixtureStatusHeading}
-                    </div>
-                    <div className="font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                      {actual}
-                    </div>
-                  </div>
 
                   <div className="text-xs text-muted text-center">Predictions</div>
                   <div className="w-full flex flex-wrap justify-center gap-2">

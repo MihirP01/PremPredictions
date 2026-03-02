@@ -8,7 +8,7 @@ import { useAuth } from "../../../../../components/AuthProvider";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
@@ -195,6 +195,7 @@ export default function PowerupsPage() {
         const gameData = (data as GameDoc | null) ?? null;
         setGame(gameData);
         const st = String(gameData?.state || "").trim().toUpperCase();
+        if (st) patchRoomBootstrapCached(roomCode, { gameState: st });
         if (routedRef.current) return;
         if (st === "DRAFT") {
           routedRef.current = true;

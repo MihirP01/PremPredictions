@@ -14,7 +14,7 @@ export type RoomBootstrapData = {
   seasonOptions?: string[];
 };
 
-const TTL_MS = 60 * 1000;
+const TTL_MS = 5 * 60 * 1000;
 const STORAGE_PREFIX = "rb:v1:";
 const memCache = new Map<string, { expiresAt: number; data: RoomBootstrapData }>();
 const pending = new Map<string, Promise<RoomBootstrapData>>();
@@ -58,20 +58,39 @@ function setCached(key: string, data: RoomBootstrapData) {
   });
 }
 
-export async function getRoomBootstrapCached(roomCode: string): Promise<RoomBootstrapData> {
+export function patchRoomBootstrapCached(
+  roomCode: string,
+  patch: Partial<RoomBootstrapData>,
+): RoomBootstrapData | null {
+  const current = peekRoomBootstrapCached(roomCode);
+  if (!current) return null;
+  const next = {
+    ...current,
+    ...patch,
+  };
+  setCached(keyFor(roomCode), next);
+  return next;
+}
+
+export function peekRoomBootstrapCached(roomCode: string): RoomBootstrapData | null {
   const key = keyFor(roomCode);
   const now = Date.now();
   const mem = memCache.get(key);
   if (mem && mem.expiresAt > now) return mem.data;
   const stored = getStorage(key);
-  if (stored) {
-    memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-    primeCurrentGameweekCache({
-      currentGameweek: stored.currentGameweek,
-      seasonKey: stored.seasonKey,
-    });
-    return stored;
-  }
+  if (!stored) return null;
+  memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
+  primeCurrentGameweekCache({
+    currentGameweek: stored.currentGameweek,
+    seasonKey: stored.seasonKey,
+  });
+  return stored;
+}
+
+export async function getRoomBootstrapCached(roomCode: string): Promise<RoomBootstrapData> {
+  const key = keyFor(roomCode);
+  const cached = peekRoomBootstrapCached(roomCode);
+  if (cached) return cached;
   const existing = pending.get(key);
   if (existing) return existing;
 

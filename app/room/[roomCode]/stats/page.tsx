@@ -585,14 +585,13 @@ export default function RoomStatsPage() {
           <div className="text-sm text-muted">No player stats available yet.</div>
         ) : (
           <>
-            <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
-              <div className="text-xs text-muted">Room Ranking</div>
-              <div className="font-display text-xl font-semibold text-foreground">
-                #{rankMapByMetric.totalPoints[effectiveSelectedUid] ?? players.length}/{players.length || 1}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-2">
+              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
+                <div className="text-xs text-muted">Room Ranking</div>
+                <div className="font-display text-xl font-semibold text-foreground">
+                  #{rankMapByMetric.totalPoints[effectiveSelectedUid] ?? players.length}/{players.length || 1}
+                </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-2">
               <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
                 <div className="text-xs text-muted">Total Points</div>
                 <div className="font-display text-xl font-semibold text-foreground">{displayStats.totalPoints}</div>

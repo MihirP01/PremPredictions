@@ -34,6 +34,12 @@ function seasonStartYearFromKey(seasonKey) {
   return 2000 + Number(String(seasonKey).slice(0, 2));
 }
 
+function teamBadgeUrl(teamId) {
+  const id = Number(teamId || 0);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return `https://images.fotmob.com/image_resources/logo/teamlogo/${id}.png`;
+}
+
 function fotmobSeasonFromStartYear(startYear) {
   return `${startYear}/${startYear + 1}`;
 }
@@ -124,11 +130,12 @@ function countTeamRedCards(teamLineup) {
   for (const player of players) {
     const events = Array.isArray(player?.performance?.events) ? player.performance.events : [];
     for (const event of events) {
-      const type = String(event?.type || "").trim();
+      const type = String(event?.type || "").trim().toLowerCase();
       if (
-        type === "redCard" ||
-        type === "yellowRedCard" ||
-        type === "secondYellowRedCard"
+        type === "redcard" ||
+        type === "yellowredcard" ||
+        type === "secondyellowredcard" ||
+        type === "secondyellow"
       ) {
         total += 1;
       }
@@ -245,6 +252,47 @@ function findFotmobMatch(index, fixture) {
   );
 }
 
+function fallbackFixtureFromFotmob(match, forceGameweek) {
+  const result = normalizeScoreStr(match?.status?.scoreStr);
+  const resultFT =
+    result != null
+      ? (() => {
+          const [home, away] = result.split("-").map(Number);
+          return Number.isFinite(home) && Number.isFinite(away) ? { home, away } : null;
+        })()
+      : null;
+
+  return {
+    fixtureId: Number(match?.id || 0) || null,
+    gameweek: Number.isFinite(Number(forceGameweek))
+      ? Number(forceGameweek)
+      : Number(match?.roundName ?? match?.round) || null,
+    kickoff: String(match?.status?.utcTime || ""),
+    venue: "TBD",
+    status: overlayStatus("TIMED", match?.status),
+    home: {
+      id: Number(match?.home?.id || 0) || null,
+      name: String(match?.home?.name || "Home"),
+      tla: match?.home?.shortName ? String(match.home.shortName) : null,
+      shortName:
+        (match?.home?.shortName ? String(match.home.shortName) : null) ||
+        String(match?.home?.name || "Home"),
+      badge: teamBadgeUrl(match?.home?.id),
+    },
+    away: {
+      id: Number(match?.away?.id || 0) || null,
+      name: String(match?.away?.name || "Away"),
+      tla: match?.away?.shortName ? String(match.away.shortName) : null,
+      shortName:
+        (match?.away?.shortName ? String(match.away.shortName) : null) ||
+        String(match?.away?.name || "Away"),
+      badge: teamBadgeUrl(match?.away?.id),
+    },
+    result,
+    resultFT,
+  };
+}
+
 export async function GET(req) {
   const API_KEY = process.env.FOOTBALLDATA_KEY;
   if (!API_KEY) {
@@ -289,8 +337,53 @@ export async function GET(req) {
     );
   }
 
+  let fotmobData = null;
+  let fotmobIndex = new Map();
+  if (fotmobResponse?.ok) {
+    try {
+      fotmobData = await fotmobResponse.json();
+      fotmobIndex = buildFotmobIndex(fotmobData?.fixtures?.allMatches);
+    } catch (error) {
+      console.warn("FotMob parse error:", error);
+    }
+  }
+  const fotmobMatches = Array.isArray(fotmobData?.fixtures?.allMatches)
+    ? fotmobData.fixtures.allMatches
+    : [];
+  const selectedFotmobMatches = gameweek
+    ? fotmobMatches.filter(
+        (match) => Number(match?.roundName ?? match?.round) === Number(gameweek),
+      )
+    : fotmobMatches;
+
+  const buildFotmobFallbackFixtures = async () =>
+    Promise.all(
+      selectedFotmobMatches.map(async (match) => {
+        const baseFixture = fallbackFixtureFromFotmob(match, gameweek);
+        return {
+          ...baseFixture,
+          redCards:
+            gameweek && match?.status?.started && match?.pageUrl
+              ? await fetchMatchRedCards(match.pageUrl, forceRefresh)
+              : null,
+        };
+      }),
+    );
+
   // If matchday isn't available yet, don't blow up the UI — return empty.
   if (response.status === 400 || response.status === 404) {
+    if (selectedFotmobMatches.length > 0) {
+      const fixtures = await buildFotmobFallbackFixtures();
+      return NextResponse.json(
+        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          status: 200,
+          headers: forceRefresh
+            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
+        },
+      );
+    }
     return NextResponse.json(
       {
         generatedAt: new Date().toISOString(),
@@ -310,6 +403,18 @@ export async function GET(req) {
   if (response.status === 429) {
     const body = await response.text().catch(() => "");
     console.error("Football-Data rate limit:", body);
+    if (selectedFotmobMatches.length > 0) {
+      const fixtures = await buildFotmobFallbackFixtures();
+      return NextResponse.json(
+        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          status: 200,
+          headers: forceRefresh
+            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
+        },
+      );
+    }
     return NextResponse.json(
       { error: "Football API rate limit", status: 429, retryAfterSec: 10 },
       {
@@ -326,6 +431,18 @@ export async function GET(req) {
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     console.error("Football-Data error:", response.status, body);
+    if (selectedFotmobMatches.length > 0) {
+      const fixtures = await buildFotmobFallbackFixtures();
+      return NextResponse.json(
+        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          status: 200,
+          headers: forceRefresh
+            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
+        },
+      );
+    }
     return NextResponse.json(
       { error: "Football API error", status: response.status },
       { status: 502 },
@@ -333,15 +450,6 @@ export async function GET(req) {
   }
 
   const data = await response.json();
-  let fotmobIndex = new Map();
-  if (fotmobResponse?.ok) {
-    try {
-      const fotmobData = await fotmobResponse.json();
-      fotmobIndex = buildFotmobIndex(fotmobData?.fixtures?.allMatches);
-    } catch (error) {
-      console.warn("FotMob parse error:", error);
-    }
-  }
 
   const fixtures = await Promise.all((data.matches ?? []).map(async (match) => {
     const homeFT = match?.score?.fullTime?.home;

@@ -8,7 +8,7 @@ import AnimatedModal from "../../../../../components/AnimatedModal";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -134,6 +134,8 @@ export default function MiniGamePlayPage() {
   const [submitting, setSubmitting] = useState(false);
   const [stoppingPredictions, setStoppingPredictions] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const [bootstrapState, setBootstrapState] = useState<string>("");
+  const [bootstrapResolved, setBootstrapResolved] = useState(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // auth guard
@@ -152,6 +154,8 @@ export default function MiniGamePlayPage() {
         if (!cancelled) {
           setGw(Number.isFinite(n) ? n : 1);
           setSeasonKey(String(data.seasonKey || ""));
+          setBootstrapState(String(data.gameState || "").trim().toUpperCase());
+          setBootstrapResolved(true);
         }
       } catch {
         if (cancelled) return;
@@ -203,7 +207,12 @@ export default function MiniGamePlayPage() {
       roomCode,
       seasonKey,
       gw,
-      (data) => setGame((data as GameDoc | null) ?? null),
+      (data) => {
+        const gameData = (data as GameDoc | null) ?? null;
+        setGame(gameData);
+        const st = String(gameData?.state || "").trim().toUpperCase();
+        if (st) patchRoomBootstrapCached(roomCode, { gameState: st });
+      },
       () => {},
     );
   }, [roomCode, gw, seasonKey]);
@@ -453,6 +462,33 @@ export default function MiniGamePlayPage() {
     );
   }
   if (!game) {
+    if (bootstrapState === "LOBBY") {
+      router.replace(`/room/${roomCode}/minigame`);
+      return null;
+    }
+    if (bootstrapState === "GOLDEN") {
+      router.replace(`/room/${roomCode}/minigame/golden`);
+      return null;
+    }
+    if (bootstrapState === "REVEAL") {
+      router.replace(`/room/${roomCode}/minigame/reveal`);
+      return null;
+    }
+    if (bootstrapState === "POWERUPS") {
+      router.replace(`/room/${roomCode}/minigame/powerups`);
+      return null;
+    }
+    if (!bootstrapResolved || bootstrapState === "DRAFT") {
+      return (
+        <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
+
+          <div className="text-sm text-muted inline-flex items-center gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Loading…</span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-0 px-2 pb-2 pt-0 sm:p-6 bg-app">
 
@@ -594,6 +630,8 @@ export default function MiniGamePlayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to stop predictions");
+      patchRoomBootstrapCached(roomCode, { gameState: "LOBBY" });
+      router.replace(`/room/${roomCode}/minigame`);
     } catch (e: unknown) {
       setErr(
         e instanceof Error ? e.message : "Failed to stop predictions",
@@ -706,13 +744,18 @@ export default function MiniGamePlayPage() {
                       type="button"
                       onClick={() => setCaptainFixtureChoice(fid)}
                       className={[
-                        "w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
+                        "relative w-full rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
                         isSelected
-                          ? "scale-[1.02] text-foreground border-[color:rgba(var(--room-accent-rgb),0.85)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.18)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] shadow-[0_8px_22px_rgba(var(--room-accent-rgb),0.18),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.24)]"
+                          ? "scale-[1.035] text-foreground border-[color:rgba(var(--room-accent-rgb),0.95)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.24)_0%,rgba(var(--room-accent-rgb),0.1)_100%)] shadow-[0_12px_28px_rgba(var(--room-accent-rgb),0.24),0_0_0_1px_rgba(var(--room-accent-rgb),0.24),inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.32)]"
                           : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
                       ].join(" ")}
                       style={clashBgStyle}
                     >
+                      {isSelected ? (
+                        <span className="absolute right-2 top-2 inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.9)] bg-[color:rgba(var(--room-accent-rgb),0.16)] px-2 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wide text-foreground shadow-[0_0_10px_rgba(var(--room-accent-rgb),0.22)]">
+                          Selected
+                        </span>
+                      ) : null}
                       {f ? (
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
                           <div className="flex flex-col items-center text-center min-w-0">
@@ -756,6 +799,13 @@ export default function MiniGamePlayPage() {
                               fullNameWindowPx={68}
                             />
                           </div>
+                        </div>
+                      ) : null}
+                      {isSelected ? (
+                        <div className="mt-2 text-center">
+                          <span className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-black/20 px-2 py-0.5 font-display text-[9px] text-foreground/90">
+                            Tap “Lock selected fixture” below
+                          </span>
                         </div>
                       ) : null}
                     </button>

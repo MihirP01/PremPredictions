@@ -57,13 +57,22 @@ export function CaptainChooseFixturePanel({
 }: ChooseFixtureProps) {
   return (
     <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3 text-center">
-      <div className="font-semibold text-foreground">Choose fixture</div>
+      <div className="space-y-1">
+        <div className="font-semibold text-foreground">
+          {hasFixture ? "Fixture Selected" : "Choose Fixture"}
+        </div>
+        <div className="text-xs text-muted">
+          {hasFixture
+            ? "Lock the highlighted fixture to start this round."
+            : "Tap one fixture above, then lock it in to continue."}
+        </div>
+      </div>
       <button
         disabled={submitting || isLocked || !hasFixture}
         onClick={onSubmit}
         className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${btnClassName}`}
       >
-        {submitting ? "Locking fixture…" : "Lock fixture"}
+        {submitting ? "Locking fixture…" : "Lock selected fixture"}
       </button>
     </div>
   );

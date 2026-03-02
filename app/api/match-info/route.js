@@ -236,20 +236,33 @@ function mapPlayer(player) {
   const tags = [];
   const events = Array.isArray(player?.performance?.events) ? player.performance.events : [];
   let goalCount = 0;
+  let ownGoalCount = 0;
   let assistCount = 0;
   let yellowCardCount = 0;
   let redCardCount = 0;
+  let sawSecondYellowRed = false;
   for (const event of events) {
-    const type = String(event?.type || "").trim();
+    const rawType = String(event?.type || "").trim();
+    const type = rawType.toLowerCase();
     if (!type) continue;
-    if (type === "yellowCard") yellowCardCount += 1;
-    else if (type === "redCard") redCardCount += 1;
-    else if (type === "yellowRedCard" || type === "secondYellowRedCard") {
+    if (type === "yellowcard") yellowCardCount += 1;
+    else if (type === "redcard") redCardCount += 1;
+    else if (
+      type === "yellowredcard" ||
+      type === "secondyellowredcard" ||
+      type === "secondyellow"
+    ) {
+      sawSecondYellowRed = true;
       yellowCardCount += 1;
       redCardCount += 1;
-    } else if (type === "goal" || type === "penaltyGoal" || type === "ownGoal") goalCount += 1;
+    } else if (type === "goal" || type === "penaltygoal") goalCount += 1;
+    else if (type === "owngoal") ownGoalCount += 1;
     else if (type === "assist") assistCount += 1;
-    else tags.push(type);
+    else tags.push(rawType);
+  }
+  if (sawSecondYellowRed) {
+    yellowCardCount = Math.min(Math.max(yellowCardCount, 1), 1);
+    redCardCount = Math.max(redCardCount, 1);
   }
   return {
     id: Number(player?.id || 0) || null,
@@ -271,6 +284,7 @@ function mapPlayer(player) {
         ? Number(player.performance.rating)
         : null,
     goalCount,
+    ownGoalCount,
     assistCount,
     yellowCardCount,
     redCardCount,

@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  peekRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
 
 type NavItem = {
@@ -24,6 +27,7 @@ export default function RoomBottomNav() {
   const [mounted, setMounted] = useState(false);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
+  const lastTouchHandledAtRef = useRef(0);
   const [navFxTick, setNavFxTick] = useState<Record<NavItem["key"], number>>({
     fixtures: 0,
     predictions: 0,
@@ -163,10 +167,57 @@ export default function RoomBottomNav() {
     items.forEach((item) => router.prefetch(item.href));
   }, [items, router]);
 
+  useEffect(() => {
+    if (!roomCode) return;
+    [
+      `/room/${roomCode}/minigame`,
+      `/room/${roomCode}/minigame/play`,
+      `/room/${roomCode}/minigame/golden`,
+      `/room/${roomCode}/minigame/powerups`,
+      `/room/${roomCode}/minigame/reveal`,
+    ].forEach((href) => router.prefetch(href));
+  }, [roomCode, router]);
+
+  const predictionsRouteForState = (state: string) =>
+    String(state || "").trim().toUpperCase() === "REVEAL"
+      ? `/room/${roomCode}/minigame/reveal`
+      : `/room/${roomCode}/minigame`;
+
+  const syncPredictionsRoute = (immediateHref: string) => {
+    void getRoomBootstrapCached(roomCode)
+      .then((bootstrap) => {
+        const nextHref = predictionsRouteForState(bootstrap?.gameState || "");
+        if (nextHref !== immediateHref) {
+          router.replace(nextHref);
+        }
+      })
+      .catch(() => {});
+  };
+
   const onNavClick = (key: NavItem["key"], href: string, active: boolean, disabled?: boolean) => {
     setNavFxTick((prev) => ({ ...prev, [key]: prev[key] + 1 }));
     if (active || disabled) return;
+    if (key === "predictions") {
+      const cachedBootstrap = peekRoomBootstrapCached(roomCode);
+      const immediateHref =
+        predictionsHref ||
+        predictionsRouteForState(cachedBootstrap?.gameState || "");
+      router.push(immediateHref);
+      if (!cachedBootstrap) syncPredictionsRoute(immediateHref);
+      return;
+    }
     router.push(href);
+  };
+
+  const onNavPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    item: NavItem,
+  ) => {
+    if (event.pointerType === "mouse") return;
+    lastTouchHandledAtRef.current = Date.now();
+    event.preventDefault();
+    event.stopPropagation();
+    onNavClick(item.key, item.href, item.active, item.disabled);
   };
 
   if (!mounted || !roomCode || hideForActiveGamePhase || typeof document === "undefined") {
@@ -193,7 +244,11 @@ export default function RoomBottomNav() {
             <button
               key={item.key}
               type="button"
-              onClick={() => onNavClick(item.key, item.href, item.active, item.disabled)}
+              onPointerDown={(event) => onNavPointerDown(event, item)}
+              onClick={() => {
+                if (Date.now() - lastTouchHandledAtRef.current < 450) return;
+                onNavClick(item.key, item.href, item.active, item.disabled);
+              }}
               disabled={item.disabled}
               aria-disabled={item.disabled ? "true" : undefined}
               className={[

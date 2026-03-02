@@ -319,6 +319,10 @@ export default function RoomScopedLayout({
       `${base}`,
       `${base}/fixtures`,
       predictionsHref,
+      `${base}/minigame/play`,
+      `${base}/minigame/golden`,
+      `${base}/minigame/powerups`,
+      `${base}/minigame/reveal`,
       `${base}/leaderboard`,
       `${base}/stats`,
     ];
@@ -380,22 +384,20 @@ export default function RoomScopedLayout({
         } as React.CSSProperties
       }
     >
-      {showBootOverlay && !isMinigamePath ? (
+      {showBootOverlay ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[rgba(3,8,20,0.78)] px-6 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.42)] bg-[rgba(7,12,22,0.9)] px-6 py-7 text-center shadow-[0_22px_80px_rgba(0,0,0,0.4)]">
-            <div
-              className="relative mx-auto w-fit font-display text-[clamp(3.4rem,16vw,5.8rem)] font-semibold leading-none tracking-[-0.03em]"
-              style={
-                {
-                  "--boot-fill": `${Math.max(0, 100 - bootProgress)}%`,
-                } as React.CSSProperties
-              }
-            >
-              <span className="select-none text-white/10">{bootProgress}%</span>
-              <span className="boot-liquid-fill absolute inset-0 select-none">
-                {bootProgress}%
-              </span>
-            </div>
+          <div
+            className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]"
+            style={
+              {
+                "--boot-fill": `${Math.max(0, 100 - bootProgress)}%`,
+              } as React.CSSProperties
+            }
+          >
+            <span className="select-none text-white/10">{bootProgress}%</span>
+            <span className="boot-liquid-fill absolute inset-0 select-none">
+              {bootProgress}%
+            </span>
           </div>
         </div>
       ) : null}

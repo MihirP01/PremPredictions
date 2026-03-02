@@ -34,6 +34,7 @@ export type MatchInfoPlayer = {
   positionLabel?: string | null;
   rating?: number | null;
   goalCount?: number | null;
+  ownGoalCount?: number | null;
   assistCount?: number | null;
   yellowCardCount?: number | null;
   redCardCount?: number | null;

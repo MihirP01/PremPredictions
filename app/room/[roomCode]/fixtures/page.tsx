@@ -65,6 +65,10 @@ type Fixture = {
   redCards?: { home: number; away: number } | null;
 };
 
+type LiveOverlayFixture = Omit<Fixture, "fixtureId"> & {
+  fixtureId?: number | null;
+};
+
 type Player = { uid: string; displayName: string };
 
 // picksByFixture[fixtureId][uid] = "2-1"
@@ -178,6 +182,24 @@ function displayResult(status: string, actual: string | null) {
   return inPlay ? "LIVE" : "TBD";
 }
 
+function isFinalFixtureStatus(status?: string | null) {
+  const s = String(status || "").trim().toUpperCase();
+  return (
+    s === "FINISHED" ||
+    s === "FT" ||
+    s === "AWARDED" ||
+    s === "POSTPONED" ||
+    s === "CANCELLED"
+  );
+}
+
+function isFixtureLiveWindow(fixture: Fixture, nowMs: number) {
+  const kickoffMs = Date.parse(String(fixture.kickoff || ""));
+  if (!Number.isFinite(kickoffMs)) return false;
+  if (kickoffMs > nowMs) return false;
+  return !isFinalFixtureStatus(fixture.status);
+}
+
 function statusHeading(status: string) {
   const raw = String(status || "").trim();
   const s = raw.toUpperCase();
@@ -200,6 +222,26 @@ function asDate(value: unknown): Date | null {
   return null;
 }
 
+function fixtureTimeBucket(value: string) {
+  const ms = Date.parse(String(value || ""));
+  return Number.isFinite(ms) ? Math.round(ms / 60000) : null;
+}
+
+function overlayKeyForFixture(fixture: {
+  kickoff: string;
+  home?: { name?: string; shortName?: string; tla?: string | null };
+  away?: { name?: string; shortName?: string; tla?: string | null };
+}) {
+  const kick = fixtureTimeBucket(fixture.kickoff);
+  const home = normalizeTeamNameForCompare(
+    fixture.home?.name || fixture.home?.shortName || fixture.home?.tla || "",
+  );
+  const away = normalizeTeamNameForCompare(
+    fixture.away?.name || fixture.away?.shortName || fixture.away?.tla || "",
+  );
+  return `${kick ?? "na"}|${home}|${away}`;
+}
+
 function mergeFixtureResults(prev: Fixture[] | null, next: Fixture[]) {
   if (!prev?.length) return next;
   const prevById = new Map(prev.map((fixture) => [fixture.fixtureId, fixture]));
@@ -210,6 +252,25 @@ function mergeFixtureResults(prev: Fixture[] | null, next: Fixture[]) {
     return {
       ...fixture,
       result: previous.result,
+    };
+  });
+}
+
+function mergeFixtureLiveOverlay(prev: Fixture[] | null, overlay: LiveOverlayFixture[]) {
+  if (!prev?.length || !overlay.length) return prev;
+  const overlayByKey = new Map(
+    overlay.map((fixture) => [overlayKeyForFixture(fixture), fixture]),
+  );
+
+  return prev.map((fixture) => {
+    const live = overlayByKey.get(overlayKeyForFixture(fixture));
+    if (!live) return fixture;
+
+    return {
+      ...fixture,
+      status: live.status || fixture.status,
+      result: live.result ?? fixture.result,
+      redCards: live.redCards ?? fixture.redCards ?? null,
     };
   });
 }
@@ -446,13 +507,10 @@ function PitchMarker({
   const goalPosClass = isCrowdedMobile ? "-right-2.5 -bottom-1.5" : "-right-3 -bottom-1.5";
   const yellowCards = Math.max(0, Number(player.yellowCardCount || 0));
   const redCards = Math.max(0, Number(player.redCardCount || 0));
-  const disciplinaryCards = [
-    ...Array.from({ length: Math.min(2, redCards) }, () => "red" as const),
-    ...Array.from(
-      { length: Math.min(3 - Math.min(2, redCards), Math.min(2, yellowCards)) },
-      () => "yellow" as const,
-    ),
-  ];
+  const hasSecondYellowDismissal = redCards > 0 && yellowCards > 0;
+  const goals = Math.max(0, Number(player.goalCount || 0));
+  const ownGoals = Math.max(0, Number(player.ownGoalCount || 0));
+  const hasGoalChip = goals > 0 || ownGoals > 0;
   const fallbackShirtNumber = String(player.shirtNumber || "—");
 
   return (
@@ -494,21 +552,44 @@ function PitchMarker({
             ) : null}
           </span>
         </span>
-        {disciplinaryCards.length ? (
-          <span className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 flex-col items-center gap-0.5`}>
-            {disciplinaryCards.map((cardType, idx) => (
+        {redCards > 0 || yellowCards > 0 ? (
+          <span className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 items-center`}>
+            {hasSecondYellowDismissal ? (
+              <span className="relative inline-flex h-3 w-4 items-center">
+                <span
+                  className="absolute left-0 top-1/2 inline-flex h-3 w-2 -translate-y-1/2 items-center justify-center rounded-[2px] border border-yellow-200/80 bg-yellow-300/90 shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+                  aria-label="Yellow card"
+                  title="Yellow card"
+                />
+                <span
+                  className="absolute left-1.5 top-1/2 z-[1] inline-flex h-3 w-2 -translate-y-1/2 items-center justify-center rounded-[2px] border border-red-300/75 bg-red-500/90 shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+                  aria-label="Red card"
+                  title="Red card"
+                />
+              </span>
+            ) : redCards > 0 ? (
               <span
-                key={`card-${player.id ?? player.name}-${cardType}-${idx}`}
-                className={[
-                  "inline-flex h-3 w-2 items-center justify-center rounded-[2px] border shadow-[0_2px_6px_rgba(0,0,0,0.2)]",
-                  cardType === "red"
-                    ? "border-red-300/75 bg-red-500/90"
-                    : "border-yellow-200/80 bg-yellow-300/90",
-                ].join(" ")}
-                aria-label={cardType === "red" ? "Red card" : "Yellow card"}
-                title={cardType === "red" ? "Red card" : "Yellow card"}
+                className="inline-flex h-3 w-2 items-center justify-center rounded-[2px] border border-red-300/75 bg-red-500/90 shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+                aria-label="Red card"
+                title="Red card"
               />
-            ))}
+            ) : (
+              <span
+                className="inline-flex h-3 w-2 items-center justify-center rounded-[2px] border border-yellow-200/80 bg-yellow-300/90 shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+                aria-label="Yellow card"
+                title="Yellow card"
+              />
+            )}
+            {!hasSecondYellowDismissal && redCards > 1 ? (
+              <span className="ml-0.5 font-display text-[8px] text-red-200 tabular-nums">
+                {redCards}
+              </span>
+            ) : null}
+            {!hasSecondYellowDismissal && redCards === 0 && yellowCards > 1 ? (
+              <span className="ml-0.5 font-display text-[8px] text-yellow-100 tabular-nums">
+                {yellowCards}
+              </span>
+            ) : null}
           </span>
         ) : null}
         {subEvent ? (
@@ -540,10 +621,22 @@ function PitchMarker({
             <Footprints size={7} strokeWidth={2.1} />
           </span>
         ) : null}
-        {Number(player.goalCount || 0) > 0 ? (
-          <span className={`absolute ${goalPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-emerald-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
-            <CircleDot size={7} strokeWidth={2.1} />
-            <span className="tabular-nums">{player.goalCount}</span>
+        {hasGoalChip ? (
+          <span
+            className={`absolute ${goalPosClass} inline-flex items-center gap-1 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}
+          >
+            {goals > 0 ? (
+              <span className="inline-flex items-center gap-0.5 text-emerald-300">
+                <CircleDot size={7} strokeWidth={2.1} />
+                <span className="tabular-nums">{goals}</span>
+              </span>
+            ) : null}
+            {ownGoals > 0 ? (
+              <span className="inline-flex items-center gap-0.5 text-red-300">
+                <CircleDot size={7} strokeWidth={2.1} />
+                <span className="tabular-nums">{ownGoals}</span>
+              </span>
+            ) : null}
           </span>
         ) : null}
       </div>
@@ -584,6 +677,7 @@ export default function FixturesPage() {
   const [powerupByUid, setPowerupByUid] = useState<PowerupByUid>({});
   const [error, setError] = useState<string | null>(null);
   const [gw, setGw] = useState<number>(1);
+  const [seasonCurrentGw, setSeasonCurrentGw] = useState<number | null>(null);
   const [seasonKey, setSeasonKey] = useState<string>("");
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [refreshingFixtures, setRefreshingFixtures] = useState(false);
@@ -823,6 +917,7 @@ export default function FixturesPage() {
         const season = String(data.seasonKey || "");
         if (!cancelled) {
           setGw(Number.isFinite(current) ? current : 1);
+          setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
           setSeasonKey(season);
           setSeasonOptions(
             options.length
@@ -979,7 +1074,7 @@ export default function FixturesPage() {
       window.clearTimeout(fixturesLoadTimerRef.current);
       fixturesLoadTimerRef.current = null;
     }
-    const delayMs = initialFixturesLoadDoneRef.current ? 1000 : 0;
+    const delayMs = initialFixturesLoadDoneRef.current ? 10 : 0;
     fixturesLoadTimerRef.current = window.setTimeout(() => {
       if (cancelled) return;
       initialFixturesLoadDoneRef.current = true;
@@ -1147,11 +1242,143 @@ export default function FixturesPage() {
     try {
       const data = await getCurrentGameweekCached(nextSeason);
       const current = Number(data.currentGameweek ?? 1);
+      setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
       setGw(Number.isFinite(current) ? current : 1);
     } catch {
+      setSeasonCurrentGw(1);
       setGw(1);
     }
   }
+
+  useEffect(() => {
+    if (!bootstrapped || !seasonKey) return;
+
+    let cancelled = false;
+    let liveRefreshInterval: number | null = null;
+    let nextKickoffTimer: number | null = null;
+
+    const syncCurrentGw = async () => {
+      try {
+        const prevCurrent = seasonCurrentGw;
+        const data = await getCurrentGameweekCached(seasonKey);
+        if (cancelled) return;
+        const nextCurrent = Number(data.currentGameweek ?? 1);
+        if (!Number.isFinite(nextCurrent)) return;
+        setSeasonCurrentGw(nextCurrent);
+        if (prevCurrent != null && gw === prevCurrent && nextCurrent !== prevCurrent) {
+          setGw(nextCurrent);
+        }
+      } catch {
+        // Leave the current GW pinned if the refresh fails.
+      }
+    };
+
+    const softRefreshLive = async () => {
+      if (cancelled || refreshingFixtures || matchInfoOpen || tableOpen) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (seasonCurrentGw != null && gw !== seasonCurrentGw) return;
+
+      try {
+        const params = new URLSearchParams({
+          seasonKey,
+          gameweek: String(gw),
+        });
+        const response = await fetch(`/api/live-preview?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => ({}))) as {
+          fixtures?: LiveOverlayFixture[];
+        };
+        const liveFixtures = Array.isArray(data.fixtures) ? data.fixtures : [];
+        if (!liveFixtures.length) return;
+        setFixtures((prev) => mergeFixtureLiveOverlay(prev, liveFixtures));
+        setFixturesRefreshedAt(new Date());
+      } catch {
+        // Keep the current snapshot on live overlay refresh failures.
+      }
+    };
+
+    const resetLiveSchedule = () => {
+      if (liveRefreshInterval) {
+        window.clearInterval(liveRefreshInterval);
+        liveRefreshInterval = null;
+      }
+      if (nextKickoffTimer) {
+        window.clearTimeout(nextKickoffTimer);
+        nextKickoffTimer = null;
+      }
+    };
+
+    const scheduleLivePolling = () => {
+      resetLiveSchedule();
+      if (
+        cancelled ||
+        refreshingFixtures ||
+        matchInfoOpen ||
+        tableOpen ||
+        (typeof document !== "undefined" && document.visibilityState !== "visible") ||
+        seasonCurrentGw == null ||
+        gw !== seasonCurrentGw ||
+        !fixtures?.length
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      const hasLiveFixture = fixtures.some((fixture) => isFixtureLiveWindow(fixture, now));
+      if (hasLiveFixture) {
+        liveRefreshInterval = window.setInterval(() => {
+          void softRefreshLive();
+        }, 8000);
+        return;
+      }
+
+      const nextKickoffMs = fixtures
+        .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+        .filter((kickoffMs) => Number.isFinite(kickoffMs) && kickoffMs > now)
+        .sort((a, b) => a - b)[0];
+
+      if (!Number.isFinite(nextKickoffMs)) return;
+      const waitMs = Math.max(250, Math.min(nextKickoffMs - now + 500, 2_147_000_000));
+      nextKickoffTimer = window.setTimeout(() => {
+        void softRefreshLive();
+      }, waitMs);
+    };
+
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      void syncCurrentGw();
+      void softRefreshLive();
+      scheduleLivePolling();
+    };
+    const currentGwInterval = window.setInterval(() => {
+      void syncCurrentGw();
+    }, 60000);
+    scheduleLivePolling();
+
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      resetLiveSchedule();
+      window.clearInterval(currentGwInterval);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [
+    bootstrapped,
+    seasonKey,
+    seasonCurrentGw,
+    gw,
+    refreshingFixtures,
+    matchInfoOpen,
+    tableOpen,
+    fixtures,
+  ]);
 
   async function openTablePopup() {
     if (tableOpen || tableLoading) return;
@@ -1252,20 +1479,6 @@ export default function FixturesPage() {
               </div>
             )}
             <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={openTablePopup}
-                disabled={tableOpen || tableLoading}
-                className={`h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 whitespace-nowrap disabled:opacity-60 ${BTN_3D}`}
-              >
-                {tableLoading ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Loader2 size={12} className="animate-spin" />
-                    <span>Loading…</span>
-                  </span>
-                ) : (
-                  "Table"
-                )}
-              </button>
               <button
                 onClick={refreshFixtures}
                 disabled={refreshingFixtures || refreshLockSeconds > 0}
@@ -1967,15 +2180,15 @@ export default function FixturesPage() {
                         </div>
                       ) : (
                         <>
-                          <div className="sm:hidden rounded-xl border border-subtle bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_100%)] px-3 py-3">
+                          <div className="sm:hidden rounded-xl border border-subtle bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_100%)] p-0">
                             <div className="relative h-[960px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
-                              <div className="absolute inset-x-3 top-3 h-[calc(50%-12px)] rounded-t-xl border border-white/8 border-b-0" />
-                              <div className="absolute inset-x-3 bottom-3 h-[calc(50%-12px)] rounded-b-xl border border-white/8 border-t-0" />
-                              <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-white/8" />
+                              <div className="absolute inset-x-1.5 top-1.5 h-[calc(50%-8px)] rounded-t-xl border border-white/8 border-b-0" />
+                              <div className="absolute inset-x-1.5 bottom-1.5 h-[calc(50%-8px)] rounded-b-xl border border-white/8 border-t-0" />
+                              <div className="absolute left-1.5 right-1.5 top-1/2 h-px -translate-y-1/2 bg-white/8" />
                               <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
-                              <div className="absolute left-1/2 top-3 h-10 w-[34%] -translate-x-1/2 rounded-b-xl border border-white/8 border-t-0" />
-                              <div className="absolute left-1/2 bottom-3 h-10 w-[34%] -translate-x-1/2 rounded-t-xl border border-white/8 border-b-0" />
-                              <div className="absolute inset-x-5 top-7 bottom-[calc(50%+32px)] flex flex-col justify-evenly">
+                              <div className="absolute left-1/2 top-1.5 h-10 w-[36%] -translate-x-1/2 rounded-b-xl border border-white/8 border-t-0" />
+                              <div className="absolute left-1/2 bottom-1.5 h-10 w-[36%] -translate-x-1/2 rounded-t-xl border border-white/8 border-b-0" />
+                              <div className="absolute inset-x-2.5 top-4 bottom-[calc(50%+28px)] flex flex-col justify-evenly">
                                 {lineupBlocksWithRows
                                   .filter((block) => block.side === "home")
                                   .map((block) => (
@@ -2017,7 +2230,7 @@ export default function FixturesPage() {
                                     </div>
                                   ))}
                               </div>
-                              <div className="absolute inset-x-5 top-[calc(50%+32px)] bottom-7 flex flex-col justify-evenly">
+                              <div className="absolute inset-x-2.5 top-[calc(50%+28px)] bottom-4 flex flex-col justify-evenly">
                                 {lineupBlocksWithRows
                                   .filter((block) => block.side === "away")
                                   .map((block) => (
@@ -2062,15 +2275,15 @@ export default function FixturesPage() {
                             </div>
                           </div>
 
-                          <div className="hidden sm:block rounded-xl border border-subtle bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(var(--room-accent-rgb),0.08)_100%)] px-3 py-3">
+                          <div className="hidden sm:block rounded-xl border border-subtle bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(var(--room-accent-rgb),0.08)_100%)] p-0">
                             <div className="relative h-[620px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
-                              <div className="absolute inset-y-3 left-3 w-[calc(50%-12px)] rounded-l-xl border border-white/8 border-r-0" />
-                              <div className="absolute inset-y-3 right-3 w-[calc(50%-12px)] rounded-r-xl border border-white/8 border-l-0" />
-                              <div className="absolute top-3 bottom-3 left-1/2 w-px -translate-x-1/2 bg-white/8" />
+                              <div className="absolute inset-y-1.5 left-1.5 w-[calc(50%-8px)] rounded-l-xl border border-white/8 border-r-0" />
+                              <div className="absolute inset-y-1.5 right-1.5 w-[calc(50%-8px)] rounded-r-xl border border-white/8 border-l-0" />
+                              <div className="absolute top-1.5 bottom-1.5 left-1/2 w-px -translate-x-1/2 bg-white/8" />
                               <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
-                              <div className="absolute left-3 top-1/2 h-[34%] w-10 -translate-y-1/2 rounded-r-xl border border-white/8 border-l-0" />
-                              <div className="absolute right-3 top-1/2 h-[34%] w-10 -translate-y-1/2 rounded-l-xl border border-white/8 border-r-0" />
-                              <div className="absolute inset-y-5 left-5 right-[calc(50%+18px)]">
+                              <div className="absolute left-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-r-xl border border-white/8 border-l-0" />
+                              <div className="absolute right-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-l-xl border border-white/8 border-r-0" />
+                              <div className="absolute inset-y-3 left-3 right-[calc(50%+14px)]">
                                 {lineupBlocksWithRows
                                   .filter((block) => block.side === "home")
                                   .map((block) => (
@@ -2111,7 +2324,7 @@ export default function FixturesPage() {
                                     </div>
                                   ))}
                               </div>
-                              <div className="absolute inset-y-5 left-[calc(50%+18px)] right-5">
+                              <div className="absolute inset-y-3 left-[calc(50%+14px)] right-3">
                                 {lineupBlocksWithRows
                                   .filter((block) => block.side === "away")
                                   .map((block) => (
@@ -2232,10 +2445,21 @@ export default function FixturesPage() {
                                               <span>{player.assistCount}</span>
                                             </span>
                                           ) : null}
-                                          {Number(player.goalCount || 0) > 0 ? (
-                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-emerald-300">
-                                              <CircleDot size={9} strokeWidth={2.1} />
-                                              <span>{player.goalCount}</span>
+                                          {Number(player.goalCount || 0) > 0 ||
+                                          Number(player.ownGoalCount || 0) > 0 ? (
+                                            <span className="inline-flex items-center gap-1 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px]">
+                                              {Number(player.goalCount || 0) > 0 ? (
+                                                <span className="inline-flex items-center gap-0.5 text-emerald-300">
+                                                  <CircleDot size={9} strokeWidth={2.1} />
+                                                  <span>{player.goalCount}</span>
+                                                </span>
+                                              ) : null}
+                                              {Number(player.ownGoalCount || 0) > 0 ? (
+                                                <span className="inline-flex items-center gap-0.5 text-red-300">
+                                                  <CircleDot size={9} strokeWidth={2.1} />
+                                                  <span>{player.ownGoalCount}</span>
+                                                </span>
+                                              ) : null}
                                             </span>
                                           ) : null}
                                         </div>

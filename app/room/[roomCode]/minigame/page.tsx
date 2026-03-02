@@ -16,7 +16,7 @@ import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { resolveDisplayName } from "@/lib/displayNameResolver";
-import { getFixturesCached } from "@/lib/fixturesClient";
+import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
@@ -33,7 +33,14 @@ import { getCountdownParts, LOCK_WINDOW_MS } from "./lock-utils";
 type LobbyPlayer = { uid: string; displayName: string };
 type LobbyDoc = { displayName?: string };
 type GameStateDoc = { state?: string };
-type Fixture = { kickoff?: string };
+type Fixture = { kickoff?: string; status?: string };
+
+const ESTIMATED_FULL_TIME_MS = 150 * 60 * 1000;
+
+function isFinalFixtureStatus(status?: string) {
+  const normalized = String(status || "").trim().toUpperCase();
+  return normalized === "FINISHED" || normalized === "FT" || normalized === "AWARDED";
+}
 
 function formatUnlockDateParts(ms: number) {
   const dt = new Date(ms);
@@ -208,35 +215,54 @@ export default function MiniGameLobbyPage() {
   useEffect(() => {
     if (gameweek == null || !seasonKey) return;
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-    (async () => {
-      const data = await getFixturesCached(gameweek, seasonKey);
+    const syncFixturesWindow = async (force = false) => {
+      const data = force
+        ? await refreshFixturesCached(gameweek, seasonKey)
+        : await getFixturesCached(gameweek, seasonKey);
       const fixtures: Fixture[] = Array.isArray(data?.fixtures) ? data.fixtures : [];
-
-      const firstKickoff = fixtures
-        .map((f) => Date.parse(String(f.kickoff || "")))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)[0];
       const kickoffTimes = fixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => a - b);
-      const lastKickoff = kickoffTimes.length ? kickoffTimes[kickoffTimes.length - 1] : null;
+      const firstKickoff = kickoffTimes[0];
+      const pendingKickoffs = fixtures
+        .filter((f) => !isFinalFixtureStatus(f.status))
+        .map((f) => Date.parse(String(f.kickoff || "")))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
+      const lastPendingKickoff = pendingKickoffs.length
+        ? pendingKickoffs[pendingKickoffs.length - 1]
+        : null;
+      const allFinished = fixtures.length > 0 && pendingKickoffs.length === 0;
 
-      if (!cancelled) {
-        setLockAtMs(
-          Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null,
-        );
-        if (Number.isFinite(lastKickoff ?? NaN)) {
-          const unlock = new Date(lastKickoff as number);
-          unlock.setUTCDate(unlock.getUTCDate() + 1);
-          unlock.setUTCHours(0, 1, 0, 0);
-          setUnlockAtMs(unlock.getTime());
-        } else {
-          setUnlockAtMs(null);
-        }
+      if (cancelled) return;
+
+      setLockAtMs(Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null);
+
+      if (allFinished) {
+        setUnlockAtMs(Date.now());
+        setGameweek((prev) => (prev == null ? prev : Math.min(prev + 1, 38)));
+        return;
       }
-    })().catch(() => {
+
+      if (Number.isFinite(lastPendingKickoff ?? NaN)) {
+        setUnlockAtMs((lastPendingKickoff as number) + ESTIMATED_FULL_TIME_MS);
+      } else {
+        setUnlockAtMs(null);
+      }
+
+      const shouldPoll =
+        Number.isFinite(firstKickoff) && Date.now() >= (firstKickoff as number) - LOCK_WINDOW_MS;
+      if (shouldPoll) {
+        refreshTimer = setTimeout(() => {
+          void syncFixturesWindow(true).catch(() => {});
+        }, 10_000);
+      }
+    };
+
+    void syncFixturesWindow(false).catch(() => {
       if (!cancelled) {
         setLockAtMs(null);
         setUnlockAtMs(null);
@@ -245,6 +271,7 @@ export default function MiniGameLobbyPage() {
 
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
     };
   }, [gameweek, seasonKey]);
 

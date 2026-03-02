@@ -182,15 +182,23 @@ export async function POST(req: Request) {
             if (!fixtureIds.includes(reqFixtureId))
               throw new Error("Fixture not part of this game");
 
-            const picksForCaptainSnap = await tx.get(picksCol);
-            const usedFixtureIds = new Set(
-              picksForCaptainSnap.docs
-                .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
-                .filter((id) => Number.isFinite(id)),
-            );
-            if (usedFixtureIds.has(reqFixtureId))
-              throw new Error("Fixture already completed");
-            fixtureIdToPick = reqFixtureId;
+            if (!hasStoredFixture) {
+              const picksForCaptainSnap = await tx.get(picksCol);
+              const usedFixtureIds = new Set(
+                picksForCaptainSnap.docs
+                  .map((d) => Number((d.data() as { fixtureId?: number }).fixtureId))
+                  .filter((id) => Number.isFinite(id)),
+              );
+              if (usedFixtureIds.has(reqFixtureId))
+                throw new Error("Fixture already completed");
+              fixtureIdToPick = reqFixtureId;
+              shouldWritePick = false;
+            } else {
+              fixtureIdToPick = storedFixtureId;
+              if (reqFixtureId !== fixtureIdToPick) {
+                throw new Error("This fixture is locked for this round");
+              }
+            }
           } else {
             if (!hasStoredFixture)
               throw new Error("Waiting for captain to choose fixture");
@@ -202,12 +210,12 @@ export async function POST(req: Request) {
         } else {
           fixtureIdToPick = fixtureIds[fixtureIndex];
         }
-        if (!scoreOk(sc)) throw new Error("Bad score");
+        if (shouldWritePick && !scoreOk(sc)) throw new Error("Bad score");
       }
 
       // Uniqueness: score can't be taken twice for same fixture
       // (Transaction-safe, OK for your scale)
-      if (sameResultLock) {
+      if (sameResultLock && shouldWritePick) {
         const existingSnap = await tx.get(
           picksCol.where("fixtureId", "==", fixtureIdToPick).where("score", "==", sc),
         );
@@ -297,7 +305,11 @@ export async function POST(req: Request) {
         }
       } else {
         const nextTurn = currentTurn + 1;
-        if (isCaptainMode) {
+        if (isCaptainMode && !shouldWritePick) {
+          tx.update(gameRef, {
+            currentFixtureId: fixtureIdToPick,
+          });
+        } else if (isCaptainMode) {
           if (nextTurn >= totalTurns) {
             tx.update(gameRef, {
               currentTurn: nextTurn,

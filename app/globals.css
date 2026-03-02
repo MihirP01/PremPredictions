@@ -3,27 +3,30 @@
 /* ===== Theme tokens ===== */
 :root {
   /* Force dark theme across all OS/browser modes */
-  --app-bg: linear-gradient(135deg, #06181c, #0b3b3a, #0ea5a4);
+  --app-bg:
+    radial-gradient(circle at top left, rgba(244, 114, 182, 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.18), transparent 26%),
+    linear-gradient(145deg, #0a1020 0%, #171027 38%, #2a1220 70%, #31150d 100%);
 
-  --surface: rgba(10, 12, 16, 0.72);
-  --surface-2: rgba(10, 12, 16, 0.84);
-  --input: rgba(10, 12, 16, 0.6);
+  --surface: rgba(8, 12, 20, 0.8);
+  --surface-2: rgba(8, 12, 20, 0.9);
+  --input: rgba(6, 10, 18, 0.72);
 
   --foreground: #eef2ff;
   --muted: rgba(238, 242, 255, 0.7);
 
-  --border: rgba(238, 242, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.12);
 
-  --accent: #2dd4bf;
-  --accent-rgb: 45, 212, 191;
-  --accent-foreground: #04110f;
+  --accent: #fb7185;
+  --accent-rgb: 251, 113, 133;
+  --accent-foreground: #14090b;
 
   --danger: #f87171;
 
-  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 18px 48px rgba(3, 2, 16, 0.46);
 
   /* Solid fallback under Safari UI */
-  --app-solid: #06181c;
+  --app-solid: #0a1020;
 
   /* Consistent top offset across browser + standalone modes */
   --app-top-gap-mobile: 0px;
@@ -118,15 +121,15 @@ body > div {
 
 /* ===== Semantic utility classes ===== */
 .bg-app {
-  /* Keep page wrappers transparent so the body gradient is continuous
-     through the iOS safe area (no visible seam at the top). */
-  background: transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 18%),
+    transparent;
 }
 
 .bg-surface {
   background: var(--surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .bg-surface-2 {

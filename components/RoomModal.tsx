@@ -26,8 +26,8 @@ export function ThemedModal({
       portal
       lockBackground
       zIndexClassName="z-[90]"
-      overlayClassName="bg-black/50 backdrop-blur-sm"
-      panelClassName={`w-full ${maxWidthClassName} rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4 ${panelClassName}`.trim()}
+      overlayClassName="bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.15),transparent_35%),rgba(4,6,14,0.82)] backdrop-blur-md"
+      panelClassName={`w-full ${maxWidthClassName} rounded-[28px] border border-white/10 bg-[linear-gradient(155deg,rgba(12,15,26,0.98),rgba(31,14,42,0.98)_55%,rgba(50,20,11,0.95))] p-4 shadow-[0_28px_90px_rgba(3,2,16,0.62)] ${panelClassName}`.trim()}
     >
       {children}
     </AnimatedModal>
@@ -42,8 +42,13 @@ type ModalHeaderProps = {
 
 export function ModalHeader({ title, onClose, ariaLabel }: ModalHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="font-display text-lg font-semibold text-foreground">{title}</div>
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-white/50">
+          Control Panel
+        </div>
+        <div className="font-display text-lg font-semibold text-foreground">{title}</div>
+      </div>
       <ModalExitButton onClick={onClose} ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`} />
     </div>
   );
@@ -74,13 +79,15 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <ThemedModal open={open} onClose={onClose} maxWidthClassName="max-w-sm">
-      <div className="font-display font-semibold text-foreground">{title}</div>
-      <div className="text-sm text-muted">{body}</div>
-      <div className="flex justify-end gap-2">
+      <div className="space-y-3 rounded-[22px] border border-white/8 bg-black/15 p-4">
+        <div className="font-display text-xl font-semibold text-foreground">{title}</div>
+        <div className="text-sm leading-relaxed text-muted">{body}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={onClose}
           disabled={confirming}
-          className="rounded-lg border border-teal-500 px-4 py-2 bg-surface text-foreground hover:bg-surface-2 disabled:opacity-60"
+          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-foreground transition hover:border-white/20 hover:bg-black/30 disabled:opacity-60"
         >
           {cancelLabel}
         </button>
@@ -88,8 +95,10 @@ export function ConfirmDialog({
           onClick={onConfirm}
           disabled={confirming}
           className={[
-            "rounded-lg px-4 py-2 text-white disabled:opacity-60",
-            danger ? "bg-red-600 hover:bg-red-500" : "bg-accent text-accent-foreground",
+            "rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:opacity-60",
+            danger
+              ? "bg-[linear-gradient(135deg,#ef4444,#f97316)] text-white"
+              : "bg-[linear-gradient(135deg,#f472b6,#fb7185,#f59e0b)] text-slate-950",
           ].join(" ")}
         >
           {confirming ? `${confirmLabel}...` : confirmLabel}

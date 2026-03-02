@@ -227,17 +227,17 @@ export default function RoomBottomNav() {
   const navNode = (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(95vw,520px)] rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.62)] bg-surface/95 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm pointer-events-auto"
+      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,540px)] rounded-[28px] border border-white/10 bg-[linear-gradient(155deg,rgba(12,15,26,0.96),rgba(31,14,42,0.96)_55%,rgba(50,20,11,0.95))] p-2 shadow-[0_22px_60px_rgba(4,4,18,0.5)] backdrop-blur-xl pointer-events-auto"
       style={{
         position: "fixed",
-        bottom: "-0.8rem",
-        paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+        bottom: "0",
+        paddingBottom: "calc(0.4rem + env(safe-area-inset-bottom))",
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
         transform: "translateZ(0)",
       }}
     >
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-5 gap-1 rounded-[22px] border border-white/8 bg-black/15 p-1.5">
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -252,12 +252,12 @@ export default function RoomBottomNav() {
               disabled={item.disabled}
               aria-disabled={item.disabled ? "true" : undefined}
               className={[
-                "flex min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
+                "flex min-w-0 min-h-[60px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[20px] px-1.5 py-2 transition-all duration-150 pointer-events-auto",
                 item.active
-                  ? "scale-[1.05] border border-[color:rgba(var(--room-accent-rgb),0.72)] bg-[color:rgba(var(--room-accent-rgb),0.18)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.2)]"
+                  ? "scale-[1.03] border border-white/15 bg-[linear-gradient(135deg,rgba(244,114,182,0.26),rgba(249,115,22,0.24))] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_10px_18px_rgba(0,0,0,0.18)]"
                   : item.disabled
-                    ? "border border-transparent bg-surface-2/50 text-muted opacity-55 cursor-not-allowed"
-                    : "border border-transparent bg-surface-2/70 text-muted",
+                    ? "border border-transparent bg-black/10 text-muted opacity-55 cursor-not-allowed"
+                    : "border border-transparent bg-black/10 text-muted hover:border-white/10 hover:bg-black/20",
               ].join(" ")}
             >
               <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
@@ -330,7 +330,9 @@ export default function RoomBottomNav() {
                   </>
                 ) : null}
               </span>
-              <span className="font-display text-[8px] leading-none truncate">{item.label}</span>
+              <span className="font-display text-[8px] font-semibold leading-none tracking-[0.03em] truncate">
+                {item.label}
+              </span>
             </button>
           );
         })}

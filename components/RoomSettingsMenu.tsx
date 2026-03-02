@@ -22,15 +22,13 @@ export function SettingsTriggerButton({
     <button
       onClick={onClick}
       className={[
-        "h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500",
-        "text-foreground hover:bg-surface-2 inline-flex items-center justify-center",
-        "page-action-btn",
+        "page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-foreground shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition duration-150 hover:border-white/20 hover:bg-black/30",
         className,
       ].join(" ")}
       data-action="settings"
       aria-label="Open settings"
     >
-      <Settings size={16} />
+      <Settings size={17} />
     </button>
   );
 }
@@ -43,17 +41,17 @@ export function SettingsDropdownPanel({
   return (
     <div
       className={[
-        "absolute right-0 top-full mt-2 sm:top-0 sm:right-[calc(100%+12px)] sm:mt-0",
-        "w-[min(18rem,calc(100vw-3rem))] sm:w-72 rounded-xl border border-teal-500",
-        "bg-surface-2 p-3 space-y-2 shadow-card z-20",
-        "origin-top-right sm:origin-top-left transition-all duration-150 ease-out",
+        "absolute right-0 top-full mt-2 sm:right-[calc(100%+14px)] sm:top-0 sm:mt-0",
+        "z-20 w-[min(19rem,calc(100vw-2rem))] rounded-[24px] border border-white/10",
+        "bg-[linear-gradient(155deg,rgba(12,15,26,0.96),rgba(31,14,42,0.96)_55%,rgba(50,20,11,0.94))] p-3 shadow-[0_20px_60px_rgba(4,4,16,0.5)] backdrop-blur-xl",
+        "origin-top-right sm:origin-top-left transition-all duration-180 ease-out",
         open
-          ? "opacity-100 translate-y-0 sm:translate-y-0 sm:translate-x-0 scale-100 pointer-events-auto"
-          : "opacity-0 -translate-y-1 sm:translate-y-0 sm:translate-x-1 scale-[0.98] pointer-events-none",
+          ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+          : "pointer-events-none -translate-y-1 scale-[0.97] opacity-0 sm:translate-x-1 sm:translate-y-0",
         className,
       ].join(" ")}
     >
-      {children}
+      <div className="rounded-[18px] border border-white/6 bg-black/15 p-2">{children}</div>
     </div>
   );
 }

@@ -4,13 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import LogoutButton from "../../components/LogoutButton";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
 import { resolveDisplayName } from "@/lib/displayNameResolver";
@@ -43,7 +37,6 @@ export default function RoomGatePage() {
     setKicked(kickedFlag);
   }, []);
 
-  // Load profile + joined rooms for quick switching/joining.
   useEffect(() => {
     if (loading) return;
     if (!user) {
@@ -64,12 +57,9 @@ export default function RoomGatePage() {
       setCurrentRoomCode(existing);
       if (existing) setRoomCode(existing);
 
-      // Fast path for returning users: if saved room membership still exists, open it.
       if (existing) {
         try {
-          const existingMembership = await getDoc(
-            doc(db, "rooms", existing, "players", user.uid),
-          );
+          const existingMembership = await getDoc(doc(db, "rooms", existing, "players", user.uid));
           if (existingMembership.exists()) {
             const role = String(existingMembership.data()?.role || "member");
             setMemberRooms([
@@ -92,13 +82,7 @@ export default function RoomGatePage() {
         const checks = await Promise.all(
           roomsSnap.docs.map(async (roomDoc) => {
             try {
-              const membershipRef = doc(
-                db,
-                "rooms",
-                roomDoc.id,
-                "players",
-                user.uid,
-              );
+              const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
               const membershipSnap = await getDoc(membershipRef);
               if (!membershipSnap.exists()) return null;
               const role = String(membershipSnap.data()?.role || "member");
@@ -117,12 +101,10 @@ export default function RoomGatePage() {
           .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
         setMemberRooms(joinedRooms);
 
-        // Auto-open saved current room when still a valid joined room.
         if (existing && joinedRooms.some((r) => r.roomCode === existing)) {
           router.replace(`/room/${existing}`);
         }
       } catch {
-        // Do not hard-fail the gate if list fetch is blocked by rules.
         setMemberRooms([]);
       } finally {
         setRoomsLoading(false);
@@ -138,15 +120,10 @@ export default function RoomGatePage() {
     setBusy(true);
     setError(null);
     try {
-      await setDoc(
-        doc(db, "users", user.uid),
-        { displayName, currentRoomCode: targetRoomCode },
-        { merge: true },
-      );
+      await setDoc(doc(db, "users", user.uid), { displayName, currentRoomCode: targetRoomCode }, { merge: true });
       router.replace(`/room/${targetRoomCode}`);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Could not open room. Please try again.";
+      const message = e instanceof Error ? e.message : "Could not open room. Please try again.";
       setError(message);
     } finally {
       setBusy(false);
@@ -187,10 +164,7 @@ export default function RoomGatePage() {
 
       router.replace(`/room/${code}`);
     } catch (e) {
-      const message =
-        e instanceof Error
-          ? e.message
-          : "Could not join room. Please try again.";
+      const message = e instanceof Error ? e.message : "Could not join room. Please try again.";
       setError(message);
     } finally {
       setBusy(false);
@@ -251,97 +225,139 @@ export default function RoomGatePage() {
 
   if (loading) {
     return (
-      <div className="p-6 text-sm text-muted inline-flex items-center gap-2">
-        <Loader2 size={14} className="animate-spin" />
-        <span>Loading…</span>
+      <div className="min-h-screen bg-app px-6 py-8">
+        <div className="mx-auto flex min-h-[40vh] max-w-xl items-center justify-center rounded-[30px] border border-white/10 bg-[linear-gradient(155deg,rgba(12,15,26,0.98),rgba(31,14,42,0.98)_55%,rgba(50,20,11,0.95))] text-sm text-white/70 shadow-[0_28px_90px_rgba(3,2,16,0.62)]">
+          <span className="inline-flex items-center gap-2">
+            <Loader2 size={16} className="animate-spin" />
+            Loading room access...
+          </span>
+        </div>
       </div>
     );
   }
 
+  const fieldClassName =
+    "w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-foreground placeholder:text-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] outline-none transition focus:border-white/20 focus:bg-black/30";
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-app">
-      <div className="w-full max-w-lg bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <h1 className="text-2xl font-semibold text-foreground">
-          Join or Create a Room
-        </h1>
-        {kicked && (
-          <div className="text-sm rounded-lg px-3 py-2 bg-surface-2 border border-teal-500 text-muted">
-            You were removed from that room by the leader.
+    <div className="min-h-screen bg-app px-5 py-6 sm:px-8 sm:py-8">
+      <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(155deg,rgba(13,18,31,0.98),rgba(31,14,42,0.96)_55%,rgba(57,24,13,0.94))] px-6 py-8 shadow-[0_32px_90px_rgba(5,4,18,0.55)] sm:px-8 sm:py-10">
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+          <div className="pointer-events-none absolute left-0 top-12 h-48 w-48 rounded-full bg-fuchsia-400/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 right-0 h-56 w-56 rounded-full bg-orange-400/10 blur-3xl" />
+          <div className="relative z-[1] space-y-8">
+            <div className="space-y-4">
+              <div className="inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 font-display text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/60">
+                Room Access
+              </div>
+              <h1 className="max-w-md font-display text-[clamp(2.6rem,7vw,4.8rem)] font-semibold leading-[0.9] text-foreground">
+                Route everyone into the right room.
+              </h1>
+              <p className="max-w-md text-sm leading-7 text-white/68 sm:text-base">
+                Rejoin active rooms, create a fresh one, or switch between spaces without exposing any backend setup.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
+                <div className="font-display text-sm font-semibold text-foreground">Fast Return</div>
+                <div className="mt-2 text-xs leading-6 text-white/60">
+                  Saved room membership still auto-opens when the membership doc is valid.
+                </div>
+              </div>
+              <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
+                <div className="font-display text-sm font-semibold text-foreground">Role-Aware</div>
+                <div className="mt-2 text-xs leading-6 text-white/60">
+                  Leaders and members stay in the same flow, with the same data contracts already in place.
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+        </section>
 
-        <div className="space-y-2">
-          <div className="text-sm text-muted">Your joined rooms</div>
-          {roomsLoading ? (
-            <div className="text-sm text-muted inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading rooms…</span>
+        <section className="relative overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(145deg,rgba(10,13,23,0.98),rgba(18,12,28,0.98)_52%,rgba(37,18,10,0.95))] p-5 shadow-[0_32px_90px_rgba(5,4,18,0.55)] sm:p-6 lg:p-8">
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+          <div className="relative z-[1] space-y-5">
+            <div className="space-y-2">
+              <div className="font-display text-2xl font-semibold text-foreground">Join or create a room</div>
+              <div className="text-sm leading-6 text-white/60">Choose a room code, then jump into the same production flow already wired into the app.</div>
             </div>
-          ) : memberRooms.length === 0 ? (
-            <div className="text-sm text-muted">
-              You are not in any rooms yet.
+
+            {kicked ? (
+              <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                You were removed from that room by the leader.
+              </div>
+            ) : null}
+
+            <div className="rounded-[26px] border border-white/8 bg-black/15 p-4 space-y-3">
+              <div className="font-display text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-white/55">Joined Rooms</div>
+              {roomsLoading ? (
+                <div className="inline-flex items-center gap-2 text-sm text-white/60">
+                  <Loader2 size={14} className="animate-spin" />
+                  Loading rooms...
+                </div>
+              ) : memberRooms.length === 0 ? (
+                <div className="text-sm text-white/55">You are not in any rooms yet.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {memberRooms.map((r) => (
+                    <button
+                      key={r.roomCode}
+                      disabled={busy}
+                      onClick={() => openJoinedRoom(r.roomCode)}
+                      className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-white/20 hover:bg-black/30 disabled:opacity-60"
+                    >
+                      {r.roomCode}
+                      {r.roomCode === currentRoomCode ? " • Current" : ""}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {memberRooms.map((r) => (
-                <button
-                  key={r.roomCode}
-                  disabled={busy}
-                  onClick={() => openJoinedRoom(r.roomCode)}
-                  className="rounded-lg px-3 py-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
-                >
-                  {r.roomCode}
-                  {r.roomCode === currentRoomCode ? " • Current" : ""}
-                </button>
-              ))}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <label className="font-display text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-white/55">Nickname</label>
+                <input className={fieldClassName} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <label className="font-display text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-white/55">Room Code</label>
+                <input
+                  className={`${fieldClassName} uppercase`}
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value)}
+                  placeholder="AB12"
+                />
+              </div>
             </div>
-          )}
-        </div>
 
-        <div>
-          <label className="text-sm text-muted">Display name</label>
-          <input
-            className="w-full rounded-lg p-2 bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </div>
+            {error ? <div className="rounded-2xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
 
-        <div>
-          <label className="text-sm text-muted">
-            Room code (4–8 A–Z / 0–9)
-          </label>
-          <input
-            className="w-full rounded-lg p-2 uppercase bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value)}
-            placeholder="AB12"
-          />
-        </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                disabled={busy}
+                onClick={joinRoom}
+                className="rounded-2xl bg-[linear-gradient(135deg,#f472b6,#fb7185,#f59e0b)] px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_16px_28px_rgba(0,0,0,0.24)] transition disabled:opacity-60"
+              >
+                Join Room
+              </button>
 
-        {error && <div className="text-sm text-danger">{error}</div>}
+              <button
+                disabled={busy}
+                onClick={createRoom}
+                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/20 hover:bg-black/30 disabled:opacity-60"
+              >
+                Create Room
+              </button>
+            </div>
 
-        <div className="flex gap-3">
-          <button
-            disabled={busy}
-            onClick={joinRoom}
-            className="flex-1 rounded-lg p-2 bg-accent text-accent-foreground disabled:opacity-60"
-          >
-            Join room
-          </button>
-
-          <button
-            disabled={busy}
-            onClick={createRoom}
-            className="flex-1 rounded-lg p-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
-          >
-            Create room
-          </button>
-        </div>
-
-        <div className="pt-1">
-          <LogoutButton />
-        </div>
+            <div className="rounded-[24px] border border-white/8 bg-black/15 p-3">
+              <LogoutButton />
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

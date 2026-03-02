@@ -15,10 +15,8 @@ export default function ScrollToTopButton() {
     let raf = 0;
     const updateVisibility = () => {
       raf = 0;
-      const scrollTop =
-        window.scrollY || document.documentElement.scrollTop || 0;
-      const canScroll =
-        document.documentElement.scrollHeight > window.innerHeight + 32;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+      const canScroll = document.documentElement.scrollHeight > window.innerHeight + 32;
       setVisible((prev) => {
         if (!canScroll) return false;
         if (!prev && scrollTop > SHOW_AFTER_PX) return true;
@@ -54,17 +52,12 @@ export default function ScrollToTopButton() {
       onClick={scrollToTop}
       aria-label="Return to top"
       className={[
-        "scroll-top-fab liquid-glass-fab fixed right-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-full",
-        "border text-foreground",
-        "will-change-transform",
-        visible ? "hover:scale-[1.02] active:scale-[0.98]" : "",
-        visible
-          ? "scroll-top-fab--visible pointer-events-auto"
-          : "scroll-top-fab--hidden pointer-events-none",
+        "scroll-top-fab fixed right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/10",
+        "bg-[linear-gradient(145deg,rgba(12,15,26,0.96),rgba(31,14,42,0.96)_55%,rgba(50,20,11,0.95))] text-foreground shadow-[0_18px_42px_rgba(4,4,18,0.4)] backdrop-blur-xl",
+        "transition-all duration-200 will-change-transform",
+        visible ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
       ].join(" ")}
-      style={{
-        bottom: "calc(env(safe-area-inset-bottom) + 1rem)",
-      }}
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.4rem)" }}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

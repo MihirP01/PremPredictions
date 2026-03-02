@@ -387,7 +387,7 @@ export default function RoomScopedLayout({
       }
     >
       {showBootOverlay ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[rgba(3,8,20,0.78)] px-6 backdrop-blur-md">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.14),transparent_28%),rgba(3,8,20,0.84)] px-6 backdrop-blur-md">
           <div
             className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]"
             style={

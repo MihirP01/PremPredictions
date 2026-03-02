@@ -19,22 +19,11 @@ export default function GameweekNavigator({
   max = 38,
   disabled = false,
   onChange,
-  className = "gw-nav-controls flex items-center gap-3 w-full max-w-md mx-auto",
-  buttonClassName = `
-    h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
-    flex items-center justify-center p-0 leading-none rounded-lg
-    bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-40
-  `,
-  selectClassName = `
-    w-full h-[clamp(2.45rem,3.2vw,2.85rem)] px-8 rounded-lg border border-teal-500
-    bg-surface text-foreground text-[clamp(0.85rem,1.1vw,1rem)] font-semibold text-center
-    appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500
-  `,
+  className = "gw-nav-controls mx-auto flex w-full max-w-md items-center gap-3",
+  buttonClassName = "flex h-[clamp(2.7rem,3.2vw,3.1rem)] w-[clamp(2.7rem,3.2vw,3.1rem)] items-center justify-center rounded-[18px] border border-white/10 bg-black/20 p-0 leading-none text-foreground shadow-[0_10px_22px_rgba(0,0,0,0.18)] transition hover:border-white/20 hover:bg-black/30 disabled:opacity-40",
+  selectClassName = "h-[clamp(2.7rem,3.2vw,3.1rem)] w-full rounded-[18px] border border-white/10 bg-black/20 px-8 text-center font-display text-[clamp(0.8rem,1.1vw,0.98rem)] font-semibold uppercase tracking-[0.16em] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] appearance-none [text-align-last:center] outline-none transition focus:border-white/20 focus:bg-black/30",
 }: GameweekNavigatorProps) {
-  const options = useMemo(
-    () => Array.from({ length: max - min + 1 }, (_, i) => min + i),
-    [max, min],
-  );
+  const options = useMemo(() => Array.from({ length: max - min + 1 }, (_, i) => min + i), [max, min]);
 
   return (
     <div className={className}>
@@ -61,9 +50,7 @@ export default function GameweekNavigator({
             </option>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-          ▼
-        </span>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/45">▼</span>
       </div>
 
       <button

@@ -20,22 +20,16 @@ export default function TeamLabel({
   tla,
   shortName,
   showFullName = true,
-  wrapperClassName = "mt-1 text-xs font-semibold text-foreground truncate w-full",
-  abbrClassName = "font-display block",
-  fullNameClassName = "font-display block text-[10px] font-medium text-muted w-[68px] sm:w-full mx-auto",
+  wrapperClassName = "mt-1 w-full truncate text-center text-xs font-semibold text-foreground",
+  abbrClassName = "font-display block text-[0.78rem] font-semibold uppercase tracking-[0.14em]",
+  fullNameClassName = "mx-auto mt-1 block w-[68px] font-display text-[10px] font-medium text-white/55 sm:w-full",
   fullNameWindowPx = null,
 }: TeamLabelProps) {
   return (
     <div className={wrapperClassName}>
-      <span className={abbrClassName}>
-        {teamAbbrFromParts(name, tla, shortName)}
-      </span>
+      <span className={abbrClassName}>{teamAbbrFromParts(name, tla, shortName)}</span>
       {showFullName ? (
-        <PendulumName
-          text={name}
-          windowPx={fullNameWindowPx}
-          className={fullNameClassName}
-        />
+        <PendulumName text={name} windowPx={fullNameWindowPx} className={fullNameClassName} />
       ) : null}
     </div>
   );

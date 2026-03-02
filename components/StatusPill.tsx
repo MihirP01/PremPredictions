@@ -13,11 +13,11 @@ type StatusPillProps = {
 };
 
 const TONE_CLASS: Record<StatusTone, string> = {
-  neutral: "bg-surface border border-teal-500 text-muted",
-  you: "bg-surface border border-teal-500 text-muted",
-  ready: "bg-emerald-400/15 border border-emerald-400 text-emerald-300",
-  waiting: "bg-amber-400/15 border border-amber-400 text-amber-300",
-  danger: "bg-surface border border-teal-500 text-danger hover:bg-surface-2",
+  neutral: "border-white/10 bg-black/20 text-white/70",
+  you: "border-white/12 bg-white/8 text-foreground",
+  ready: "border-emerald-300/25 bg-emerald-400/12 text-emerald-200",
+  waiting: "border-amber-300/25 bg-amber-400/12 text-amber-100",
+  danger: "border-red-300/25 bg-red-500/10 text-red-200 hover:bg-red-500/16",
 };
 
 export default function StatusPill({
@@ -27,7 +27,7 @@ export default function StatusPill({
   onClick,
   invisible = false,
 }: StatusPillProps) {
-  const base = `font-display text-xs px-2 py-1 rounded-full ${TONE_CLASS[tone]} ${className}`.trim();
+  const base = `inline-flex items-center justify-center rounded-full border px-2.5 py-1 font-display text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${TONE_CLASS[tone]} ${className}`.trim();
   if (onClick) {
     return (
       <button onClick={onClick} className={base}>

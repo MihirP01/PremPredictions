@@ -26,7 +26,7 @@ export default function TeamBadge({
 
   return (
     <div
-      className={`${wrapperClassName} rounded-full flex items-center justify-center overflow-hidden shrink-0`}
+      className={`${wrapperClassName} flex items-center justify-center overflow-hidden rounded-[14px] border border-white/8 bg-black/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] shrink-0`}
     >
       {badge ? (
         // eslint-disable-next-line @next/next/no-img-element

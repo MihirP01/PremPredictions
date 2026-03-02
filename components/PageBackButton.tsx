@@ -21,8 +21,9 @@ export default function PageBackButton({
         onClick();
       }}
       className={[
-        "h-10 text-sm rounded-lg px-3 bg-surface border border-teal-500",
-        "text-foreground hover:bg-surface-2 whitespace-nowrap hidden sm:inline-flex",
+        "hidden h-10 items-center justify-center whitespace-nowrap rounded-xl border border-white/8 bg-white/[0.03] px-4 text-sm font-medium text-foreground sm:inline-flex",
+        "hover:border-[color:rgba(var(--room-accent-rgb),0.4)] hover:bg-white/[0.06]",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
         "items-center justify-center page-action-btn",
         className,
       ].join(" ")}

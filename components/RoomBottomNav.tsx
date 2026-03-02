@@ -227,17 +227,17 @@ export default function RoomBottomNav() {
   const navNode = (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(95vw,520px)] rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.62)] bg-surface/95 p-2 shadow-[0_8px_20px_rgba(0,0,0,0.18)] backdrop-blur-sm pointer-events-auto"
+      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,560px)] rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.96)_0%,rgba(8,16,31,0.9)_100%)] p-2 shadow-[0_24px_40px_rgba(2,8,23,0.38)] backdrop-blur-xl pointer-events-auto"
       style={{
         position: "fixed",
-        bottom: "-0.8rem",
-        paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+        bottom: "0",
+        paddingBottom: "calc(0.65rem + env(safe-area-inset-bottom))",
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
         transform: "translateZ(0)",
       }}
     >
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-5 gap-1.5">
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -252,17 +252,17 @@ export default function RoomBottomNav() {
               disabled={item.disabled}
               aria-disabled={item.disabled ? "true" : undefined}
               className={[
-                "flex min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
+                "flex min-w-0 min-h-[58px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
                 item.active
-                  ? "scale-[1.05] border border-[color:rgba(var(--room-accent-rgb),0.72)] bg-[color:rgba(var(--room-accent-rgb),0.18)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.2)]"
+                  ? "scale-[1.02] border border-[color:rgba(var(--room-accent-rgb),0.56)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.16)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(var(--room-accent-rgb),0.14)]"
                   : item.disabled
-                    ? "border border-transparent bg-surface-2/50 text-muted opacity-55 cursor-not-allowed"
-                    : "border border-transparent bg-surface-2/70 text-muted",
+                    ? "border border-transparent bg-white/[0.03] text-muted opacity-55 cursor-not-allowed"
+                    : "border border-transparent bg-white/[0.02] text-muted",
               ].join(" ")}
             >
               <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
                 <Icon
-                  size={16}
+                  size={15}
                   className={[
                     item.active ? "text-foreground" : "text-muted",
                     item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
@@ -330,7 +330,9 @@ export default function RoomBottomNav() {
                   </>
                 ) : null}
               </span>
-              <span className="font-display text-[8px] leading-none truncate">{item.label}</span>
+              <span className="font-display text-[7.5px] font-medium leading-none tracking-[0.08em] truncate">
+                {item.label}
+              </span>
             </button>
           );
         })}

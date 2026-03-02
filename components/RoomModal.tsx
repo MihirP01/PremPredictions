@@ -26,8 +26,8 @@ export function ThemedModal({
       portal
       lockBackground
       zIndexClassName="z-[90]"
-      overlayClassName="bg-black/50 backdrop-blur-sm"
-      panelClassName={`w-full ${maxWidthClassName} rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4 ${panelClassName}`.trim()}
+      overlayClassName="bg-[rgba(2,8,23,0.72)] backdrop-blur-md"
+      panelClassName={`w-full ${maxWidthClassName} rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.98)_0%,rgba(8,16,31,0.94)_100%)] p-5 space-y-4 shadow-[0_28px_50px_rgba(2,8,23,0.48)] ${panelClassName}`.trim()}
     >
       {children}
     </AnimatedModal>
@@ -80,7 +80,7 @@ export function ConfirmDialog({
         <button
           onClick={onClose}
           disabled={confirming}
-          className="rounded-lg border border-teal-500 px-4 py-2 bg-surface text-foreground hover:bg-surface-2 disabled:opacity-60"
+          className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-2 text-foreground hover:bg-white/[0.05] disabled:opacity-60"
         >
           {cancelLabel}
         </button>
@@ -88,8 +88,10 @@ export function ConfirmDialog({
           onClick={onConfirm}
           disabled={confirming}
           className={[
-            "rounded-lg px-4 py-2 text-white disabled:opacity-60",
-            danger ? "bg-red-600 hover:bg-red-500" : "bg-accent text-accent-foreground",
+            "rounded-xl px-4 py-2 disabled:opacity-60",
+            danger
+              ? "border border-rose-400/30 bg-rose-500/8 text-danger hover:bg-rose-500/12"
+              : "bg-[linear-gradient(180deg,rgba(56,189,248,1)_0%,rgba(14,165,233,0.92)_100%)] text-accent-foreground shadow-[0_16px_24px_rgba(14,165,233,0.22)]",
           ].join(" ")}
         >
           {confirming ? `${confirmLabel}...` : confirmLabel}

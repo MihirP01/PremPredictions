@@ -259,19 +259,48 @@ export default function RoomGatePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-app">
-      <div className="w-full max-w-lg bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-teal-500">
-        <h1 className="text-2xl font-semibold text-foreground">
+    <div className="min-h-screen bg-app px-4 py-6 sm:px-8 sm:py-10">
+      <div className="mx-auto w-full max-w-4xl rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.94)_0%,rgba(8,16,31,0.82)_100%)] p-4 shadow-card sm:p-6">
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(145deg,rgba(56,189,248,0.12)_0%,rgba(15,23,42,0.92)_38%,rgba(8,16,31,0.96)_100%)] p-6 sm:p-8">
+            <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-display uppercase tracking-[0.24em] text-muted">
+              Room access
+            </div>
+            <div className="mt-4 font-display text-4xl font-semibold tracking-[-0.04em] text-foreground">
+              Join your current room or open a new one.
+            </div>
+            <div className="mt-3 max-w-md text-sm leading-6 text-muted sm:text-base">
+              Keep the room code tight, move between rooms quickly, and preserve the same game state across the app.
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-display uppercase tracking-[0.18em] text-muted">Current profile</div>
+                <div className="mt-2 text-lg font-semibold text-foreground">{displayName || "Player"}</div>
+                <div className="mt-1 text-sm text-muted">
+                  {currentRoomCode ? `Last room: ${currentRoomCode}` : "No room selected yet"}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                <div className="text-[11px] font-display uppercase tracking-[0.18em] text-muted">Memberships</div>
+                <div className="mt-2 text-lg font-semibold text-foreground">{memberRooms.length}</div>
+                <div className="mt-1 text-sm text-muted">Joined rooms available for instant switching</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.96)_0%,rgba(8,16,31,0.9)_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-7">
+        <div className="space-y-5">
+        <h1 className="font-display text-3xl font-semibold tracking-[-0.04em] text-foreground">
           Join or Create a Room
         </h1>
         {kicked && (
-          <div className="text-sm rounded-lg px-3 py-2 bg-surface-2 border border-teal-500 text-muted">
+          <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-muted">
             You were removed from that room by the leader.
           </div>
         )}
 
-        <div className="space-y-2">
-          <div className="text-sm text-muted">Your joined rooms</div>
+        <div className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+          <div className="text-[11px] font-display uppercase tracking-[0.18em] text-muted">Your joined rooms</div>
           {roomsLoading ? (
             <div className="text-sm text-muted inline-flex items-center gap-2">
               <Loader2 size={14} className="animate-spin" />
@@ -288,7 +317,7 @@ export default function RoomGatePage() {
                   key={r.roomCode}
                   disabled={busy}
                   onClick={() => openJoinedRoom(r.roomCode)}
-                  className="rounded-lg px-3 py-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
+                  className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-foreground hover:border-[rgba(56,189,248,0.36)] hover:bg-white/[0.05] disabled:opacity-60"
                 >
                   {r.roomCode}
                   {r.roomCode === currentRoomCode ? " • Current" : ""}
@@ -299,33 +328,33 @@ export default function RoomGatePage() {
         </div>
 
         <div>
-          <label className="text-sm text-muted">Display name</label>
+          <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.18em] text-muted">Display name</label>
           <input
-            className="w-full rounded-lg p-2 bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </div>
 
         <div>
-          <label className="text-sm text-muted">
+          <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.18em] text-muted">
             Room code (4–8 A–Z / 0–9)
           </label>
           <input
-            className="w-full rounded-lg p-2 uppercase bg-input text-foreground border border-teal-500 focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 uppercase text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value)}
             placeholder="AB12"
           />
         </div>
 
-        {error && <div className="text-sm text-danger">{error}</div>}
+        {error ? <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 px-4 py-3 text-sm text-danger">{error}</div> : null}
 
         <div className="flex gap-3">
           <button
             disabled={busy}
             onClick={joinRoom}
-            className="flex-1 rounded-lg p-2 bg-accent text-accent-foreground disabled:opacity-60"
+            className="flex-1 rounded-2xl bg-[linear-gradient(180deg,rgba(56,189,248,1)_0%,rgba(14,165,233,0.92)_100%)] px-4 py-3 font-semibold text-accent-foreground shadow-[0_16px_24px_rgba(14,165,233,0.22)] disabled:opacity-60"
           >
             Join room
           </button>
@@ -333,7 +362,7 @@ export default function RoomGatePage() {
           <button
             disabled={busy}
             onClick={createRoom}
-            className="flex-1 rounded-lg p-2 bg-surface text-foreground border border-teal-500 hover:bg-surface-2 disabled:opacity-60"
+            className="flex-1 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 font-semibold text-foreground hover:bg-white/[0.05] disabled:opacity-60"
           >
             Create room
           </button>
@@ -341,6 +370,9 @@ export default function RoomGatePage() {
 
         <div className="pt-1">
           <LogoutButton />
+        </div>
+        </div>
+          </div>
         </div>
       </div>
     </div>

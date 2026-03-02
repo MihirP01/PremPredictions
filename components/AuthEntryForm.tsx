@@ -101,83 +101,164 @@ export default function AuthEntryForm() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center p-6 bg-app">
-      <div className="w-full max-w-md bg-surface rounded-2xl shadow-card page-shell-enter p-6 space-y-4 border border-subtle">
-        <h1 className="text-2xl font-semibold text-foreground">
-          {mode === "signin" ? "Sign in" : "Create account"}
-        </h1>
-
-        {mode === "signup" && (
-          <div>
-            <label className="text-sm text-muted">Display name</label>
-            <input
-              className="w-full rounded-lg p-2 bg-surface border border-subtle text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
-              value={displayName}
-              disabled={busy}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Player Name"
-              autoComplete="nickname"
-            />
+    <div className="min-h-[100dvh] bg-app px-4 py-6 sm:px-8 sm:py-10">
+      <div className="mx-auto grid w-full max-w-5xl gap-4 rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.92)_0%,rgba(8,16,31,0.78)_100%)] p-4 shadow-card sm:gap-6 sm:p-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(145deg,rgba(56,189,248,0.12)_0%,rgba(15,23,42,0.92)_38%,rgba(8,16,31,0.96)_100%)] p-6 sm:p-8">
+          <div className="pointer-events-none absolute -right-12 top-6 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.32)_0%,rgba(56,189,248,0)_70%)]" />
+          <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(20,184,166,0.22)_0%,rgba(20,184,166,0)_74%)]" />
+          <div className="relative z-[1] space-y-6">
+            <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-display uppercase tracking-[0.24em] text-muted">
+              PL Predictions
+            </div>
+            <div className="space-y-3">
+              <h1 className="font-display text-4xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
+                Matchday decisions, built like a control room.
+              </h1>
+              <p className="max-w-md text-sm leading-6 text-muted sm:text-base">
+                Join your room, track live fixtures, run the minigame, and keep standings tight without touching any backend setup.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Live overlays", "Fixture state updates without reloading the full view"],
+                ["Room-first flow", "Faster return paths into the exact state players left"],
+                ["Home-screen ready", "Install directly from this page for the clean app shell"],
+              ].map(([label, copy]) => (
+                <div
+                  key={label}
+                  className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                >
+                  <div className="text-[11px] font-display uppercase tracking-[0.2em] text-muted">{label}</div>
+                  <div className="mt-2 text-sm text-foreground/90">{copy}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        )}
-
-        <div>
-          <label className="text-sm text-muted">Email</label>
-          <input
-            type="email"
-            className="w-full rounded-lg p-2 bg-surface border border-subtle text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
-            value={email}
-            disabled={busy}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@email.com"
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            inputMode="email"
-          />
         </div>
 
-        <div>
-          <label className="text-sm text-muted">Password</label>
-          <input
-            type="password"
-            className="w-full rounded-lg p-2 bg-surface border border-subtle text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
-            value={password}
-            disabled={busy}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            inputMode="text"
-          />
+        <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.96)_0%,rgba(8,16,31,0.88)_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-7">
+          <div className="space-y-5">
+            <div className="inline-flex rounded-2xl border border-white/8 bg-white/[0.03] p-1">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setMode("signin")}
+                className={[
+                  "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                  mode === "signin"
+                    ? "bg-[linear-gradient(180deg,rgba(56,189,248,0.2)_0%,rgba(56,189,248,0.08)_100%)] text-foreground"
+                    : "text-muted",
+                ].join(" ")}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setMode("signup")}
+                className={[
+                  "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                  mode === "signup"
+                    ? "bg-[linear-gradient(180deg,rgba(56,189,248,0.2)_0%,rgba(56,189,248,0.08)_100%)] text-foreground"
+                    : "text-muted",
+                ].join(" ")}
+              >
+                Create account
+              </button>
+            </div>
+
+            <div>
+              <div className="font-display text-3xl font-semibold tracking-[-0.04em] text-foreground">
+                {mode === "signin" ? "Welcome back" : "Create your profile"}
+              </div>
+              <div className="mt-2 text-sm text-muted">
+                {mode === "signin"
+                  ? "Use your existing credentials to reopen your rooms."
+                  : "Set your player identity once, then join or create rooms immediately."}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {mode === "signup" && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
+                    Display name
+                  </label>
+                  <input
+                    className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                    value={displayName}
+                    disabled={busy}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Player Name"
+                    autoComplete="nickname"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                  value={email}
+                  disabled={busy}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@email.com"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  inputMode="email"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                  value={password}
+                  disabled={busy}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  inputMode="text"
+                />
+              </div>
+            </div>
+
+            {error ? <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 px-4 py-3 text-sm text-danger">{error}</div> : null}
+
+            <button
+              onClick={submit}
+              disabled={busy}
+              className="w-full rounded-2xl bg-[linear-gradient(180deg,rgba(56,189,248,1)_0%,rgba(14,165,233,0.92)_100%)] px-4 py-3 font-semibold text-accent-foreground shadow-[0_16px_24px_rgba(14,165,233,0.22)] disabled:opacity-60"
+            >
+              {busy ? "Please wait…" : mode === "signin" ? "Enter workspace" : "Create account"}
+            </button>
+
+            <button
+              onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
+              disabled={busy}
+              className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-muted disabled:opacity-60"
+            >
+              {mode === "signin" ? "Need an account? Switch to sign up" : "Already have an account? Switch to sign in"}
+            </button>
+
+            {isPhone ? (
+              <button
+                type="button"
+                onClick={() => setShowInstallHelp(true)}
+                className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-foreground hover:bg-white/[0.05]"
+              >
+                Add to home screen
+              </button>
+            ) : null}
+          </div>
         </div>
-
-        {error && <div className="text-sm text-danger">{error}</div>}
-
-        <button
-          onClick={submit}
-          disabled={busy}
-          className="w-full rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
-        >
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Sign up"}
-        </button>
-
-        <button
-          onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
-          disabled={busy}
-          className="w-full text-sm text-muted underline disabled:opacity-60"
-        >
-          {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-        </button>
-
-        {isPhone ? (
-          <button
-            type="button"
-            onClick={() => setShowInstallHelp(true)}
-            className="w-full rounded-lg border border-teal-500 px-4 py-2 font-semibold text-foreground hover:bg-surface-2"
-          >
-            ADD TO HOME SCREEN
-          </button>
-        ) : null}
       </div>
 
       <AnimatedModal
@@ -187,14 +268,14 @@ export default function AuthEntryForm() {
         lockBackground
         closeOnBackdrop={false}
         zIndexClassName="z-[90]"
-        overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-sm rounded-2xl border border-teal-500 bg-surface p-4 space-y-3"
+        overlayClassName="bg-[rgba(2,8,23,0.72)] backdrop-blur-md"
+        panelClassName="w-full max-w-md rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.98)_0%,rgba(8,16,31,0.94)_100%)] p-5 space-y-4 shadow-[0_28px_50px_rgba(2,8,23,0.48)]"
       >
         <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold text-foreground">Install App</div>
+          <div className="font-display text-xl font-semibold text-foreground">Install App</div>
           <button
             type="button"
-            className="rounded-lg border border-teal-500 px-3 py-1.5 text-sm text-foreground"
+            className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-1.5 text-sm text-foreground"
             onClick={() => setShowInstallHelp(false)}
           >
             Exit

@@ -10,16 +10,15 @@ type PageShellProps = {
 
 export default function PageShell({
   children,
-  innerClassName = "relative w-full max-w-[1480px] mx-auto overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,16,31,0.94)_0%,rgba(8,16,31,0.82)_100%)] px-5 py-5 shadow-card page-shell-enter sm:px-8 sm:py-7 space-y-5",
-  outerClassName = "min-h-0 px-3 pb-3 pt-0 sm:px-8 sm:pb-8 sm:pt-2 bg-app",
+  innerClassName = "w-full max-w-[1440px] mx-auto page-shell-enter relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(160deg,rgba(9,18,34,0.96),rgba(10,27,46,0.94)_55%,rgba(14,45,63,0.92))] p-4 sm:p-6 shadow-[0_28px_70px_rgba(3,8,20,0.42)]",
+  outerClassName = "min-h-0 px-2 pb-2 pt-0 sm:px-5 sm:pb-5 sm:pt-3 bg-app",
 }: PageShellProps) {
   return (
     <div className={outerClassName}>
       <div className={innerClassName}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(56,189,248,0.08)_0%,rgba(56,189,248,0)_100%)]" />
-        <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(20,184,166,0.18)_0%,rgba(20,184,166,0)_68%)]" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.12)_0%,rgba(56,189,248,0)_70%)]" />
-        <div className="relative z-[1] space-y-5">{children}</div>
+        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+        <div className="pointer-events-none absolute right-8 top-8 h-20 w-20 rounded-full bg-sky-300/8 blur-3xl" />
+        <div className="relative z-[1] space-y-4">{children}</div>
       </div>
     </div>
   );

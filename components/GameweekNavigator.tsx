@@ -20,8 +20,8 @@ export default function GameweekNavigator({
   disabled = false,
   onChange,
   className = "gw-nav-controls mx-auto flex w-full max-w-md items-center gap-3",
-  buttonClassName = "flex h-[clamp(2.7rem,3.2vw,3.1rem)] w-[clamp(2.7rem,3.2vw,3.1rem)] items-center justify-center rounded-[18px] border border-white/10 bg-black/20 p-0 leading-none text-foreground shadow-[0_10px_22px_rgba(0,0,0,0.18)] transition hover:border-white/20 hover:bg-black/30 disabled:opacity-40",
-  selectClassName = "h-[clamp(2.7rem,3.2vw,3.1rem)] w-full rounded-[18px] border border-white/10 bg-black/20 px-8 text-center font-display text-[clamp(0.8rem,1.1vw,0.98rem)] font-semibold uppercase tracking-[0.16em] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] appearance-none [text-align-last:center] outline-none transition focus:border-white/20 focus:bg-black/30",
+  buttonClassName = "flex h-[clamp(2.55rem,3.2vw,2.9rem)] w-[clamp(2.55rem,3.2vw,2.9rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 leading-none text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.18)] transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-40",
+  selectClassName = "h-[clamp(2.55rem,3.2vw,2.9rem)] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-8 text-center font-display text-[clamp(0.82rem,1.1vw,0.98rem)] font-semibold text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] appearance-none [text-align-last:center] outline-none transition focus:border-white/16 focus:bg-white/[0.06]",
 }: GameweekNavigatorProps) {
   const options = useMemo(() => Array.from({ length: max - min + 1 }, (_, i) => min + i), [max, min]);
 

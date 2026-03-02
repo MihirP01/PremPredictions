@@ -4,10 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
-import {
-  getRoomBootstrapCached,
-  peekRoomBootstrapCached,
-} from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached, peekRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
 
 type NavItem = {
@@ -34,7 +31,7 @@ export default function RoomBottomNav() {
     home: 0,
     leaderboard: 0,
     stats: 0,
-    });
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -51,18 +48,12 @@ export default function RoomBottomNav() {
         if (cancelled) return;
         const seasonKey = String(current?.seasonKey || "");
         const gw = Number(current?.currentGameweek || 1);
-        const bootstrapState = String(current?.gameState || "")
-          .trim()
-          .toUpperCase();
+        const bootstrapState = String(current?.gameState || "").trim().toUpperCase();
 
         if (bootstrapState === "REVEAL") {
           setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
           setPredictionsDisabled(false);
-        } else if (
-          bootstrapState === "DRAFT" ||
-          bootstrapState === "GOLDEN" ||
-          bootstrapState === "POWERUPS"
-        ) {
+        } else if (bootstrapState === "DRAFT" || bootstrapState === "GOLDEN" || bootstrapState === "POWERUPS") {
           setPredictionsHref(`/room/${roomCode}/minigame`);
           setPredictionsDisabled(true);
         } else {
@@ -77,9 +68,7 @@ export default function RoomBottomNav() {
           seasonKey,
           gw,
           (snap) => {
-            const state = String((snap as { state?: string } | null)?.state || "")
-              .trim()
-              .toUpperCase();
+            const state = String((snap as { state?: string } | null)?.state || "").trim().toUpperCase();
 
             if (state === "REVEAL") {
               setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
@@ -129,8 +118,7 @@ export default function RoomBottomNav() {
         href: predictionsHref || `/room/${roomCode}/minigame`,
         icon: Gamepad2,
         active:
-          pathname === `/room/${roomCode}/minigame` ||
-          pathname.startsWith(`/room/${roomCode}/minigame/`),
+          pathname === `/room/${roomCode}/minigame` || pathname.startsWith(`/room/${roomCode}/minigame/`),
         disabled: predictionsDisabled,
       },
       {
@@ -199,9 +187,7 @@ export default function RoomBottomNav() {
     if (active || disabled) return;
     if (key === "predictions") {
       const cachedBootstrap = peekRoomBootstrapCached(roomCode);
-      const immediateHref =
-        predictionsHref ||
-        predictionsRouteForState(cachedBootstrap?.gameState || "");
+      const immediateHref = predictionsHref || predictionsRouteForState(cachedBootstrap?.gameState || "");
       router.push(immediateHref);
       if (!cachedBootstrap) syncPredictionsRoute(immediateHref);
       return;
@@ -209,10 +195,7 @@ export default function RoomBottomNav() {
     router.push(href);
   };
 
-  const onNavPointerDown = (
-    event: React.PointerEvent<HTMLButtonElement>,
-    item: NavItem,
-  ) => {
+  const onNavPointerDown = (event: React.PointerEvent<HTMLButtonElement>, item: NavItem) => {
     if (event.pointerType === "mouse") return;
     lastTouchHandledAtRef.current = Date.now();
     event.preventDefault();
@@ -227,17 +210,17 @@ export default function RoomBottomNav() {
   const navNode = (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,560px)] rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.96)_0%,rgba(8,16,31,0.9)_100%)] p-2 shadow-[0_24px_40px_rgba(2,8,23,0.38)] backdrop-blur-xl pointer-events-auto"
+      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,520px)] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.96),rgba(10,24,43,0.94))] p-2 shadow-[0_20px_44px_rgba(3,8,20,0.34)] backdrop-blur-xl pointer-events-auto"
       style={{
         position: "fixed",
         bottom: "0",
-        paddingBottom: "calc(0.65rem + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(0.35rem + env(safe-area-inset-bottom))",
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
         transform: "translateZ(0)",
       }}
     >
-      <div className="grid grid-cols-5 gap-1.5">
+      <div className="grid grid-cols-5 gap-1 rounded-[18px] border border-white/8 bg-white/[0.03] p-1.5">
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -254,15 +237,15 @@ export default function RoomBottomNav() {
               className={[
                 "flex min-w-0 min-h-[58px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
                 item.active
-                  ? "scale-[1.02] border border-[color:rgba(var(--room-accent-rgb),0.56)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.16)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_24px_rgba(var(--room-accent-rgb),0.14)]"
+                  ? "border border-white/12 bg-white/[0.08] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : item.disabled
-                    ? "border border-transparent bg-white/[0.03] text-muted opacity-55 cursor-not-allowed"
-                    : "border border-transparent bg-white/[0.02] text-muted",
+                    ? "border border-transparent bg-transparent text-muted opacity-55 cursor-not-allowed"
+                    : "border border-transparent bg-transparent text-muted hover:border-white/8 hover:bg-white/[0.03]",
               ].join(" ")}
             >
               <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
                 <Icon
-                  size={15}
+                  size={16}
                   className={[
                     item.active ? "text-foreground" : "text-muted",
                     item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
@@ -272,23 +255,16 @@ export default function RoomBottomNav() {
                     item.key === "stats" ? "nav-icon-stats-fix" : "",
                     item.key === "home" && item.active ? "home-icon--active" : "",
                     item.key === "stats" && item.active ? "stats-icon--active" : "",
-                    item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0)
-                      ? "leaderboard-icon-pop"
-                      : "",
+                    item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0) ? "leaderboard-icon-pop" : "",
                     item.key === "fixtures" && (item.active || navFxTick.fixtures > 0) ? "fixtures-icon-pop" : "",
-                    item.key === "predictions" && (item.active || navFxTick.predictions > 0)
-                      ? "predictions-icon-pop"
-                      : "",
+                    item.key === "predictions" && (item.active || navFxTick.predictions > 0) ? "predictions-icon-pop" : "",
                     item.key === "home" && (item.active || navFxTick.home > 0) ? "home-icon-pop" : "",
                     item.key === "stats" && (item.active || navFxTick.stats > 0) ? "stats-icon-pop" : "",
                   ].join(" ")}
                 />
                 {item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0) ? (
                   <>
-                    <span
-                      key={`lb-ring-${navFxTick.leaderboard}`}
-                      className="leaderboard-burst-once"
-                    />
+                    <span key={`lb-ring-${navFxTick.leaderboard}`} className="leaderboard-burst-once" />
                     {[
                       { x: -14, y: -10, d: "0ms" },
                       { x: 13, y: -12, d: "60ms" },
@@ -299,13 +275,11 @@ export default function RoomBottomNav() {
                       <span
                         key={`lb-spark-${navFxTick.leaderboard}-${idx}`}
                         className="leaderboard-firework-once"
-                        style={
-                          {
-                            "--sx": `${spark.x}px`,
-                            "--sy": `${spark.y}px`,
-                            animationDelay: spark.d,
-                          } as React.CSSProperties
-                        }
+                        style={{
+                          "--sx": `${spark.x}px`,
+                          "--sy": `${spark.y}px`,
+                          animationDelay: spark.d,
+                        } as React.CSSProperties}
                       />
                     ))}
                   </>
@@ -330,9 +304,7 @@ export default function RoomBottomNav() {
                   </>
                 ) : null}
               </span>
-              <span className="font-display text-[7.5px] font-medium leading-none tracking-[0.08em] truncate">
-                {item.label}
-              </span>
+              <span className="truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]">{item.label}</span>
             </button>
           );
         })}

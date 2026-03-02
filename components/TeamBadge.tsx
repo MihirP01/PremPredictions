@@ -25,9 +25,7 @@ export default function TeamBadge({
   const fallback = teamAbbrFromParts(name, tla, shortName);
 
   return (
-    <div
-      className={`${wrapperClassName} flex items-center justify-center overflow-hidden rounded-[14px] border border-white/8 bg-black/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] shrink-0`}
-    >
+    <div className={`${wrapperClassName} flex items-center justify-center overflow-hidden rounded-[12px] border border-white/8 bg-white/[0.03] shrink-0`}>
       {badge ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={badge} alt={name} className={imageClassName} loading="lazy" />

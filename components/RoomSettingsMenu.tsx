@@ -22,9 +22,7 @@ export function SettingsTriggerButton({
     <button
       onClick={onClick}
       className={[
-        "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] text-foreground",
-        "hover:border-[color:rgba(var(--room-accent-rgb),0.4)] hover:bg-white/[0.06]",
-        "page-action-btn",
+        "page-action-btn inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.18)] transition hover:border-white/16 hover:bg-white/[0.06]",
         className,
       ].join(" ")}
       data-action="settings"
@@ -43,13 +41,12 @@ export function SettingsDropdownPanel({
   return (
     <div
       className={[
-        "absolute right-0 top-full mt-2 sm:top-0 sm:right-[calc(100%+12px)] sm:mt-0",
-        "z-20 w-[min(19rem,calc(100vw-3rem))] sm:w-80 rounded-2xl border border-white/8",
-        "bg-[linear-gradient(180deg,rgba(10,19,36,0.98)_0%,rgba(8,16,31,0.94)_100%)] p-3.5 space-y-2 shadow-[0_24px_40px_rgba(2,8,23,0.38)]",
+        "absolute right-0 top-full mt-2 sm:right-[calc(100%+12px)] sm:top-0 sm:mt-0",
+        "z-20 w-[min(18rem,calc(100vw-2rem))] rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.98))] p-3 shadow-[0_20px_44px_rgba(3,8,20,0.35)] backdrop-blur-xl",
         "origin-top-right sm:origin-top-left transition-all duration-150 ease-out",
         open
-          ? "opacity-100 translate-y-0 sm:translate-y-0 sm:translate-x-0 scale-100 pointer-events-auto"
-          : "opacity-0 -translate-y-1 sm:translate-y-0 sm:translate-x-1 scale-[0.98] pointer-events-none",
+          ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+          : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0 sm:translate-x-1 sm:translate-y-0",
         className,
       ].join(" ")}
     >

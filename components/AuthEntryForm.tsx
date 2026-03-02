@@ -100,92 +100,83 @@ export default function AuthEntryForm() {
     }
   };
 
+  const inputClassName =
+    "w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-foreground placeholder:text-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition focus:border-white/16 focus:bg-white/[0.06]";
+
   return (
-    <div className="min-h-[100dvh] bg-app px-4 py-6 sm:px-8 sm:py-10">
-      <div className="mx-auto grid w-full max-w-5xl gap-4 rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.92)_0%,rgba(8,16,31,0.78)_100%)] p-4 shadow-card sm:gap-6 sm:p-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="relative overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(145deg,rgba(56,189,248,0.12)_0%,rgba(15,23,42,0.92)_38%,rgba(8,16,31,0.96)_100%)] p-6 sm:p-8">
-          <div className="pointer-events-none absolute -right-12 top-6 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.32)_0%,rgba(56,189,248,0)_70%)]" />
-          <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(20,184,166,0.22)_0%,rgba(20,184,166,0)_74%)]" />
-          <div className="relative z-[1] space-y-6">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-display uppercase tracking-[0.24em] text-muted">
-              PL Predictions
+    <div className="min-h-[100dvh] bg-app px-5 py-6 sm:px-8 sm:py-8">
+      <div className="mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(160deg,rgba(9,18,34,0.96),rgba(10,27,46,0.94)_55%,rgba(14,45,63,0.92))] px-6 py-8 shadow-[0_28px_70px_rgba(3,8,20,0.42)] sm:px-8 sm:py-10">
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+          <div className="pointer-events-none absolute right-8 top-8 h-24 w-24 rounded-full bg-sky-300/8 blur-3xl" />
+          <div className="relative z-[1] flex h-full flex-col justify-between gap-10">
+            <div className="space-y-5">
+              <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/58">
+                Premium Match Hub
+              </div>
+              <div className="space-y-3">
+                <h1 className="max-w-xl font-display text-[clamp(2.8rem,7vw,5.4rem)] font-semibold leading-[0.92] text-foreground">
+                  A cleaner control room for every matchday.
+                </h1>
+                <p className="max-w-lg text-sm leading-7 text-white/62 sm:text-base">
+                  This concept reduces clutter, keeps room controls predictable, and makes the product feel like a polished SaaS dashboard instead of a raw utility.
+                </p>
+              </div>
             </div>
-            <div className="space-y-3">
-              <h1 className="font-display text-4xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl">
-                Matchday decisions, built like a control room.
-              </h1>
-              <p className="max-w-md text-sm leading-6 text-muted sm:text-base">
-                Join your room, track live fixtures, run the minigame, and keep standings tight without touching any backend setup.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+
+            <div className="grid gap-4 sm:grid-cols-3">
               {[
-                ["Live overlays", "Fixture state updates without reloading the full view"],
-                ["Room-first flow", "Faster return paths into the exact state players left"],
-                ["Home-screen ready", "Install directly from this page for the clean app shell"],
-              ].map(([label, copy]) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
-                >
-                  <div className="text-[11px] font-display uppercase tracking-[0.2em] text-muted">{label}</div>
-                  <div className="mt-2 text-sm text-foreground/90">{copy}</div>
+                ["Room Access", "Sign in and return to the exact room context you left."],
+                ["Stable Navigation", "Core routes stay visible and predictable across devices."],
+                ["Low Friction", "The interface prioritizes the next useful action, not decoration."],
+              ].map(([label, body]) => (
+                <div key={label} className="rounded-3xl border border-white/8 bg-white/[0.03] p-4">
+                  <div className="font-display text-sm font-semibold text-foreground">{label}</div>
+                  <div className="mt-2 text-xs leading-6 text-white/55">{body}</div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.96)_0%,rgba(8,16,31,0.88)_100%)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-7">
-          <div className="space-y-5">
-            <div className="inline-flex rounded-2xl border border-white/8 bg-white/[0.03] p-1">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setMode("signin")}
-                className={[
-                  "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
-                  mode === "signin"
-                    ? "bg-[linear-gradient(180deg,rgba(56,189,248,0.2)_0%,rgba(56,189,248,0.08)_100%)] text-foreground"
-                    : "text-muted",
-                ].join(" ")}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setMode("signup")}
-                className={[
-                  "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
-                  mode === "signup"
-                    ? "bg-[linear-gradient(180deg,rgba(56,189,248,0.2)_0%,rgba(56,189,248,0.08)_100%)] text-foreground"
-                    : "text-muted",
-                ].join(" ")}
-              >
-                Create account
-              </button>
+        <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-5 shadow-[0_28px_70px_rgba(3,8,20,0.42)] sm:p-6 lg:p-8">
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+          <div className="relative z-[1] flex h-full flex-col gap-5">
+            <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] p-1.5">
+              {([
+                ["signin", "Sign In"],
+                ["signup", "Create Account"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setMode(value)}
+                  disabled={busy}
+                  className={[
+                    "flex-1 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                    mode === value ? "bg-white/[0.08] text-foreground" : "text-white/55 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
-            <div>
-              <div className="font-display text-3xl font-semibold tracking-[-0.04em] text-foreground">
-                {mode === "signin" ? "Welcome back" : "Create your profile"}
+            <div className="space-y-2">
+              <div className="font-display text-2xl font-semibold text-foreground">
+                {mode === "signin" ? "Access your room dashboard" : "Create your player profile"}
               </div>
-              <div className="mt-2 text-sm text-muted">
-                {mode === "signin"
-                  ? "Use your existing credentials to reopen your rooms."
-                  : "Set your player identity once, then join or create rooms immediately."}
+              <div className="text-sm leading-6 text-white/58">
+                Authentication, routing, and room membership stay the same. Only the control surface changes.
               </div>
             </div>
 
             <div className="space-y-4">
-              {mode === "signup" && (
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
-                    Display name
-                  </label>
+              {mode === "signup" ? (
+                <div className="space-y-2">
+                  <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Full Name</label>
                   <input
-                    className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                    className={inputClassName}
                     value={displayName}
                     disabled={busy}
                     onChange={(e) => setDisplayName(e.target.value)}
@@ -193,15 +184,13 @@ export default function AuthEntryForm() {
                     autoComplete="nickname"
                   />
                 </div>
-              )}
+              ) : null}
 
-              <div>
-                <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
-                  Email
-                </label>
+              <div className="space-y-2">
+                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Email</label>
                 <input
                   type="email"
-                  className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                  className={inputClassName}
                   value={email}
                   disabled={busy}
                   onChange={(e) => setEmail(e.target.value)}
@@ -213,13 +202,11 @@ export default function AuthEntryForm() {
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-[11px] font-display uppercase tracking-[0.2em] text-muted">
-                  Password
-                </label>
+              <div className="space-y-2">
+                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Password</label>
                 <input
                   type="password"
-                  className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+                  className={inputClassName}
                   value={password}
                   disabled={busy}
                   onChange={(e) => setPassword(e.target.value)}
@@ -230,35 +217,36 @@ export default function AuthEntryForm() {
               </div>
             </div>
 
-            {error ? <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 px-4 py-3 text-sm text-danger">{error}</div> : null}
+            {error ? <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
 
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="w-full rounded-2xl bg-[linear-gradient(180deg,rgba(56,189,248,1)_0%,rgba(14,165,233,0.92)_100%)] px-4 py-3 font-semibold text-accent-foreground shadow-[0_16px_24px_rgba(14,165,233,0.22)] disabled:opacity-60"
-            >
-              {busy ? "Please wait…" : mode === "signin" ? "Enter workspace" : "Create account"}
-            </button>
-
-            <button
-              onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
-              disabled={busy}
-              className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-muted disabled:opacity-60"
-            >
-              {mode === "signin" ? "Need an account? Switch to sign up" : "Already have an account? Switch to sign in"}
-            </button>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <button
+                onClick={submit}
+                disabled={busy}
+                className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground shadow-[0_16px_28px_rgba(3,8,20,0.24)] transition disabled:opacity-60"
+              >
+                {busy ? "Please wait..." : mode === "signin" ? "Enter Dashboard" : "Create Account"}
+              </button>
+              <button
+                onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
+                disabled={busy}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
+              >
+                {mode === "signin" ? "Need an account?" : "Already registered?"}
+              </button>
+            </div>
 
             {isPhone ? (
               <button
                 type="button"
                 onClick={() => setShowInstallHelp(true)}
-                className="w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-foreground hover:bg-white/[0.05]"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/16 hover:bg-white/[0.06]"
               >
-                Add to home screen
+                Add to Home Screen
               </button>
             ) : null}
           </div>
-        </div>
+        </section>
       </div>
 
       <AnimatedModal
@@ -268,39 +256,41 @@ export default function AuthEntryForm() {
         lockBackground
         closeOnBackdrop={false}
         zIndexClassName="z-[90]"
-        overlayClassName="bg-[rgba(2,8,23,0.72)] backdrop-blur-md"
-        panelClassName="w-full max-w-md rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(10,19,36,0.98)_0%,rgba(8,16,31,0.94)_100%)] p-5 space-y-4 shadow-[0_28px_50px_rgba(2,8,23,0.48)]"
+        overlayClassName="bg-[rgba(4,12,24,0.62)] backdrop-blur-sm"
+        panelClassName="w-full max-w-sm rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
-        <div className="flex items-center justify-between">
-          <div className="font-display text-xl font-semibold text-foreground">Install App</div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/45">Install</div>
+            <div className="font-display text-lg font-semibold text-foreground">Home Screen Setup</div>
+          </div>
           <button
             type="button"
-            className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-1.5 text-sm text-foreground"
+            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-foreground transition hover:border-white/16 hover:bg-white/[0.06]"
             onClick={() => setShowInstallHelp(false)}
           >
             Exit
           </button>
         </div>
-        <div className="text-sm text-muted">
-          Install only from this login page (<span className="font-display text-foreground">/</span>) so the app
-          launches correctly.
+        <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-white/60">
+          Install only from this login page (<span className="font-display text-foreground">/</span>) so the app launches correctly.
         </div>
 
         {installPlatform === "ios" ? (
-          <div className="text-sm text-muted space-y-1">
+          <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-white/60">
             <div>1. Open this login page in Safari.</div>
             <div>2. Tap Share.</div>
             <div>3. Tap Add to Home Screen.</div>
             <div>4. Confirm Add.</div>
           </div>
         ) : installPlatform === "android" ? (
-          <div className="text-sm text-muted space-y-1">
+          <div className="space-y-3 rounded-[22px] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-white/60">
             <div>1. Stay on this login page.</div>
             {deferredPrompt ? (
               <button
                 type="button"
                 onClick={runAndroidInstallPrompt}
-                className="w-full rounded-lg bg-accent px-4 py-2 font-semibold text-accent-foreground"
+                className="w-full rounded-2xl bg-accent px-4 py-3 font-semibold text-accent-foreground"
               >
                 Install Now
               </button>
@@ -309,7 +299,9 @@ export default function AuthEntryForm() {
             )}
           </div>
         ) : (
-          <div className="text-sm text-muted">Use your browser menu and add this login page to the home screen.</div>
+          <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-white/60">
+            Use your browser menu and add this login page to the home screen.
+          </div>
         )}
       </AnimatedModal>
     </div>

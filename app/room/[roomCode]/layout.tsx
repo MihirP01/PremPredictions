@@ -7,9 +7,7 @@ import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
-import {
-  getRoomBootstrapCached,
-} from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -29,58 +27,58 @@ const ACCENT_THEME: Record<string, AccentTheme> = {
   teal: {
     hex: "#2dd4bf",
     rgb: "45,212,191",
-    bgLight: "linear-gradient(135deg, #d9f2f0, #a7e1dc, #6fc3bf)",
-    bgDark: "linear-gradient(135deg, #06181c, #0b3b3a, #0ea5a4)",
-    solidLight: "#d9f2f0",
-    solidDark: "#06181c",
+    bgLight: "linear-gradient(145deg, #ecfeff, #d4f8f3, #b2f5ea)",
+    bgDark: "linear-gradient(145deg, #07111f, #0d2036, #102e40)",
+    solidLight: "#ecfeff",
+    solidDark: "#07111f",
   },
   blue: {
     hex: "#60a5fa",
     rgb: "96,165,250",
-    bgLight: "linear-gradient(135deg, #e2ecff, #c6daff, #98bfff)",
-    bgDark: "linear-gradient(135deg, #081325, #132b4d, #2563eb)",
-    solidLight: "#e2ecff",
-    solidDark: "#081325",
+    bgLight: "linear-gradient(145deg, #eff6ff, #dbeafe, #bfdbfe)",
+    bgDark: "linear-gradient(145deg, #07111f, #10294a, #123654)",
+    solidLight: "#eff6ff",
+    solidDark: "#07111f",
   },
   emerald: {
     hex: "#34d399",
     rgb: "52,211,153",
-    bgLight: "linear-gradient(135deg, #dff8ee, #baf0dd, #86e0be)",
-    bgDark: "linear-gradient(135deg, #071c16, #124737, #059669)",
-    solidLight: "#dff8ee",
-    solidDark: "#071c16",
+    bgLight: "linear-gradient(145deg, #ecfdf5, #d1fae5, #a7f3d0)",
+    bgDark: "linear-gradient(145deg, #07111f, #0f2c2a, #123a35)",
+    solidLight: "#ecfdf5",
+    solidDark: "#07111f",
   },
   orange: {
     hex: "#fb923c",
     rgb: "251,146,60",
-    bgLight: "linear-gradient(135deg, #fff0e2, #ffd7b3, #ffb57a)",
-    bgDark: "linear-gradient(135deg, #241306, #4f2a0f, #c2410c)",
-    solidLight: "#fff0e2",
-    solidDark: "#241306",
+    bgLight: "linear-gradient(145deg, #fff7ed, #ffedd5, #fed7aa)",
+    bgDark: "linear-gradient(145deg, #07111f, #2f2318, #433428)",
+    solidLight: "#fff7ed",
+    solidDark: "#07111f",
   },
   rose: {
     hex: "#fb7185",
     rgb: "251,113,133",
-    bgLight: "linear-gradient(135deg, #ffe6ec, #ffc9d5, #ff9eb3)",
-    bgDark: "linear-gradient(135deg, #260a13, #532136, #be185d)",
-    solidLight: "#ffe6ec",
-    solidDark: "#260a13",
+    bgLight: "linear-gradient(145deg, #fff1f2, #ffe4e6, #fecdd3)",
+    bgDark: "linear-gradient(145deg, #07111f, #2f1f33, #3d2740)",
+    solidLight: "#fff1f2",
+    solidDark: "#07111f",
   },
   red: {
     hex: "#ef4444",
     rgb: "239,68,68",
-    bgLight: "linear-gradient(135deg, #ffe7e7, #ffc8c8, #ff9e9e)",
-    bgDark: "linear-gradient(135deg, #2a0c0c, #5a1717, #b91c1c)",
-    solidLight: "#ffe7e7",
-    solidDark: "#2a0c0c",
+    bgLight: "linear-gradient(145deg, #fef2f2, #fee2e2, #fecaca)",
+    bgDark: "linear-gradient(145deg, #07111f, #2a1d2a, #3a2231)",
+    solidLight: "#fef2f2",
+    solidDark: "#07111f",
   },
   slate: {
     hex: "#94a3b8",
     rgb: "148,163,184",
-    bgLight: "linear-gradient(135deg, #edf1f6, #d8e0eb, #becadb)",
-    bgDark: "linear-gradient(135deg, #0f172a, #1e293b, #334155)",
-    solidLight: "#edf1f6",
-    solidDark: "#0f172a",
+    bgLight: "linear-gradient(145deg, #f8fafc, #e2e8f0, #cbd5e1)",
+    bgDark: "linear-gradient(145deg, #07111f, #1a2738, #213245)",
+    solidLight: "#f8fafc",
+    solidDark: "#07111f",
   },
 };
 
@@ -90,27 +88,16 @@ type RoomDoc = {
   };
 };
 
-export default function RoomScopedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RoomScopedLayout({ children }: { children: React.ReactNode }) {
   const params = useParams<{ roomCode: string }>();
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const roomCode = useMemo(
-    () => String(params.roomCode || "").toUpperCase(),
-    [params.roomCode],
-  );
+  const roomCode = useMemo(() => String(params.roomCode || "").toUpperCase(), [params.roomCode]);
   const [accentKey, setAccentKey] = useState<string>("teal");
   const [showBootOverlay, setShowBootOverlay] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootHint, setBootHint] = useState<{
-    seasonKey: string;
-    gw: number;
-    gameState: string;
-  } | null>(null);
+  const [bootHint, setBootHint] = useState<{ seasonKey: string; gw: number; gameState: string } | null>(null);
   const redirectedRef = useRef(false);
   const initialVarsRef = useRef<{ bg: string; solid: string } | null>(null);
   const bootedRef = useRef(false);
@@ -128,11 +115,7 @@ export default function RoomScopedLayout({
     const forceToRoomGate = () => {
       if (redirectedRef.current) return;
       redirectedRef.current = true;
-      setDoc(
-        doc(db, "users", user.uid),
-        { currentRoomCode: null },
-        { merge: true },
-      ).catch(() => {});
+      setDoc(doc(db, "users", user.uid), { currentRoomCode: null }, { merge: true }).catch(() => {});
       router.replace("/room-gate?kicked=1");
     };
     const unsub = onSnapshot(
@@ -145,7 +128,6 @@ export default function RoomScopedLayout({
         forceToRoomGate();
       },
       () => {
-        // When kicked, rules can deny read before `exists=false` is delivered.
         forceToRoomGate();
       },
     );
@@ -163,8 +145,6 @@ export default function RoomScopedLayout({
     return () => unsub();
   }, [roomCode]);
 
-  // Phase 1 bootstrap:
-  // warm shared current-GW cache once on room open, and refresh on app resume.
   useEffect(() => {
     if (!roomCode) return;
     let cancelled = false;
@@ -187,7 +167,6 @@ export default function RoomScopedLayout({
       const run = (async () => {
         try {
           const bootstrap = await getRoomBootstrapCached(roomCode);
-          // Warm current-GW caches for faster navigation between tabs.
           if (bootstrap?.seasonKey && Number.isFinite(bootstrap?.currentGameweek)) {
             const gw = bootstrap.currentGameweek;
             const season = bootstrap.seasonKey;
@@ -196,18 +175,11 @@ export default function RoomScopedLayout({
             const warmKey = `${roomCode}:${season}:gw-${gw}`;
             if (warmedDataKeyRef.current !== warmKey) {
               warmedDataKeyRef.current = warmKey;
-              // Critical prewarm first (fast first render/nav)
               void getFixturesCached(gw, season).catch(() => {});
-              void getRoomGameStateCached(
-                roomCode,
-                season,
-                gw,
-              ).catch(() => {});
+              void getRoomGameStateCached(roomCode, season, gw).catch(() => {});
 
               const scheduleIdle = (fn: () => void) => {
-                const w = window as Window & {
-                  requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-                };
+                const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
                 if (w.requestIdleCallback) {
                   const id = w.requestIdleCallback(fn, { timeout: 1200 });
                   idleTasksRef.current.push(id);
@@ -217,7 +189,6 @@ export default function RoomScopedLayout({
                 idleTasksRef.current.push(id);
               };
 
-              // Non-critical prewarm on idle to reduce startup jank
               scheduleIdle(() => {
                 void getGameDataCached(roomCode, season, gw).catch(() => {});
                 void getTableCached(season).catch(() => {});
@@ -227,7 +198,7 @@ export default function RoomScopedLayout({
           }
           lastWarmAtRef.current = Date.now();
         } catch {
-          // no-op; pages still fetch directly as fallback
+          // no-op
         } finally {
           bootedRef.current = true;
           if (overlayTimer != null) window.clearTimeout(overlayTimer);
@@ -237,7 +208,7 @@ export default function RoomScopedLayout({
             bootHideTimerRef.current = window.setTimeout(() => {
               if (!cancelled) setShowBootOverlay(false);
               bootHideTimerRef.current = null;
-            }, 240);
+            }, 220);
           }
         }
       })();
@@ -265,9 +236,7 @@ export default function RoomScopedLayout({
         window.clearTimeout(bootHideTimerRef.current);
         bootHideTimerRef.current = null;
       }
-      const w = window as Window & {
-        cancelIdleCallback?: (id: number) => void;
-      };
+      const w = window as Window & { cancelIdleCallback?: (id: number) => void };
       idleTasksRef.current.forEach((id) => {
         if (w.cancelIdleCallback) w.cancelIdleCallback(id);
         else window.clearTimeout(id);
@@ -307,7 +276,6 @@ export default function RoomScopedLayout({
     };
   }, [showBootOverlay]);
 
-  // Phase 17: route prefetch from bootstrap hint for snappier first nav taps.
   useEffect(() => {
     if (!roomCode || !bootHint?.seasonKey || !Number.isFinite(bootHint.gw)) return;
     const key = `${roomCode}:${bootHint.seasonKey}:${bootHint.gw}:${bootHint.gameState}`;
@@ -315,8 +283,7 @@ export default function RoomScopedLayout({
     prefetchedKeyRef.current = key;
 
     const base = `/room/${roomCode}`;
-    const predictionsHref =
-      bootHint.gameState === "REVEAL" ? `${base}/minigame/reveal` : `${base}/minigame`;
+    const predictionsHref = bootHint.gameState === "REVEAL" ? `${base}/minigame/reveal` : `${base}/minigame`;
     const routes = [
       `${base}`,
       `${base}/fixtures`,
@@ -334,13 +301,11 @@ export default function RoomScopedLayout({
   }, [bootHint, roomCode, router]);
 
   const accent = ACCENT_THEME[accentKey] || ACCENT_THEME.teal;
-  const isMinigamePath = pathname.startsWith(`/room/${roomCode}/minigame`);
   const hideBottomNav =
     pathname.startsWith(`/room/${roomCode}/minigame/play`) ||
     pathname.startsWith(`/room/${roomCode}/minigame/golden`) ||
     pathname.startsWith(`/room/${roomCode}/minigame/powerups`);
 
-  // Capture default app vars once, restore only when leaving room scope.
   useEffect(() => {
     const root = document.documentElement;
     initialVarsRef.current = {
@@ -357,7 +322,6 @@ export default function RoomScopedLayout({
     };
   }, []);
 
-  // Update vars on room/theme changes without resetting between room switches.
   useEffect(() => {
     const root = document.documentElement;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
@@ -382,24 +346,15 @@ export default function RoomScopedLayout({
           "--room-accent": accent.hex,
           "--room-accent-rgb": accent.rgb,
           "--accent": accent.hex,
-          "--shadow-card": `0 10px 30px rgba(${accent.rgb}, 0.20)`,
+          "--shadow-card": `0 16px 44px rgba(${accent.rgb}, 0.14)`,
         } as React.CSSProperties
       }
     >
       {showBootOverlay ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(244,114,182,0.14),transparent_28%),rgba(3,8,20,0.84)] px-6 backdrop-blur-md">
-          <div
-            className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]"
-            style={
-              {
-                "--boot-fill": `${Math.max(0, 100 - bootProgress)}%`,
-              } as React.CSSProperties
-            }
-          >
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[rgba(4,12,24,0.68)] px-6 backdrop-blur-sm">
+          <div className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]" style={{ "--boot-fill": `${Math.max(0, 100 - bootProgress)}%` } as React.CSSProperties}>
             <span className="select-none text-white/10">{bootProgress}%</span>
-            <span className="boot-liquid-fill absolute inset-0 select-none">
-              {bootProgress}%
-            </span>
+            <span className="boot-liquid-fill absolute inset-0 select-none">{bootProgress}%</span>
           </div>
         </div>
       ) : null}

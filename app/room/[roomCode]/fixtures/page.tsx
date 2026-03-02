@@ -2022,7 +2022,7 @@ export default function FixturesPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
+        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
         <div className="h-full p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -2047,7 +2047,7 @@ export default function FixturesPage() {
             <ModalExitButton
               onClick={() => setMatchInfoOpen(false)}
               ariaLabel="Exit match info"
-              className={`border-[color:rgba(var(--room-accent-rgb),0.65)] ${BTN_3D}`}
+              className={`border-white/10 ${BTN_3D}`}
             />
           </div>
 
@@ -2771,7 +2771,7 @@ export default function FixturesPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface shadow-card"
+        panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
             <div className="flex items-center justify-between p-4">
               <div className="font-display text-lg font-semibold text-foreground">
@@ -2780,7 +2780,7 @@ export default function FixturesPage() {
               <ModalExitButton
                 onClick={() => setTableOpen(false)}
                 ariaLabel="Exit table"
-                className={`border-[color:rgba(var(--room-accent-rgb),0.65)] ${BTN_3D}`}
+                className={`border-white/10 ${BTN_3D}`}
               />
             </div>
             <div className="max-h-[calc(95vh-176px)] flex flex-col">

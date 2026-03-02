@@ -27,7 +27,7 @@ export function ThemedModal({
       lockBackground
       zIndexClassName="z-[90]"
       overlayClassName="bg-[rgba(4,12,24,0.62)] backdrop-blur-sm"
-      panelClassName={`w-full ${maxWidthClassName} rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)] ${panelClassName}`.trim()}
+      panelClassName={`w-full ${maxWidthClassName} rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)] ${panelClassName}`.trim()}
     >
       {children}
     </AnimatedModal>

@@ -706,9 +706,12 @@ export default function RoomPage() {
             title="Hub"
             subtitle={roomCode}
             actions={
-              <div ref={settingsWrapRef} className="relative">
+              <div ref={settingsWrapRef} className="relative ml-auto">
             <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
-            <SettingsDropdownPanel open={settingsOpen}>
+            <SettingsDropdownPanel
+              open={settingsOpen}
+              className="right-0 left-auto top-[calc(100%+0.5rem)] mt-0"
+            >
                 <div className="font-display font-semibold text-foreground">Settings</div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">

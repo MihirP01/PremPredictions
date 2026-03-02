@@ -905,7 +905,7 @@ export default function MiniGameLobbyPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-lg h-[min(86vh,720px)] rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 overflow-hidden"
+        panelClassName="w-full max-w-lg h-[min(86vh,720px)] rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 overflow-hidden shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
         <div className="h-full flex flex-col min-h-0">
           <div className="flex items-center justify-between shrink-0">
@@ -1035,7 +1035,7 @@ export default function MiniGameLobbyPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-md rounded-2xl border border-[color:rgba(var(--room-accent-rgb),0.7)] bg-surface p-4 space-y-4"
+        panelClassName="w-full max-w-md rounded-2xl border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
             <div className="flex items-center justify-between">
               <div className="font-display text-lg font-semibold text-foreground">Game Mode</div>

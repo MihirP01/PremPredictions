@@ -49,7 +49,7 @@ export default function PageHeader({
 
   return (
     <div
-      className={["rounded-[22px] border px-4 py-4 sm:px-5", className].join(" ")}
+      className={["relative z-[40] rounded-[22px] border px-4 py-4 sm:px-5", className].join(" ")}
       style={{
         borderColor: "var(--editorial-header-border)",
         background: "var(--editorial-header-bg)",
@@ -70,7 +70,7 @@ export default function PageHeader({
       {showActions ? (
         <div
           className={[
-            "page-actions-enter flex-wrap items-center gap-2 rounded-[18px] border px-2 py-2 sm:ml-auto sm:flex",
+            "page-actions-enter relative z-[60] flex-wrap items-center gap-2 overflow-visible rounded-[18px] border px-2 py-2 sm:ml-auto sm:flex",
             showActionsOnMobile ? "flex" : "hidden",
           ].join(" ")}
           style={{

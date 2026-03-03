@@ -16,7 +16,7 @@ export function ThemedModal({
   open,
   onClose,
   children,
-  maxWidthClassName = "max-w-md",
+  maxWidthClassName = "max-w-lg",
   panelClassName = "",
 }: ThemedModalProps) {
   return (
@@ -27,7 +27,7 @@ export function ThemedModal({
       lockBackground
       zIndexClassName="z-[90]"
       overlayClassName="backdrop-blur-sm"
-      panelClassName={`w-full ${maxWidthClassName} rounded-[24px] border p-4 ${panelClassName}`.trim()}
+      panelClassName={`w-full ${maxWidthClassName} max-h-[88dvh] overflow-y-auto overscroll-contain rounded-[24px] border p-4 sm:p-5 no-scrollbar ${panelClassName}`.trim()}
       overlayStyle={{ background: "var(--editorial-modal-overlay)" }}
       panelStyle={{
         borderColor: "var(--editorial-modal-border)",
@@ -37,7 +37,7 @@ export function ThemedModal({
         WebkitBackdropFilter: "blur(22px)",
       }}
     >
-      {children}
+      <div className="flex flex-col gap-4 sm:gap-5">{children}</div>
     </AnimatedModal>
   );
 }

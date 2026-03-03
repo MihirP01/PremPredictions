@@ -253,6 +253,17 @@ select:-webkit-autofill:focus {
   transition: background-color 9999s ease-out 0s;
 }
 
+/* Prevent iOS Safari from auto-zooming focused form fields.
+   Safari zooms when the computed font size is below 16px. */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+    line-height: 1.25;
+  }
+}
+
 @keyframes team-name-pan {
   0%,
   14% {

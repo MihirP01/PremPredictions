@@ -2,7 +2,17 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Crosshair,
+  Loader2,
+  Shield,
+  Sparkles,
+  Swords,
+  Target,
+  Trophy,
+} from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
@@ -13,7 +23,10 @@ import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
+import {
+  getSeasonScoresSnapshotCached,
+  type SeasonScoresSnapshot,
+} from "@/lib/seasonScoresClient";
 
 type Player = { uid: string; displayName: string };
 type ScoreDoc = {
@@ -131,19 +144,123 @@ function totalGoals(score: string) {
   return h + a;
 }
 
-function rankStyle(rank: number) {
-  if (rank === 1) return "metal-glow metal-glow-gold border border-yellow-400/80 bg-yellow-400/15";
-  if (rank === 2) return "metal-glow metal-glow-silver border border-gray-300/80 bg-gray-300/15";
-  if (rank === 3) return "metal-glow metal-glow-bronze border border-amber-500/80 bg-amber-500/15";
-  return "border border-teal-500 bg-surface-2";
-}
-
 function mostUsedPowerupLabel(usage: { ALL_IN: number; SAFETY_NET: number }) {
   const allIn = usage.ALL_IN ?? 0;
   const safety = usage.SAFETY_NET ?? 0;
   if (allIn === 0 && safety === 0) return "None";
   if (allIn === safety) return "All-In / Safety Net";
   return allIn > safety ? "All-In" : "Safety Net";
+}
+
+function signedValue(value: number) {
+  if (value > 0) return `+${value}`;
+  if (value < 0) return `${value}`;
+  return "0";
+}
+
+function metricTone(rank: number) {
+  if (rank === 1) {
+    return {
+      shell:
+        "border-yellow-400/55 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(15,23,42,0.62))] shadow-[0_14px_32px_rgba(245,158,11,0.08)]",
+      badge: "text-yellow-200 bg-yellow-400/12 border-yellow-300/25",
+    };
+  }
+  if (rank === 2) {
+    return {
+      shell:
+        "border-slate-300/40 bg-[linear-gradient(135deg,rgba(148,163,184,0.14),rgba(15,23,42,0.62))] shadow-[0_14px_32px_rgba(148,163,184,0.08)]",
+      badge: "text-slate-100 bg-slate-300/12 border-slate-300/20",
+    };
+  }
+  if (rank === 3) {
+    return {
+      shell:
+        "border-amber-500/45 bg-[linear-gradient(135deg,rgba(180,83,9,0.14),rgba(15,23,42,0.62))] shadow-[0_14px_32px_rgba(180,83,9,0.08)]",
+      badge: "text-amber-100 bg-amber-500/12 border-amber-400/20",
+    };
+  }
+  return {
+    shell:
+      "border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] shadow-[0_14px_32px_rgba(3,8,20,0.14)]",
+    badge: "text-white/70 bg-white/[0.03] border-white/8",
+  };
+}
+
+type StatsSelectFieldProps = {
+  id?: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+};
+
+function StatsSelectField({
+  id,
+  label,
+  value,
+  onChange,
+  children,
+}: StatsSelectFieldProps) {
+  return (
+    <label className="space-y-2">
+      <span className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+        {label}
+      </span>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full h-12 rounded-2xl border border-white/8 bg-white/[0.035] px-4 pr-10 font-display text-sm font-semibold text-foreground outline-none appearance-none [text-align-last:left] backdrop-blur-sm"
+        >
+          {children}
+        </select>
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.72rem] text-white/45">
+          ▼
+        </span>
+      </div>
+    </label>
+  );
+}
+
+type MetricTileProps = {
+  label: string;
+  value: React.ReactNode;
+  note?: React.ReactNode;
+  rank?: number;
+  icon?: React.ReactNode;
+};
+
+function MetricTile({ label, value, note, rank = 0, icon }: MetricTileProps) {
+  const tone = metricTone(rank);
+  return (
+    <div className={`rounded-[22px] border p-4 ${tone.shell}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2 min-w-0">
+          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            {label}
+          </div>
+          <div className="font-display text-[clamp(1.25rem,2vw,1.9rem)] font-semibold leading-none text-foreground">
+            {value}
+          </div>
+        </div>
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white/75">
+            {icon}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="min-h-[1.25rem] text-xs text-muted">{note ?? "\u00a0"}</div>
+        {rank > 0 ? (
+          <div className={`rounded-full border px-2.5 py-1 font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${tone.badge}`}>
+            Rank #{rank}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export default function RoomStatsPage() {
@@ -160,7 +277,7 @@ export default function RoomStatsPage() {
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statsByUid, setStatsByUid] = useState<Record<string, PlayerStats>>({});
+  const [seasonSnapshot, setSeasonSnapshot] = useState<SeasonScoresSnapshot | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
 
@@ -226,7 +343,7 @@ export default function RoomStatsPage() {
     (async () => {
       try {
         const cached = await getRoomPlayersCached(roomCode);
-        if (cancelled || !cached.length) return;
+        if (cancelled || !cached?.length) return;
         const seeded: Player[] = cached
           .map((p) => ({
             uid: p.uid,
@@ -271,7 +388,51 @@ export default function RoomStatsPage() {
   }, [players, selectedUid, user]);
 
   useEffect(() => {
-    if (players.length === 0 || !seasonKey) return;
+    if (!seasonKey) {
+      setSeasonSnapshot(null);
+      setLastUpdated(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) {
+        setBusy(true);
+        setError(null);
+      }
+      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
+      let latestComputedAtMs: number | null = null;
+      for (const week of snapshot.weeks) {
+        if (
+          week.computedAtMs != null &&
+          (latestComputedAtMs == null || week.computedAtMs > latestComputedAtMs)
+        ) {
+          latestComputedAtMs = week.computedAtMs;
+        }
+      }
+
+      if (!cancelled) {
+        setSeasonSnapshot(snapshot);
+        setLastUpdated(latestComputedAtMs != null ? new Date(latestComputedAtMs) : null);
+        setError(null);
+      }
+    })()
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load player stats.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode, seasonKey]);
+
+  const statsByUid = useMemo(() => {
+    if (players.length === 0 || !seasonSnapshot) return {};
 
     const playerSet = new Set(players.map((p) => p.uid));
     const baseStats: Record<string, PlayerStats> = {};
@@ -296,149 +457,114 @@ export default function RoomStatsPage() {
       };
     }
 
-    let cancelled = false;
+    const weekByGw = new Map(seasonSnapshot.weeks.map((w) => [w.gw, w]));
+    const gws = seasonSnapshot.weeks
+      .map((w) => w.gw)
+      .filter((n) => n >= 1 && n <= currentGw)
+      .sort((a, b) => a - b);
 
-    (async () => {
-      if (!cancelled) {
-        setBusy(true);
-        setError(null);
-      }
-      let latestComputedAt: Date | null = null;
-      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
-      const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
-      const gws = snapshot.weeks
-        .map((w) => w.gw)
-        .filter((n) => n >= 1 && n <= currentGw)
-        .sort((a, b) => a - b);
+    for (const gw of gws) {
+      const users = weekByGw.get(gw)?.users ?? [];
 
-      for (const week of snapshot.weeks) {
-        if (
-          week.computedAtMs != null &&
-          (!latestComputedAt || week.computedAtMs > latestComputedAt.getTime())
-        ) {
-          latestComputedAt = new Date(week.computedAtMs);
+      for (const userScoreDoc of users) {
+        const uid = String(userScoreDoc.uid);
+        if (!playerSet.has(uid)) continue;
+
+        const score = userScoreDoc as ScoreDoc;
+        const points = Number(score.points ?? 0);
+        const s = baseStats[uid];
+        if (!s) continue;
+
+        s.totalPoints += Number.isFinite(points) ? points : 0;
+        s.byGw[gw] = Number.isFinite(points) ? points : 0;
+        if (!s.byGwBreakdown[gw]) {
+          s.byGwBreakdown[gw] = {
+            points: 0,
+            exactCount: 0,
+            resultOnlyCount: 0,
+            totalGradedPicks: 0,
+            goldenBonusPoints: 0,
+            powerupPointsGained: 0,
+            powerupPointsLost: 0,
+            powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
+            goldenPickCount: 0,
+            goalDisparity: 0,
+            outcomeAttempts: { H: 0, D: 0, A: 0 },
+            outcomeHits: { H: 0, D: 0, A: 0 },
+          };
         }
-      }
+        const gwStats = s.byGwBreakdown[gw];
+        gwStats.points = Number.isFinite(points) ? points : 0;
 
-      for (const gw of gws) {
-        const users = weekByGw.get(gw)?.users ?? [];
+        if (s.bestGw == null || points > s.bestGwPoints) {
+          s.bestGw = gw;
+          s.bestGwPoints = points;
+        }
 
-        for (const userScoreDoc of users) {
-          const uid = String(userScoreDoc.uid);
-          if (!playerSet.has(uid)) continue;
-
-          const score = userScoreDoc as ScoreDoc;
-          const points = Number(score.points ?? 0);
-          const s = baseStats[uid];
-          if (!s) continue;
-
-          s.totalPoints += Number.isFinite(points) ? points : 0;
-          s.byGw[gw] = Number.isFinite(points) ? points : 0;
-          if (!s.byGwBreakdown[gw]) {
-            s.byGwBreakdown[gw] = {
-              points: 0,
-              exactCount: 0,
-              resultOnlyCount: 0,
-              totalGradedPicks: 0,
-              goldenBonusPoints: 0,
-              powerupPointsGained: 0,
-              powerupPointsLost: 0,
-              powerupUsage: { ALL_IN: 0, SAFETY_NET: 0 },
-              goldenPickCount: 0,
-              goalDisparity: 0,
-              outcomeAttempts: { H: 0, D: 0, A: 0 },
-              outcomeHits: { H: 0, D: 0, A: 0 },
-            };
+        const breakdown = score.breakdown ?? {};
+        for (const item of Object.values(breakdown)) {
+          if (item.pred != null && String(item.pred).trim() !== "") {
+            s.totalGradedPicks += 1;
+            gwStats.totalGradedPicks += 1;
           }
-          const gwStats = s.byGwBreakdown[gw];
-          gwStats.points = Number.isFinite(points) ? points : 0;
-
-          if (s.bestGw == null || points > s.bestGwPoints) {
-            s.bestGw = gw;
-            s.bestGwPoints = points;
+          if (item.base === 2) {
+            s.exactCount += 1;
+            gwStats.exactCount += 1;
+          } else if (item.base === 1) {
+            s.resultOnlyCount += 1;
+            gwStats.resultOnlyCount += 1;
+          }
+          if (item.golden) {
+            s.goldenPickCount += 1;
+            gwStats.goldenPickCount += 1;
+            const base = Number(item.base ?? 0);
+            if (Number.isFinite(base) && base > 0) {
+              s.goldenBonusPoints += base;
+              gwStats.goldenBonusPoints += base;
+            }
           }
 
-          const breakdown = score.breakdown ?? {};
-          for (const item of Object.values(breakdown)) {
-            if (item.pred != null && String(item.pred).trim() !== "") {
-              s.totalGradedPicks += 1;
-              gwStats.totalGradedPicks += 1;
+          const multiplier = item.golden ? 2 : 1;
+          const nonPowerupPoints = Number(item.base ?? 0) * multiplier;
+          const fixtureTotalPoints = Number(item.total ?? nonPowerupPoints);
+          const powerupType = item.powerupType ?? null;
+          if (powerupType === "ALL_IN" || powerupType === "SAFETY_NET") {
+            const delta = fixtureTotalPoints - nonPowerupPoints;
+            if (delta > 0) {
+              s.powerupPointsGained += delta;
+              gwStats.powerupPointsGained += delta;
+            } else if (delta < 0) {
+              const loss = Math.abs(delta);
+              s.powerupPointsLost += loss;
+              gwStats.powerupPointsLost += loss;
             }
-            if (item.base === 2) {
-              s.exactCount += 1;
-              gwStats.exactCount += 1;
-            } else if (item.base === 1) {
-              s.resultOnlyCount += 1;
-              gwStats.resultOnlyCount += 1;
-            }
-            if (item.golden) {
-              s.goldenPickCount += 1;
-              gwStats.goldenPickCount += 1;
-              const base = Number(item.base ?? 0);
-              if (Number.isFinite(base) && base > 0) {
-                // Golden doubles fixture points; bonus = added copy of base points.
-                s.goldenBonusPoints += base;
-                gwStats.goldenBonusPoints += base;
-              }
-            }
+            s.powerupUsage[powerupType] += 1;
+            gwStats.powerupUsage[powerupType] += 1;
+          }
 
-            const multiplier = item.golden ? 2 : 1;
-            const nonPowerupPoints = Number(item.base ?? 0) * multiplier;
-            const fixtureTotalPoints = Number(item.total ?? nonPowerupPoints);
-            const powerupType = item.powerupType ?? null;
-            if (powerupType === "ALL_IN" || powerupType === "SAFETY_NET") {
-              const delta = fixtureTotalPoints - nonPowerupPoints;
-              if (delta > 0) {
-                s.powerupPointsGained += delta;
-                gwStats.powerupPointsGained += delta;
-              } else if (delta < 0) {
-                const loss = Math.abs(delta);
-                s.powerupPointsLost += loss;
-                gwStats.powerupPointsLost += loss;
-              }
-              s.powerupUsage[powerupType] += 1;
-              gwStats.powerupUsage[powerupType] += 1;
+          const predOutcome = item.pred ? outcome(item.pred) : null;
+          const actualOutcome = item.actual ? outcome(String(item.actual)) : null;
+          if (predOutcome && actualOutcome) {
+            s.outcomeAttempts[predOutcome] += 1;
+            gwStats.outcomeAttempts[predOutcome] += 1;
+            if (predOutcome === actualOutcome) {
+              s.outcomeHits[predOutcome] += 1;
+              gwStats.outcomeHits[predOutcome] += 1;
             }
+          }
 
-            const predOutcome = item.pred ? outcome(item.pred) : null;
-            const actualOutcome = item.actual ? outcome(String(item.actual)) : null;
-            if (predOutcome && actualOutcome) {
-              s.outcomeAttempts[predOutcome] += 1;
-              gwStats.outcomeAttempts[predOutcome] += 1;
-              if (predOutcome === actualOutcome) {
-                s.outcomeHits[predOutcome] += 1;
-                gwStats.outcomeHits[predOutcome] += 1;
-              }
-            }
-
-            const predGoals = item.pred ? totalGoals(item.pred) : null;
-            const actualGoals = item.actual ? totalGoals(String(item.actual)) : null;
-            if (predGoals != null && actualGoals != null) {
-              s.goalDisparity += predGoals - actualGoals;
-              gwStats.goalDisparity += predGoals - actualGoals;
-            }
+          const predGoals = item.pred ? totalGoals(item.pred) : null;
+          const actualGoals = item.actual ? totalGoals(String(item.actual)) : null;
+          if (predGoals != null && actualGoals != null) {
+            s.goalDisparity += predGoals - actualGoals;
+            gwStats.goalDisparity += predGoals - actualGoals;
           }
         }
       }
+    }
 
-      if (!cancelled) {
-        setStatsByUid(baseStats);
-        setLastUpdated(latestComputedAt);
-      }
-    })()
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load player stats.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setBusy(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [players, roomCode, currentGw, seasonKey]);
+    return baseStats;
+  }, [players, seasonSnapshot, currentGw]);
 
   const selectedPlayer = players.find((p) => p.uid === effectiveSelectedUid) ?? null;
   const stats = effectiveSelectedUid ? statsByUid[effectiveSelectedUid] : null;
@@ -509,66 +635,65 @@ export default function RoomStatsPage() {
     Array.from({ length: Math.min(5, currentGw) }, (_, i) => currentGw - i);
   if (loading || !user) return null;
 
+  const scopedLabel =
+    selectedGwNumber == null ? "Season to date" : `Gameweek ${selectedGwNumber} snapshot`;
+  const correctResultsTotal =
+    (displayStats?.exactCount ?? 0) + (displayStats?.resultOnlyCount ?? 0);
+  const exactRate = pct(displayStats?.exactCount ?? 0, displayStats?.totalGradedPicks ?? 0);
+  const correctRate = pct(correctResultsTotal, displayStats?.totalGradedPicks ?? 0);
+  const roomRank = rankMapByMetric.totalPoints[effectiveSelectedUid] ?? Math.max(players.length, 1);
+  const bestGwRank = rankMapByMetric.bestGwPoints[effectiveSelectedUid] ?? 0;
+  const exactRank = rankMapByMetric.exactCount[effectiveSelectedUid] ?? 0;
+  const correctRank = rankMapByMetric.correctResults[effectiveSelectedUid] ?? 0;
+  const goldenRank = rankMapByMetric.goldenBonus[effectiveSelectedUid] ?? 0;
+  const gainRank = rankMapByMetric.powerupGain[effectiveSelectedUid] ?? 0;
+  const lossRank = rankMapByMetric.powerupLoss[effectiveSelectedUid] ?? 0;
+  const disparityRank = rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0;
+
   return (
     <PageShell>
-        <div className="space-y-3">
-          <TopActionRow
-            title="Player Stats"
-            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-            actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
-          />
-        </div>
+      <div className="space-y-3">
+        <TopActionRow
+          title="Player Stats"
+          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+          actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
+        />
+      </div>
 
-        <SectionCard>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[180px_260px_1fr] gap-3 items-end">
-            {!!seasonOptions.length && (
-              <div className="relative">
-                <label className="text-sm text-muted block mb-1" htmlFor="stats-season-select">
-                  Season
-                </label>
-                <select
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              {!!seasonOptions.length && (
+                <StatsSelectField
                   id="stats-season-select"
+                  label="Season"
                   value={seasonKey}
-                  onChange={(e) => setSeasonKey(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  onChange={setSeasonKey}
                 >
                   {seasonOptions.map((s) => (
                     <option key={s} value={s}>
                       {seasonLabel(s)}
                     </option>
                   ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
-                  ▼
-                </span>
-              </div>
-            )}
-            <div className="relative">
-              <label className="text-sm text-muted block mb-1">Select player</label>
-              <select
+                </StatsSelectField>
+              )}
+              <StatsSelectField
+                label="Player"
                 value={effectiveSelectedUid}
-                onChange={(e) => setSelectedUid(e.target.value)}
-                className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                onChange={setSelectedUid}
               >
                 {players.map((p) => (
                   <option className="font-display" key={p.uid} value={p.uid}>
                     {p.displayName}
                   </option>
                 ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
-                ▼
-              </span>
-            </div>
-            <div className="relative">
-              <label className="text-sm text-muted block mb-1" htmlFor="stats-gw-filter-select">
-                Gameweek
-              </label>
-              <select
+              </StatsSelectField>
+              <StatsSelectField
                 id="stats-gw-filter-select"
+                label="Scope"
                 value={effectiveGwFilter}
-                onChange={(e) => setSelectedGwFilter(e.target.value)}
-                className="font-display w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                onChange={setSelectedGwFilter}
               >
                 <option value="all">All GWs</option>
                 {allScoredGws.map((gw) => (
@@ -576,141 +701,330 @@ export default function RoomStatsPage() {
                     GW {gw}
                   </option>
                 ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-[calc(50%+0.5rem)] -translate-y-1/2 text-xs text-muted">
-                ▼
-              </span>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SpecialBreak />
-
-        {error && <div className="text-sm text-danger">{error}</div>}
-
-        {busy ? (
-          <div className="text-sm text-muted inline-flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            <span>Loading stats…</span>
-          </div>
-        ) : !selectedPlayer || !displayStats ? (
-          <div className="text-sm text-muted">No player stats available yet.</div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-10 gap-2">
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Room Ranking</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  #{rankMapByMetric.totalPoints[effectiveSelectedUid] ?? players.length}/{players.length || 1}
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.totalPoints[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Total Points</div>
-                <div className="font-display text-xl font-semibold text-foreground">{displayStats.totalPoints}</div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.bestGwPoints[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Best GW</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.bestGw ? `GW${displayStats.bestGw} (${displayStats.bestGwPoints})` : "-"}
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.exactCount[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Exact Scores</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.exactCount} ({pct(displayStats.exactCount, displayStats.totalGradedPicks)})
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.correctResults[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Correct Results</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.exactCount + displayStats.resultOnlyCount} (
-                  {pct(displayStats.exactCount + displayStats.resultOnlyCount, displayStats.totalGradedPicks)})
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.goldenBonus[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Golden Bonus Points</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.goldenBonusPoints}
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupGain[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Power-up Points Gained</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.powerupPointsGained > 0
-                    ? `+${displayStats.powerupPointsGained}`
-                    : displayStats.powerupPointsGained}
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.powerupLoss[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Power-up Points Lost</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.powerupPointsLost > 0
-                    ? `-${displayStats.powerupPointsLost}`
-                    : displayStats.powerupPointsLost}
-                </div>
-              </div>
-              <div className="rounded-xl p-3 border border-teal-500 bg-surface-2">
-                <div className="text-xs text-muted">Most Used Power-up</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {mostUsedPowerupLabel(displayStats.powerupUsage)}
-                </div>
-              </div>
-              <div className={`rounded-xl p-3 ${rankStyle(rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0)}`}>
-                <div className="text-xs text-muted">Goal Disparity (+/-)</div>
-                <div className="font-display text-xl font-semibold text-foreground">
-                  {displayStats.goalDisparity > 0 ? `+${displayStats.goalDisparity}` : displayStats.goalDisparity}
-                </div>
-              </div>
+              </StatsSelectField>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-              <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-                <div className="font-semibold text-foreground mb-2">Recent Weeks</div>
-                <div className="space-y-2">
-                  {recentGws.map((gw) => (
-                    <div
-                      key={gw}
-                      className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
-                    >
-                      <span className="font-display text-sm text-muted">GW {gw}</span>
-                      <span className="font-display font-semibold text-foreground">
-                        {stats?.byGw[gw] ?? 0}
-                      </span>
+            {error ? (
+              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : busy ? (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-4 text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading stats…</span>
+              </div>
+            ) : !selectedPlayer || !displayStats ? (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-4 text-sm text-muted">
+                No player stats available yet.
+              </div>
+            ) : (
+              <>
+                <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(255,255,255,0.03)_38%,rgba(56,189,248,0.05)_100%)] p-5">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.95fr)]">
+                    <div className="space-y-3">
+                      <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
+                        {scopedLabel}
+                      </div>
+                      <div className="font-display text-[clamp(1.9rem,3vw,3.1rem)] font-semibold leading-[0.95] text-foreground">
+                        {selectedPlayer.displayName}
+                      </div>
+                      <div className="max-w-2xl text-sm text-muted">
+                        A compact editorial view of scoring output, prediction accuracy, power-up swing, and weekly form.
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border border-teal-500 rounded-xl p-4 bg-surface-2">
-                <div className="font-semibold text-foreground mb-2">Hit Rate by Type</div>
-                <div className="space-y-2">
-                  {[
-                    { key: "H" as const, label: "Home Win" },
-                    { key: "D" as const, label: "Draw" },
-                    { key: "A" as const, label: "Away Win" },
-                  ].map((t) => (
-                    <div
-                      key={t.key}
-                      className="flex items-center justify-between border-b border-subtle last:border-0 py-1"
-                    >
-                      <span className="text-sm text-muted">{t.label}</span>
-                      <span className="font-display font-semibold text-foreground">
-                        {displayStats.outcomeHits[t.key]}/{displayStats.outcomeAttempts[t.key]} (
-                        {pct(displayStats.outcomeHits[t.key], displayStats.outcomeAttempts[t.key])})
-                      </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+                          Room Ranking
+                        </div>
+                        <div className="mt-2 font-display text-2xl font-semibold text-foreground">
+                          #{roomRank}/{players.length || 1}
+                        </div>
+                        <div className="mt-2 text-xs text-muted">Standing in the current scope.</div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
+                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+                          Most Used
+                        </div>
+                        <div className="mt-2 font-display text-lg font-semibold text-foreground">
+                          {mostUsedPowerupLabel(displayStats.powerupUsage)}
+                        </div>
+                        <div className="mt-2 text-xs text-muted">Preferred chip usage pattern.</div>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                <SpecialBreak />
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <MetricTile
+                    label="Total Points"
+                    value={displayStats.totalPoints}
+                    note={`${correctResultsTotal} correct outcomes from ${displayStats.totalGradedPicks} graded picks`}
+                    rank={roomRank}
+                    icon={<Trophy size={16} />}
+                  />
+                  <MetricTile
+                    label="Best Gameweek"
+                    value={displayStats.bestGw ? `GW${displayStats.bestGw}` : "-"}
+                    note={
+                      displayStats.bestGw
+                        ? `${displayStats.bestGwPoints} points in the strongest single week`
+                        : "No scored gameweek yet"
+                    }
+                    rank={bestGwRank}
+                    icon={<Sparkles size={16} />}
+                  />
+                  <MetricTile
+                    label="Exact Scores"
+                    value={`${displayStats.exactCount}`}
+                    note={`${exactRate} exact hit rate`}
+                    rank={exactRank}
+                    icon={<Target size={16} />}
+                  />
+                  <MetricTile
+                    label="Correct Results"
+                    value={`${correctResultsTotal}`}
+                    note={`${correctRate} overall result hit rate`}
+                    rank={correctRank}
+                    icon={<Crosshair size={16} />}
+                  />
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                          Prediction Profile
+                        </div>
+                        <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                          Outcome accuracy by result type
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                        {displayStats.totalGradedPicks} graded
+                      </div>
+                    </div>
+                    <div className="mt-5 space-y-3">
+                      {[
+                        {
+                          key: "H" as const,
+                          label: "Home Win",
+                          value: displayStats.outcomeHits.H,
+                          total: displayStats.outcomeAttempts.H,
+                        },
+                        {
+                          key: "D" as const,
+                          label: "Draw",
+                          value: displayStats.outcomeHits.D,
+                          total: displayStats.outcomeAttempts.D,
+                        },
+                        {
+                          key: "A" as const,
+                          label: "Away Win",
+                          value: displayStats.outcomeHits.A,
+                          total: displayStats.outcomeAttempts.A,
+                        },
+                      ].map((row) => {
+                        const ratio = row.total ? Math.max(0.08, row.value / row.total) : 0.08;
+                        return (
+                          <div key={row.key} className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-display text-sm font-semibold text-foreground">{row.label}</span>
+                              <span className="font-display text-sm font-semibold text-white/75">
+                                {row.value}/{row.total} ({pct(row.value, row.total)})
+                              </span>
+                            </div>
+                            <div className="mt-3 h-2.5 rounded-full bg-white/[0.04]">
+                              <div
+                                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.58),rgba(56,189,248,0.58))]"
+                                style={{ width: `${ratio * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Recent Weeks
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">Latest scoring trend</div>
+                    <div className="mt-4 space-y-2">
+                      {recentGws.map((gw) => {
+                        const value = stats?.byGw[gw] ?? 0;
+                        const width = Math.min(100, Math.max(10, ((Math.abs(value) || 1) / Math.max(displayStats.bestGwPoints || 1, 1)) * 100));
+                        return (
+                          <div key={gw} className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-display text-sm font-semibold text-white/72">GW {gw}</span>
+                              <span className="font-display text-base font-semibold text-foreground">{value}</span>
+                            </div>
+                            <div className="mt-3 h-2 rounded-full bg-white/[0.04]">
+                              <div
+                                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.55),rgba(245,158,11,0.55))]"
+                                style={{ width: `${width}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </SectionCard>
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                          Power & Risk
+                        </div>
+                        <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                          Chips, golden edge, and swing
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                        {displayStats.goldenPickCount} golden picks
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <MetricTile
+                        label="Golden Bonus"
+                        value={displayStats.goldenBonusPoints}
+                        note="Extra points earned from doubled golden hits"
+                        rank={goldenRank}
+                        icon={<Sparkles size={16} />}
+                      />
+                      <MetricTile
+                        label="Power-up Gain"
+                        value={signedValue(displayStats.powerupPointsGained)}
+                        note="Positive swing created by chips"
+                        rank={gainRank}
+                        icon={<ArrowUpRight size={16} />}
+                      />
+                      <MetricTile
+                        label="Power-up Loss"
+                        value={`-${displayStats.powerupPointsLost}`}
+                        note="Opportunity cost from aggressive chip use"
+                        rank={lossRank}
+                        icon={<ArrowDownRight size={16} />}
+                      />
+                      <MetricTile
+                        label="Goal Disparity"
+                        value={signedValue(displayStats.goalDisparity)}
+                        note="Difference between predicted and actual goals"
+                        rank={disparityRank}
+                        icon={<Swords size={16} />}
+                      />
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Breakdown
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">Snapshot summary</div>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-muted">Golden picks played</span>
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {displayStats.goldenPickCount}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-muted">Power-up spread</span>
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {displayStats.powerupUsage.ALL_IN} All-In • {displayStats.powerupUsage.SAFETY_NET} Safety Net
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-muted">Exact vs result-only</span>
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {displayStats.exactCount} / {displayStats.resultOnlyCount}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-muted">Best weekly output</span>
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {displayStats.bestGw ? `GW${displayStats.bestGw} • ${displayStats.bestGwPoints}` : "No score yet"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </SectionCard>
+                </div>
+              </>
+            )}
+          </div>
+
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Editorial Notes
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">What this scope says</div>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] text-white/70">
+                <Shield size={16} />
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                  Accuracy Pulse
+                </div>
+                <div className="mt-2 text-sm text-muted">
+                  {busy || !displayStats
+                    ? "Loading current scoring profile."
+                    : `${selectedPlayer?.displayName || "This player"} converts ${correctRate} of graded picks into correct outcomes, with ${exactRate} landing as exact scores.`}
                 </div>
               </div>
-
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                  Risk Profile
+                </div>
+                <div className="mt-2 text-sm text-muted">
+                  {busy || !displayStats
+                    ? "Waiting for power-up data."
+                    : displayStats.powerupPointsLost > displayStats.powerupPointsGained
+                      ? "Aggressive chip use is costing more than it returns in this scope."
+                      : "Chip usage is adding net value or staying disciplined."}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                  Goal Forecasting
+                </div>
+                <div className="mt-2 text-sm text-muted">
+                  {busy || !displayStats
+                    ? "Waiting for scoring comparison."
+                    : displayStats.goalDisparity === 0
+                      ? "Predicted and actual goals are tracking almost perfectly."
+                      : displayStats.goalDisparity > 0
+                        ? "This player is generally forecasting more goals than actually arrive."
+                        : "This player is generally undercalling total goals."}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-xs text-muted">
+                Last updated: {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
+              </div>
             </div>
-
-          </>
-        )}
-
-        <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
-          Last updated: {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
+          </SectionCard>
         </div>
+      </SectionCard>
     </PageShell>
   );
 }

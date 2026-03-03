@@ -21,11 +21,15 @@ export default function PageBackButton({
         onClick();
       }}
       className={[
-        "page-action-btn hidden h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.18)] transition hover:border-white/16 hover:bg-white/[0.06] sm:inline-flex",
+        "page-action-btn hidden h-10 items-center justify-center rounded-2xl border px-4 text-sm text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.18)] transition sm:inline-flex",
         "whitespace-nowrap",
         className,
       ].join(" ")}
       data-action="back"
+      style={{
+        borderColor: "var(--editorial-action-border)",
+        background: "var(--editorial-action-bg)",
+      }}
     >
       {label}
     </button>

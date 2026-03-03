@@ -210,7 +210,7 @@ export default function RoomBottomNav() {
   const navNode = (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,520px)] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(8,16,31,0.96),rgba(10,24,43,0.94))] p-2 shadow-[0_20px_44px_rgba(3,8,20,0.34)] backdrop-blur-xl pointer-events-auto"
+      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,520px)] rounded-[24px] border p-2 pointer-events-auto"
       style={{
         position: "fixed",
         bottom: "0",
@@ -218,9 +218,20 @@ export default function RoomBottomNav() {
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
         transform: "translateZ(0)",
+        borderColor: "var(--editorial-nav-border)",
+        background: "var(--editorial-nav-bg)",
+        boxShadow: "0 22px 52px rgba(3,8,20,0.34)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
       }}
     >
-      <div className="grid grid-cols-5 gap-1 rounded-[18px] border border-white/8 bg-white/[0.03] p-1.5">
+      <div
+        className="grid grid-cols-5 gap-1 rounded-[18px] border p-1.5"
+        style={{
+          borderColor: "var(--editorial-nav-border)",
+          background: "var(--editorial-nav-inner)",
+        }}
+      >
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -237,11 +248,22 @@ export default function RoomBottomNav() {
               className={[
                 "flex min-w-0 min-h-[58px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
                 item.active
-                  ? "border border-white/12 bg-white/[0.08] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  ? "border text-foreground"
                   : item.disabled
                     ? "border border-transparent bg-transparent text-muted opacity-55 cursor-not-allowed"
-                    : "border border-transparent bg-transparent text-muted hover:border-white/8 hover:bg-white/[0.03]",
+                    : "border border-transparent bg-transparent text-muted",
               ].join(" ")}
+              style={
+                item.active
+                  ? {
+                      borderColor: "var(--editorial-nav-active-border)",
+                      background: "var(--editorial-nav-active)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
+                    }
+                  : !item.disabled
+                    ? { background: "transparent" }
+                    : undefined
+              }
             >
               <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
                 <Icon

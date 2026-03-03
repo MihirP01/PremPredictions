@@ -12,6 +12,8 @@ type AnimatedModalProps = {
   zIndexClassName?: string;
   overlayClassName?: string;
   panelClassName?: string;
+  overlayStyle?: React.CSSProperties;
+  panelStyle?: React.CSSProperties;
   children: React.ReactNode;
 };
 
@@ -24,6 +26,8 @@ export default function AnimatedModal({
   zIndexClassName = "z-[90]",
   overlayClassName = "",
   panelClassName = "",
+  overlayStyle,
+  panelStyle,
   children,
 }: AnimatedModalProps) {
   const [shouldRender, setShouldRender] = useState(open);
@@ -120,7 +124,7 @@ export default function AnimatedModal({
       ]
         .filter(Boolean)
         .join(" ")}
-      style={modalThemeStyle}
+      style={{ ...modalThemeStyle, ...overlayStyle }}
       onMouseDown={(e) => {
         if (!closeOnBackdrop) return;
         if (e.target !== e.currentTarget) return;
@@ -137,6 +141,7 @@ export default function AnimatedModal({
         ]
           .filter(Boolean)
           .join(" ")}
+        style={panelStyle}
       >
         {children}
       </div>

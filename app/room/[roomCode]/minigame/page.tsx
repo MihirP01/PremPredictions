@@ -5,10 +5,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronDown, Loader2, Lock } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
-import AnimatedModal from "../../../../components/AnimatedModal";
-import ModalExitButton from "../../../../components/ModalExitButton";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
+import { ModalHeader, ThemedModal } from "../../../../components/RoomModal";
 import SectionCard from "../../../../components/SectionCard";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
@@ -63,6 +62,106 @@ function formatUnlockDateParts(ms: number) {
     hour12: false,
   });
   return { day, suffix, monthYear, time };
+}
+
+function LobbyStatTile({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] p-4">
+      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+        {label}
+      </div>
+      <div className="mt-2 font-display text-2xl font-semibold text-foreground">{value}</div>
+      {note ? <div className="mt-2 text-xs text-muted">{note}</div> : null}
+    </div>
+  );
+}
+
+function CountdownRing({
+  label,
+  value,
+  progress,
+}: {
+  label: string;
+  value: string;
+  progress: number;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-[20px] border border-white/8 bg-white/[0.02] p-3">
+      <div className="relative h-16 w-16 sm:h-[72px] sm:w-[72px]">
+        <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+          <circle
+            cx="40"
+            cy="40"
+            r="34"
+            fill="none"
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="4"
+          />
+          <circle
+            cx="40"
+            cy="40"
+            r="34"
+            fill="none"
+            stroke="rgb(var(--room-accent-rgb))"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={213.63}
+            strokeDashoffset={213.63 - (Math.max(Math.min(progress, 100), 0) / 100) * 213.63}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-display text-lg font-semibold text-foreground sm:text-xl">{value}</span>
+        </div>
+      </div>
+      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/56">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function GuideDisclosure({
+  title,
+  body,
+  open,
+  onToggle,
+}: {
+  title: string;
+  body: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))]">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div className="font-display text-sm font-semibold text-foreground">{title}</div>
+        <ChevronDown
+          size={14}
+          className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      <div
+        className={[
+          "grid overflow-hidden transition-all duration-200 ease-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        ].join(" ")}
+      >
+        <div className="min-h-0 px-4 pb-4 text-sm text-muted">{body}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function MiniGameLobbyPage() {
@@ -658,219 +757,185 @@ export default function MiniGameLobbyPage() {
       progress: (secondValue / 60) * 100,
     },
   ];
+  const readyCount = players.length;
+  const missingCount = Math.max(roomPlayersCount - readyCount, 0);
 
   return (
     <>
       <PageShell width="standard">
         <TopActionRow
           title="Mini-Game Lobby"
-          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
+          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""} • ${modeLabel}`}
           actions={<PageBackButton onClick={onBack} />}
         />
 
-        {error && <div className="text-sm text-danger">{error}</div>}
-
-        <SectionCard className="border border-teal-500 rounded-xl p-4 space-y-2 bg-surface-2">
-          <div className="font-semibold text-foreground">
-            Control Panel
+        {error ? (
+          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
           </div>
-          {!isLocked && (
-            <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-foreground">Game Style</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setModeGuideOpen(true)}
-                    className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-                  >
-                    Guide
-                  </button>
-                  {isLeader && (
-                    <button
-                      onClick={() => setModeSettingsOpen(true)}
-                      className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-                    >
-                      Mode
-                    </button>
-                  )}
-                </div>
+        ) : null}
+
+        <SectionCard className="rounded-[28px] border border-white/8 bg-[linear-gradient(145deg,rgba(245,158,11,0.06),rgba(255,255,255,0.025)_38%,rgba(56,189,248,0.045)_100%)] p-5 sm:p-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+            <div className="space-y-3">
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Matchday desk
               </div>
-              <div className="text-sm text-muted">
-                Style:{" "}
-                <span className="font-display text-foreground font-semibold">
-                  {modeLabel}
-                </span>
+              <div className="font-display text-[clamp(1.9rem,3vw,3.2rem)] font-semibold leading-[0.95] text-foreground">
+                GW{gameweek ?? "—"} lobby control
               </div>
-              <div className="text-xs text-muted">
-                Allow Identical Picks:{" "}
-                <span className="font-display text-foreground">
-                  {allowIdenticalPicks ? "ON" : "OFF"}
-                </span>
-              </div>
-              <div className="text-xs text-muted">
-                Power-Ups:{" "}
-                <span className="font-display text-foreground">
-                  {powerupsEnabled ? "ON" : "OFF"}
-                </span>
+              <div className="max-w-2xl text-sm text-muted">
+                Final pre-kickoff checkpoint for room readiness, game style confirmation, and deadline tracking before the mini-game opens.
               </div>
             </div>
-          )}
-          <div className="border border-teal-500 rounded-xl p-3 bg-surface space-y-3">
-            {isLocked ? (
-              <>
-                <div className="flex items-center justify-center gap-2 text-sm font-semibold text-foreground">
-                  <Lock size={16} className="animate-pulse text-foreground" aria-hidden="true" />
-                  <span className="font-display">GW{gameweek ?? "—"} Locked</span>
-                  <Lock size={16} className="animate-pulse text-foreground" aria-hidden="true" />
-                </div>
-                <SpecialBreak />
-                <div className="text-sm text-muted text-center">
-                  Next gameweek:{" "}
-                  <span className="font-display text-foreground">
-                    GW {gameweek != null ? gameweek + 1 : "—"}
-                  </span>
-                </div>
-                {unlockAtMs != null && (
-                  <>
-                    <div className="text-sm text-muted text-center">
-                      <span className="font-display text-foreground">
-                        {(() => {
-                          const p = formatUnlockDateParts(unlockAtMs);
-                          return (
-                            <>
-                              {p.day}
-                              <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                                {p.suffix}
-                              </span>{" "}
-                              {p.monthYear} {p.time}
-                            </>
-                          );
-                        })()}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      {[
-                        { label: "Days", value: unlockCountdown.days, progress: Math.min((Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100, 100) },
-                        { label: "Hours", value: unlockCountdown.hours, progress: (Math.floor((unlockMsLeft / 1000 % 86400) / 3600) / 24) * 100 },
-                        { label: "Minutes", value: unlockCountdown.minutes, progress: (Math.floor((unlockMsLeft / 1000 % 3600) / 60) / 60) * 100 },
-                        { label: "Seconds", value: unlockCountdown.seconds, progress: (Math.floor(unlockMsLeft / 1000) % 60 / 60) * 100 },
-                      ].map((unit) => (
-                        <div key={`locked-${unit.label}`} className="flex flex-col items-center gap-2">
-                          <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
-                            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
-                              <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(var(--room-accent-rgb), 0.2)" strokeWidth="4" />
-                              <circle
-                                cx="40"
-                                cy="40"
-                                r="34"
-                                fill="none"
-                                stroke="rgb(var(--room-accent-rgb))"
-                                strokeWidth="4"
-                                strokeLinecap="round"
-                                strokeDasharray={213.63}
-                                strokeDashoffset={213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63}
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">{unit.value}</span>
-                            </div>
-                          </div>
-                          <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">{unit.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="text-sm font-semibold text-foreground">Weekend Lock Countdown</div>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  {countdownRings.map((unit) => (
-                    <div key={unit.label} className="flex flex-col items-center gap-2">
-                      <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
-                        <svg
-                          className="absolute inset-0 w-full h-full -rotate-90"
-                          viewBox="0 0 80 80"
-                          aria-hidden="true"
-                        >
-                          <circle
-                            cx="40"
-                            cy="40"
-                            r="34"
-                            fill="none"
-                            stroke="rgba(var(--room-accent-rgb), 0.2)"
-                            strokeWidth="4"
-                          />
-                          <circle
-                            cx="40"
-                            cy="40"
-                            r="34"
-                            fill="none"
-                            stroke="rgb(var(--room-accent-rgb))"
-                            strokeWidth="4"
-                            strokeLinecap="round"
-                            strokeDasharray={213.63}
-                            strokeDashoffset={
-                              213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
-                            }
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
-                            {unit.value}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
-                        {unit.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {isLeader && !isLocked ? (
-            <>
-              <button
-                className="rounded-lg px-4 py-2 bg-accent text-accent-foreground disabled:opacity-60"
-                disabled={
-                  starting ||
-                  gameweek == null ||
-                  roomPlayersCount < 2 ||
-                  !allPlayersReady ||
-                  isLocked
-                }
-                onClick={startMiniGame}
-              >
-                {starting ? "Starting…" : "Start Mini-game"}
-              </button>
-
-              {roomPlayersCount < 2 && (
-                <div className="text-xs text-muted">
-                  Need at least 2 players to play the mini-game.
-                </div>
-              )}
-            </>
-          ) : isLocked ? (
-            <div className="text-sm text-muted text-center">Missed deadline for this gameweek.</div>
-          ) : (
-            <div className="text-sm text-muted inline-flex items-center justify-center gap-2 w-full">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Waiting for the leader to start once everyone is ready…</span>
+            <div className="grid grid-cols-2 gap-3">
+              <LobbyStatTile
+                label="Ready"
+                value={`${readyCount}/${roomPlayersCount || 0}`}
+                note={allPlayersReady ? "All players are marked in." : `${missingCount} still missing.`}
+              />
+              <LobbyStatTile
+                label="Mode"
+                value={modeLabel}
+                note={`Picks ${allowIdenticalPicks ? "can repeat" : "must stay unique"}`}
+              />
             </div>
-          )}
+          </div>
         </SectionCard>
 
-        <SectionCard>
-          <div className="font-semibold mb-2 text-foreground">
-            Room Player Status
-          </div>
-          <div className="space-y-2">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Format desk
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">Game configuration</div>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  onClick={() => setModeGuideOpen(true)}
+                  className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
+                >
+                  Guide
+                </button>
+                {isLeader ? (
+                  <button
+                    onClick={() => setModeSettingsOpen(true)}
+                    className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
+                  >
+                    Mode
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <LobbyStatTile label="Style" value={modeLabel} note="Current room format" />
+              <LobbyStatTile
+                label="Identical Picks"
+                value={allowIdenticalPicks ? "ON" : "OFF"}
+                note={allowIdenticalPicks ? "Parallel-friendly picks." : "Unique picks enforced."}
+              />
+              <LobbyStatTile
+                label="Power-Ups"
+                value={powerupsEnabled ? "ON" : "OFF"}
+                note={powerupsEnabled ? "Extra chip round enabled." : "Standard scoring only."}
+              />
+            </div>
+
+            <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Lobby readout
+              </div>
+              <div className="mt-2 text-sm text-muted">{currentModeSummary}</div>
+            </div>
+          </SectionCard>
+
+          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Lock window
+            </div>
+            <div className="mt-1 font-display text-xl font-semibold text-foreground">
+              {isLocked ? `GW${gameweek ?? "—"} locked` : "Weekend countdown"}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(isLocked
+                ? [
+                    {
+                      label: "Days",
+                      value: unlockCountdown.days,
+                      progress: Math.min((Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100, 100),
+                    },
+                    {
+                      label: "Hours",
+                      value: unlockCountdown.hours,
+                      progress: (Math.floor((unlockMsLeft / 1000) % 86400 / 3600) / 24) * 100,
+                    },
+                    {
+                      label: "Minutes",
+                      value: unlockCountdown.minutes,
+                      progress: (Math.floor((unlockMsLeft / 1000) % 3600 / 60) / 60) * 100,
+                    },
+                    {
+                      label: "Seconds",
+                      value: unlockCountdown.seconds,
+                      progress: ((Math.floor(unlockMsLeft / 1000) % 60) / 60) * 100,
+                    },
+                  ]
+                : countdownRings
+              ).map((unit) => (
+                <CountdownRing
+                  key={`${isLocked ? "unlock" : "lock"}-${unit.label}`}
+                  label={unit.label}
+                  value={unit.value}
+                  progress={unit.progress}
+                />
+              ))}
+            </div>
+            <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.02] p-4 text-sm text-muted">
+              {isLocked ? (
+                <div className="space-y-2 text-center">
+                  <div>
+                    Next gameweek:{" "}
+                    <span className="font-display font-semibold text-foreground">GW {gameweek != null ? gameweek + 1 : "—"}</span>
+                  </div>
+                  {unlockAtMs != null ? (
+                    <div className="font-display text-foreground">
+                      {(() => {
+                        const p = formatUnlockDateParts(unlockAtMs);
+                        return (
+                          <>
+                            {p.day}
+                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                              {p.suffix}
+                            </span>{" "}
+                            {p.monthYear} {p.time}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div>
+                  Lock closes automatically when the gameweek cutoff hits. Everyone must be ready before the leader can launch the round.
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        </div>
+
+        <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+            <div>
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Ready board
+              </div>
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">Room player status</div>
+              <div className="mt-4 space-y-2">
             {roomPlayersCount === 0 ? (
-              <div className="text-sm text-muted">
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
                 No players found in this room yet.
               </div>
             ) : (
@@ -879,10 +944,15 @@ export default function MiniGameLobbyPage() {
                 return (
                   <div
                     key={p.uid}
-                    className="flex items-center justify-between border-b border-subtle last:border-0 py-2"
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
                   >
-                    <div className="font-display font-medium text-foreground">{p.displayName}</div>
-                    <div className="flex items-center gap-2">
+                        <div className="min-w-0">
+                          <div className="font-display font-medium text-foreground">{p.displayName}</div>
+                          <div className="mt-1 text-xs text-muted">
+                            {p.uid === user?.uid ? "You" : p.uid === leaderUid ? "Room leader" : "Room player"}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
                       {p.uid === leaderUid && (
                         <StatusPill label="Leader" tone="neutral" />
                       )}
@@ -895,201 +965,197 @@ export default function MiniGameLobbyPage() {
                 );
               })
             )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Launch gate
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">Start conditions</div>
+                <div className="mt-3 space-y-3 text-sm text-muted">
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                    <span>Minimum players</span>
+                    <span className="font-display font-semibold text-foreground">{roomPlayersCount}/2</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                    <span>Lobby readiness</span>
+                    <span className="font-display font-semibold text-foreground">{allPlayersReady ? "Ready" : "Pending"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                    <span>Deadline</span>
+                    <span className="font-display font-semibold text-foreground">{isLocked ? "Missed" : "Open"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {isLeader && !isLocked ? (
+                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+                  <button
+                    className="w-full rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] px-4 py-3 font-display text-sm font-semibold text-foreground transition hover:bg-[linear-gradient(135deg,rgba(245,158,11,0.2),rgba(56,189,248,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      starting ||
+                      gameweek == null ||
+                      roomPlayersCount < 2 ||
+                      !allPlayersReady ||
+                      isLocked
+                    }
+                    onClick={startMiniGame}
+                  >
+                    {starting ? "Starting…" : "Start Mini-game"}
+                  </button>
+                  <div className="mt-3 text-xs text-muted">
+                    {roomPlayersCount < 2
+                      ? "At least two room players are needed before launch."
+                      : allPlayersReady
+                        ? "All conditions are met. Launch when ready."
+                        : "Launch remains locked until every room player is marked Ready."}
+                  </div>
+                </div>
+              ) : isLocked ? (
+                <div className="rounded-[22px] border border-amber-300/20 bg-amber-400/5 px-4 py-4 text-sm text-amber-100/85">
+                  Missed deadline for this gameweek.
+                </div>
+              ) : (
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Waiting for the leader to start once everyone is ready…</span>
+                </div>
+              )}
+            </div>
           </div>
         </SectionCard>
       </PageShell>
-      <AnimatedModal
+      <ThemedModal
         open={modeGuideOpen}
         onClose={() => setModeGuideOpen(false)}
-        portal
-        lockBackground
-        zIndexClassName="z-[90]"
-        overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-lg h-[min(86vh,720px)] rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 overflow-hidden shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+        maxWidthClassName="max-w-2xl"
+        panelClassName="p-4 sm:p-5"
       >
-        <div className="h-full flex flex-col min-h-0">
-          <div className="flex items-center justify-between shrink-0">
-            <div className="font-display text-lg font-semibold text-foreground">Game Guide</div>
-            <ModalExitButton
-              onClick={() => setModeGuideOpen(false)}
-              ariaLabel="Exit game guide"
-            />
+        <ModalHeader title="Game Guide" onClose={() => setModeGuideOpen(false)} />
+        <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(145deg,rgba(245,158,11,0.06),rgba(255,255,255,0.025)_38%,rgba(56,189,248,0.045)_100%)] p-4">
+          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Current setup
           </div>
-          <div className="min-h-0 flex-1 overflow-auto no-scrollbar space-y-4 pr-1 mt-4">
-            <div className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-1">
-              <div className="text-xs text-muted">Current Setup</div>
-              <div className="font-display font-semibold text-foreground">
-                {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
-              </div>
-              <div className="text-xs text-muted">
-                Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
-              </div>
-              <div className="text-sm text-muted">{currentModeSummary}</div>
-              {allowIdenticalPicks && (
-                <div className="text-xs text-muted">ON = Hidden until reveal, same picks allowed.</div>
-              )}
+          <div className="mt-2 font-display text-xl font-semibold text-foreground">
+            {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
+          </div>
+          <div className="mt-2 text-xs text-muted">Power-Ups: {powerupsEnabled ? "ON" : "OFF"}</div>
+          <div className="mt-3 text-sm text-muted">{currentModeSummary}</div>
+        </SectionCard>
+        <SpecialBreak />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Modes
             </div>
-            <div className="w-full flex items-center justify-center gap-1.5">
-              <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-              <span
-                className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-                aria-hidden
+            {[
+              {
+                key: "round_robin" as const,
+                title: "Round-Robin",
+                body:
+                  "Traditional turn-by-turn mode. Players rotate through fixtures in order. Allow Identical Picks ON allows duplicate picks hidden until reveal; OFF enforces unique picks.",
+              },
+              {
+                key: "captain" as const,
+                title: "Captain",
+                body:
+                  "Captain rotates each fixture and chooses which fixture is played next. Allow Identical Picks ON runs parallel submissions hidden until reveal; OFF runs turn-based picks.",
+              },
+              {
+                key: "sprint" as const,
+                title: "Sprint",
+                body:
+                  "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
+              },
+            ].map((item) => (
+              <GuideDisclosure
+                key={item.key}
+                title={item.title}
+                body={item.body}
+                open={guideOpenMode === item.key}
+                onToggle={() => setGuideOpenMode((prev) => (prev === item.key ? null : item.key))}
               />
-              <span className="h-px w-8 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
+            ))}
+          </div>
+          <div className="space-y-2">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Power-Ups
             </div>
-            <div className="space-y-2">
-              <div className="text-xs text-muted uppercase tracking-wide">Modes</div>
-              {[
-                {
-                  key: "round_robin" as const,
-                  title: "Round-Robin",
-                  body:
-                    "Traditional turn-by-turn mode. Players rotate through fixtures in order. Allow Identical Picks ON allows duplicate picks (hidden until reveal); OFF enforces unique picks.",
-                },
-                {
-                  key: "captain" as const,
-                  title: "Captain",
-                  body:
-                    "Captain rotates each fixture and chooses which fixture is played next. Allow Identical Picks ON runs parallel submissions hidden until reveal; OFF runs turn-based picks.",
-                },
-                {
-                  key: "sprint" as const,
-                  title: "Sprint",
-                  body:
-                    "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
-                },
-              ].map((item) => {
-                const open = guideOpenMode === item.key;
-                return (
-                  <div key={item.key} className="rounded-lg border border-subtle bg-surface-2">
-                    <button
-                      type="button"
-                      onClick={() => setGuideOpenMode((prev) => (prev === item.key ? null : item.key))}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
-                    >
-                      <span className="font-display font-semibold text-foreground">{item.title}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    <div
-                      className={[
-                        "grid transition-all duration-200 ease-out overflow-hidden",
-                        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-                      ].join(" ")}
-                    >
-                      <div className="min-h-0 px-3 pb-3 text-sm text-muted">{item.body}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="space-y-2">
-              <div className="text-xs text-muted uppercase tracking-wide">Power-Ups (Optional)</div>
-              {[
-                {
-                  key: "all_in" as const,
-                  title: "All-In",
-                  body: "Exact score = 6 points, otherwise 0.",
-                },
-                {
-                  key: "safety_net" as const,
-                  title: "Safety Net",
-                  body: "If your fixture points are 0, they become 1.",
-                },
-              ].map((item) => {
-                const open = guideOpenPowerup === item.key;
-                return (
-                  <div key={item.key} className="rounded-lg border border-subtle bg-surface-2">
-                    <button
-                      type="button"
-                      onClick={() => setGuideOpenPowerup((prev) => (prev === item.key ? null : item.key))}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left"
-                    >
-                      <span className="font-display font-semibold text-foreground">{item.title}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    <div
-                      className={[
-                        "grid transition-all duration-200 ease-out overflow-hidden",
-                        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-                      ].join(" ")}
-                    >
-                      <div className="min-h-0 px-3 pb-3 text-sm text-muted">{item.body}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {[
+              {
+                key: "all_in" as const,
+                title: "All-In",
+                body: "Exact score = 6 points, otherwise 0.",
+              },
+              {
+                key: "safety_net" as const,
+                title: "Safety Net",
+                body: "If your fixture points are 0, they become 1.",
+              },
+            ].map((item) => (
+              <GuideDisclosure
+                key={item.key}
+                title={item.title}
+                body={item.body}
+                open={guideOpenPowerup === item.key}
+                onToggle={() =>
+                  setGuideOpenPowerup((prev) => (prev === item.key ? null : item.key))
+                }
+              />
+            ))}
           </div>
         </div>
-      </AnimatedModal>
-      <AnimatedModal
+      </ThemedModal>
+      <ThemedModal
         open={modeSettingsOpen && isLeader}
         onClose={() => setModeSettingsOpen(false)}
-        portal
-        lockBackground
-        zIndexClassName="z-[90]"
-        overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-full max-w-md rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+        maxWidthClassName="max-w-xl"
+        panelClassName="p-4 sm:p-5"
       >
-            <div className="flex items-center justify-between">
-              <div className="font-display text-lg font-semibold text-foreground">Game Mode</div>
-              <ModalExitButton
-                onClick={() => setModeSettingsOpen(false)}
-                ariaLabel="Exit mode settings"
-              />
+        <ModalHeader title="Game Mode" onClose={() => setModeSettingsOpen(false)} />
+        <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Format selection
+          </div>
+          <div className="mt-1 text-sm text-muted">Pick the mode that defines turn order and pace for this room.</div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {([
+              ["round_robin", "Round-Robin"],
+              ["captain", "Captain"],
+              ["sprint", "Sprint"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => updateGameModeStyle(value)}
+                disabled={modeSettingsBusy}
+                className={[
+                  "rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:opacity-60",
+                  gameModeStyle === value
+                    ? "border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] text-foreground shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                    : "border-white/8 bg-white/[0.025] text-foreground hover:bg-white/[0.04]",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </SectionCard>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Scoring rules
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => updateGameModeStyle("round_robin")}
-                disabled={modeSettingsBusy}
-                className={[
-                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
-                  gameModeStyle === "round_robin"
-                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
-                ].join(" ")}
-              >
-                Round-Robin
-              </button>
-              <button
-                onClick={() => updateGameModeStyle("captain")}
-                disabled={modeSettingsBusy}
-                className={[
-                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
-                  gameModeStyle === "captain"
-                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
-                ].join(" ")}
-              >
-                Captain
-              </button>
-              <button
-                onClick={() => updateGameModeStyle("sprint")}
-                disabled={modeSettingsBusy}
-                className={[
-                  "text-sm rounded-lg px-3 py-2 border disabled:opacity-60",
-                  gameModeStyle === "sprint"
-                    ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                    : "bg-surface border-subtle text-foreground hover:bg-surface-2",
-                ].join(" ")}
-              >
-                Sprint
-              </button>
-            </div>
+            <div className="mt-1 text-sm text-muted">Identical picks can be locked per round except in Sprint.</div>
             <button
               onClick={toggleSameResultLock}
               disabled={modeSettingsBusy || gameModeStyle === "sprint"}
               className={[
-                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                "mt-4 w-full rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:opacity-60",
                 gameModeStyle === "sprint"
-                  ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
-                  : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                  ? "cursor-not-allowed border-white/8 bg-white/[0.02] text-muted"
+                  : "border-white/8 bg-white/[0.03] text-foreground hover:bg-white/[0.05]",
               ].join(" ")}
             >
               {modeSettingsBusy
@@ -1100,10 +1166,16 @@ export default function MiniGameLobbyPage() {
                     ? "Allow Identical Picks: ON"
                     : "Allow Identical Picks: OFF"}
             </button>
+          </SectionCard>
+          <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Power-Up deck
+            </div>
+            <div className="mt-1 text-sm text-muted">Enable or disable the extra chip round for this lobby.</div>
             <button
               onClick={togglePowerupsEnabled}
               disabled={modeSettingsBusy}
-              className="w-full text-sm rounded-lg px-4 py-2 border bg-surface border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              className="mt-4 w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-foreground transition hover:bg-white/[0.05] disabled:opacity-60"
             >
               {modeSettingsBusy
                 ? "Saving..."
@@ -1111,7 +1183,9 @@ export default function MiniGameLobbyPage() {
                   ? "Power-Ups: ON"
                   : "Power-Ups: OFF"}
             </button>
-      </AnimatedModal>
+          </SectionCard>
+        </div>
+      </ThemedModal>
     </>
   );
 }

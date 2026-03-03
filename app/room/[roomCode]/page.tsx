@@ -57,6 +57,67 @@ function validRoomCode(code: string) {
   return /^[A-Z0-9]{4,8}$/.test(code);
 }
 
+function seasonLabel(seasonKey: string) {
+  if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
+  return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
+}
+
+type HubSummaryTileProps = {
+  label: string;
+  value: React.ReactNode;
+  note: React.ReactNode;
+  icon?: React.ReactNode;
+};
+
+function HubSummaryTile({ label, value, note, icon }: HubSummaryTileProps) {
+  return (
+    <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.014))] p-4 shadow-[0_14px_32px_rgba(3,8,20,0.14)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+            {label}
+          </div>
+          <div className="font-display text-[clamp(1rem,1.8vw,1.6rem)] font-semibold leading-none text-foreground">
+            {value}
+          </div>
+        </div>
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white/75">
+            {icon}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 text-xs text-muted">{note}</div>
+    </div>
+  );
+}
+
+type HubNavTileProps = {
+  label: string;
+  hint: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  onClick: () => void;
+};
+
+function HubNavTile({ label, hint, icon: Icon, onClick }: HubNavTileProps) {
+  return (
+    <button
+      onClick={onClick}
+      className="group rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 text-left shadow-[0_14px_32px_rgba(3,8,20,0.14)] transition hover:-translate-y-0.5 hover:bg-white/[0.045]"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-display text-base font-semibold text-foreground">{label}</div>
+          <div className="mt-1 text-xs text-muted">{hint}</div>
+        </div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white/75 transition group-hover:border-white/14 group-hover:bg-white/[0.055]">
+          <Icon size={16} />
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function RoomPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
@@ -697,6 +758,14 @@ export default function RoomPage() {
       : gameModeStyle === "captain"
         ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
         : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
+  const sharedButtonClass =
+    "w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:opacity-60";
+  const sharedInputClass =
+    "w-full rounded-2xl border border-white/8 bg-white/[0.035] px-3 py-2.5 text-foreground outline-none";
+  const modalSectionClass =
+    "rounded-[22px] border border-white/8 bg-white/[0.025] p-4";
+  const modalSectionTitleClass =
+    "font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48";
 
   return (
     <>
@@ -704,230 +773,308 @@ export default function RoomPage() {
         <div className="relative z-30">
           <TopActionRow
             title="Hub"
-            subtitle={roomCode}
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
             actions={
               <div ref={settingsWrapRef} className="relative ml-auto">
-            <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
-            <SettingsDropdownPanel
-              open={settingsOpen}
-              className="right-0 left-auto top-[calc(100%+0.5rem)] mt-0"
-            >
-                <div className="font-display font-semibold text-foreground">Settings</div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-teal-300">
-                    Change Nickname
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleNicknameSection}
-                    className="inline-flex items-center gap-1 rounded-lg border border-teal-500 bg-surface px-2.5 py-1 text-xs text-foreground hover:bg-surface-2"
-                  >
-                    {nicknameExpanded ? "Collapse" : "Expand"}
-                    {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                </div>
-                {nicknameExpanded && (
-                  <div className="rounded-lg border border-teal-500 p-2 space-y-2">
-                    <div>
-                      <input
-                        value={nickNameDraft}
-                        onChange={(e) => setNickNameDraft(e.target.value)}
-                        maxLength={20}
-                        placeholder="Nickname"
-                        className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
-                      />
-                    </div>
-                    <button
-                      onClick={saveNickName}
-                      disabled={nickNameBusy}
-                      className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                    >
-                      {nickNameBusy ? "Saving..." : "Save"}
-                    </button>
-                    <div className="text-xs text-muted">
-                      Nickname shows across the room. Leave blank to use your name.
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                <SpecialBreak />
-                <button
-                  onClick={async () => {
-                    setSettingsOpen(false);
-                    setRoomSwitcherOpen(true);
-                    await loadMemberRooms();
-                  }}
-                  className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+                <SettingsDropdownPanel
+                  open={settingsOpen}
+                  className="right-0 left-auto top-[calc(100%+0.5rem)] mt-0"
                 >
-                  Switch Rooms
-                </button>
-                <LogoutButton />
-                {isLeader && (
+                  <div className="font-display font-semibold text-foreground">Settings</div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                        Nickname
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleNicknameSection}
+                        className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+                      >
+                        {nicknameExpanded ? "Collapse" : "Expand"}
+                        {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+                    {nicknameExpanded && (
+                      <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
+                        <input
+                          value={nickNameDraft}
+                          onChange={(e) => setNickNameDraft(e.target.value)}
+                          maxLength={20}
+                          placeholder="Nickname"
+                          className={sharedInputClass}
+                        />
+                        <button
+                          onClick={saveNickName}
+                          disabled={nickNameBusy}
+                          className={sharedButtonClass}
+                        >
+                          {nickNameBusy ? "Saving..." : "Save"}
+                        </button>
+                        <div className="text-xs text-muted">
+                          Nickname shows across the room. Leave blank to use your name.
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     <SpecialBreak />
                     <button
-                      onClick={() => setRoomRulesOpen(true)}
-                      className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
+                      onClick={async () => {
+                        setSettingsOpen(false);
+                        setRoomSwitcherOpen(true);
+                        await loadMemberRooms();
+                      }}
+                      className={sharedButtonClass}
                     >
-                      Room Settings
+                      Switch Rooms
                     </button>
+                    <LogoutButton />
+                    {isLeader && (
+                      <div className="space-y-2">
+                        <SpecialBreak />
+                        <button onClick={() => setRoomRulesOpen(true)} className={sharedButtonClass}>
+                          Room Settings
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </SettingsDropdownPanel>
+                </SettingsDropdownPanel>
               </div>
             }
           />
         </div>
 
-        <div className="hidden sm:grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {[
-            {
-              label: "Fixtures",
-              hint: "Games & picks",
-              href: `/room/${roomCode}/fixtures`,
-              icon: CalendarDays,
-            },
-            {
-              label: "Predictions",
-              hint: "Mini-game",
-              href: "#",
-              icon: Gamepad2,
-            },
-            {
-              label: "Leaderboard",
-              hint: "Room ranking",
-              href: `/room/${roomCode}/leaderboard`,
-              icon: Trophy,
-            },
-            {
-              label: "Stats",
-              hint: "Player form",
-              href: `/room/${roomCode}/stats`,
-              icon: BarChart3,
-            },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.label}
-                onClick={() =>
-                  item.label === "Predictions" ? void openPredictionsTarget() : router.push(item.href)
-                }
-                className="group rounded-xl border border-teal-500 bg-surface p-3 text-left hover:bg-surface-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-foreground">{item.label}</span>
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-teal-500 bg-accent/15">
-                    <Icon size={14} className="text-foreground" />
-                  </span>
-                </div>
-                <div className="mt-1 text-xs text-muted">{item.hint}</div>
-              </button>
-            );
-          })}
-        </div>
+        {error && (
+          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
 
-        {error && <div className="text-sm text-danger">{error}</div>}
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+            <div className="space-y-3">
+              <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
+                Room overview
+              </div>
+              <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
+                Matchday control centre
+              </div>
+              <div className="max-w-2xl text-sm text-muted">
+                Navigate the room, review the live table, and manage the squad from one editorial dashboard.
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <HubSummaryTile
+                label="Room"
+                value={roomCode}
+                note={`${players.length} registered ${players.length === 1 ? "player" : "players"}`}
+                icon={<Trophy size={16} />}
+              />
+              <HubSummaryTile
+                label="Mode"
+                value={gameModeStyle === "round_robin" ? "Round-Robin" : gameModeStyle === "captain" ? "Captain" : "Sprint"}
+                note={resultLockSubtext}
+                icon={<Gamepad2 size={16} />}
+              />
+            </div>
+          </div>
+        </SectionCard>
 
-        <SectionCard>
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <SpecialBreak />
+
+        <SectionCard className="hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5 lg:block">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="font-semibold text-foreground">PL Table</div>
-              <div className="text-xs text-muted">
-                {seasonKey ? seasonKey.slice(0, 2) + "/" + seasonKey.slice(2) : "Current season"}
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Quick routes
+              </div>
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                Core room navigation
               </div>
             </div>
-            {tableLoading ? (
-              <span className="inline-flex items-center gap-2 text-xs text-muted">
-                <Loader2 size={12} className="animate-spin" />
-                <span>Loading…</span>
-              </span>
-            ) : null}
-          </div>
-          {tableError ? (
-            <div className="text-sm text-danger">{tableError}</div>
-          ) : (
-            <div className="max-h-[420px] overflow-auto no-scrollbar rounded-xl border border-subtle">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-surface-2 text-muted">
-                  <tr className="border-b border-subtle">
-                    <th className="px-3 py-2 text-left">#</th>
-                    <th className="px-3 py-2 text-left">Club</th>
-                    <th className="px-3 py-2 text-center">P</th>
-                    <th className="px-3 py-2 text-center">GD</th>
-                    <th className="px-3 py-2 text-center">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((row) => (
-                    <tr key={`${row.position}-${row.team.name}`} className="border-b border-subtle last:border-0">
-                      <td className="px-3 py-2 text-foreground">{row.position}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 shrink-0 overflow-hidden rounded-md border border-subtle bg-surface-2 flex items-center justify-center">
-                            {row.team.badge ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={row.team.badge} alt={row.team.name} className="h-5 w-5 object-contain" />
-                            ) : null}
-                          </div>
-                          <span className="font-display text-foreground">{row.team.tla || row.team.shortName || row.team.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-center text-foreground">{row.playedGames}</td>
-                      <td className="px-3 py-2 text-center text-foreground">{row.goalDifference}</td>
-                      <td className="px-3 py-2 text-center font-semibold text-foreground">{row.points}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+              Desktop rail
             </div>
-          )}
+          </div>
+          <div className="mt-5 grid gap-3 xl:grid-cols-4">
+            <HubNavTile
+              label="Fixtures"
+              hint="Games, scores, and room picks"
+              icon={CalendarDays}
+              onClick={() => router.push(`/room/${roomCode}/fixtures`)}
+            />
+            <HubNavTile
+              label="Predictions"
+              hint="Current mini-game flow"
+              icon={Gamepad2}
+              onClick={() => {
+                void openPredictionsTarget();
+              }}
+            />
+            <HubNavTile
+              label="Leaderboard"
+              hint="Room ranking and gameweek matrix"
+              icon={Trophy}
+              onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
+            />
+            <HubNavTile
+              label="Stats"
+              hint="Player profile and scoring trends"
+              icon={BarChart3}
+              onClick={() => router.push(`/room/${roomCode}/stats`)}
+            />
+          </div>
         </SectionCard>
 
-        <SectionCard>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="font-semibold text-foreground">Players</div>
-            {isLeader && (
-              <button
-                onClick={() => setShowKickControls((v) => !v)}
-                className="text-xs rounded-lg px-3 py-1.5 bg-surface border border-teal-500 text-foreground hover:bg-surface-2"
-              >
-                {showKickControls ? "Hide Kick" : "Show Kick"}
-              </button>
-            )}
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Your seat
           </div>
-          <div className="space-y-2">
-            {sortedPlayers.map((p) => (
-              <div
-                key={p.uid}
-                className="min-h-10 flex items-center justify-between border-b border-subtle last:border-0 py-2"
-              >
-                <div className="min-w-0 flex-1 font-medium text-foreground">
-                  <span className="font-display flex items-center gap-2">
-                    <span className="block truncate">
-                      {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
-                    </span>
-                    {p.uid === user?.uid && (
-                      <StatusPill label="You" tone="you" className="shrink-0 text-[10px] py-0.5" />
-                    )}
-                  </span>
-                </div>
-                <div className="ml-2 w-[84px] h-6 flex items-center justify-end">
-                  {p.role === "leader" ? (
-                    <StatusPill label="Leader" tone="neutral" />
-                  ) : isLeader && showKickControls && p.uid !== user?.uid ? (
-                    <StatusPill label="Kick" tone="danger" onClick={() => setKickTarget(p)} />
-                  ) : (
-                    <StatusPill label="Kick" invisible />
-                  )}
-                </div>
+          <div className="mt-1 font-display text-xl font-semibold text-foreground">
+            Room identity
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Display</div>
+              <div className="mt-2 font-display text-lg font-semibold text-foreground">
+                {myNickName ? `${myNickName} • ${myDisplayName}` : myDisplayName}
               </div>
-            ))}
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Role</div>
+              <div className="mt-2 flex items-center gap-2">
+                <StatusPill label={isLeader ? "Leader" : "Member"} tone="neutral" />
+                {user?.uid ? <StatusPill label="You" tone="you" className="text-[10px] py-0.5" /> : null}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Security</div>
+              <div className="mt-2 font-display text-sm font-semibold text-foreground">
+                {hasPassword ? "Private room" : "Open room"}
+              </div>
+              <div className="mt-1 text-xs text-muted">
+                {hasPassword ? "Password is enabled for new joins." : "Members can join without a password."}
+              </div>
+            </div>
           </div>
         </SectionCard>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Premier League table
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Live standings
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  {seasonKey ? seasonLabel(seasonKey) : "Current season"}
+                </div>
+              </div>
+              {tableLoading ? (
+                <span className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-muted">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Loading…</span>
+                </span>
+              ) : null}
+            </div>
+            {tableError ? (
+              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {tableError}
+              </div>
+            ) : (
+              <div className="max-h-[460px] overflow-auto no-scrollbar rounded-[22px] border border-white/8 bg-white/[0.02]">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-black/10 text-muted">
+                    <tr className="border-b border-white/8">
+                      <th className="px-3 py-2 text-left">#</th>
+                      <th className="px-3 py-2 text-left">Club</th>
+                      <th className="px-3 py-2 text-center">P</th>
+                      <th className="px-3 py-2 text-center">GD</th>
+                      <th className="px-3 py-2 text-center">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row) => (
+                      <tr
+                        key={`${row.position}-${row.team.name}`}
+                        className="border-b border-white/8 last:border-0"
+                      >
+                        <td className="px-3 py-2 font-display text-foreground">{row.position}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/[0.03]">
+                              {row.team.badge ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={row.team.badge} alt={row.team.name} className="h-5 w-5 object-contain" />
+                              ) : null}
+                            </div>
+                            <span className="font-display text-foreground">
+                              {row.team.tla || row.team.shortName || row.team.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center text-foreground">{row.playedGames}</td>
+                        <td className="px-3 py-2 text-center text-foreground">{row.goalDifference}</td>
+                        <td className="px-3 py-2 text-center font-display font-semibold text-foreground">{row.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Squad
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">Room players</div>
+              </div>
+              {isLeader && (
+                <button
+                  onClick={() => setShowKickControls((v) => !v)}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.12em] text-foreground transition hover:bg-white/[0.06]"
+                >
+                  {showKickControls ? "Hide Kick" : "Show Kick"}
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {sortedPlayers.map((p) => (
+                <div
+                  key={p.uid}
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-display text-sm font-semibold text-foreground">
+                      <span className="block truncate">
+                        {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      {p.uid === user?.uid ? (
+                        <StatusPill label="You" tone="you" className="shrink-0 text-[10px] py-0.5" />
+                      ) : null}
+                      {p.role === "leader" ? <StatusPill label="Leader" tone="neutral" /> : null}
+                    </div>
+                  </div>
+                  <div className="ml-2 flex h-8 items-center justify-end">
+                    {isLeader && showKickControls && p.uid !== user?.uid ? (
+                      <StatusPill label="Kick" tone="danger" onClick={() => setKickTarget(p)} />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </PageShell>
       <ConfirmDialog
         open={!!kickTarget}
@@ -952,18 +1099,22 @@ export default function RoomPage() {
       <ThemedModal
         open={roomSwitcherOpen}
         onClose={() => setRoomSwitcherOpen(false)}
-        maxWidthClassName="max-w-lg"
+        maxWidthClassName="max-w-xl"
       >
             <ModalHeader title="Switch Rooms" onClose={() => setRoomSwitcherOpen(false)} />
 
             {switcherError && (
-              <div className="text-sm text-danger">{switcherError}</div>
+              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {switcherError}
+              </div>
             )}
 
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-foreground">
-                Your Rooms
+            <div className={modalSectionClass}>
+              <div className={modalSectionTitleClass}>Your Rooms</div>
+              <div className="mt-1 text-sm text-muted">
+                Move between rooms you already belong to without leaving the hub.
               </div>
+              <div className="mt-4 space-y-2">
               {switcherBusy ? (
                 <div className="text-sm text-muted inline-flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin" />
@@ -977,65 +1128,73 @@ export default function RoomPage() {
                     key={r.roomCode}
                     disabled={switcherBusy || r.roomCode === roomCode}
                     onClick={() => switchToRoom(r.roomCode)}
-                    className="w-full text-left text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+                    className={`${sharedButtonClass} text-left`}
                   >
                     <span className="font-display">{r.roomCode}</span> {r.roomCode === roomCode ? "• Current" : ""}
                   </button>
                 ))
               )}
+              </div>
             </div>
             <SpecialBreak />
 
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-foreground">
-                Join New Room
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className={modalSectionClass}>
+                <div className={modalSectionTitleClass}>Join New Room</div>
+                <div className="mt-1 text-sm text-muted">
+                  Enter a room code to join another active room.
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  <input
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    placeholder="AB12"
+                    className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                    inputMode="text"
+                  />
+                  <button
+                    onClick={joinNewRoom}
+                    disabled={switcherBusy}
+                    className={sharedButtonClass}
+                  >
+                    Join
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <input
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="AB12"
-                  className="flex-1 rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground uppercase"
-                  inputMode="text"
-                />
-                <button
-                  onClick={joinNewRoom}
-                  disabled={switcherBusy}
-                  className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                >
-                  Join
-                </button>
+
+              <div className={modalSectionClass}>
+                <div className={modalSectionTitleClass}>Create New Room</div>
+                <div className="mt-1 text-sm text-muted">
+                  Create a fresh room using a new code.
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  <input
+                    value={createCode}
+                    onChange={(e) => setCreateCode(e.target.value)}
+                    placeholder="NEW25"
+                    className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                    inputMode="text"
+                  />
+                  <button
+                    onClick={createNewRoom}
+                    disabled={switcherBusy}
+                    className={sharedButtonClass}
+                  >
+                    Create
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="text-sm font-semibold text-foreground">
-                Create New Room
+            <div className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}>
+              <div className={modalSectionTitleClass}>Current Room</div>
+              <div className="mt-1 text-sm text-muted">
+                Leave <span className="font-display text-foreground">{roomCode}</span> and return to room selection.
               </div>
-              <div className="flex gap-2">
-                <input
-                  value={createCode}
-                  onChange={(e) => setCreateCode(e.target.value)}
-                  placeholder="NEW25"
-                  className="flex-1 rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground uppercase"
-                  inputMode="text"
-                />
-                <button
-                  onClick={createNewRoom}
-                  disabled={switcherBusy}
-                  className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                >
-                  Create
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <SpecialBreak />
               <button
                 onClick={leaveCurrentRoom}
                 disabled={switcherBusy}
-                className="w-full text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+                className={`${sharedButtonClass} mt-4 text-danger`}
               >
                 Leave Current Room
               </button>
@@ -1071,50 +1230,68 @@ export default function RoomPage() {
         confirming={deleteBusy}
         danger
       />
-      <ThemedModal open={roomRulesOpen} onClose={() => setRoomRulesOpen(false)}>
+      <ThemedModal open={roomRulesOpen} onClose={() => setRoomRulesOpen(false)} maxWidthClassName="max-w-2xl">
             <ModalHeader
               title="Room Settings"
               onClose={() => setRoomRulesOpen(false)}
               ariaLabel="Exit room settings"
             />
-            <button
-              onClick={openPasswordModal}
-              disabled={roomSettingsBusy}
-              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-            >
-              {hasPassword ? "Change Password" : "Set Password"}
-            </button>
-            <div className="space-y-1">
-              <div className="text-xs text-muted">Theme Accent</div>
-              <div className="relative">
-                <select
-                  value={themeAccent}
-                  onChange={(e) => updateThemeAccent(e.target.value)}
-                  disabled={roomSettingsBusy}
-                  className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-[color:rgba(var(--room-accent-rgb),0.65)] disabled:opacity-60"
-                >
-                  {THEME_ACCENT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                  ▼
-                </span>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="space-y-4">
+                <div className={modalSectionClass}>
+                  <div className={modalSectionTitleClass}>Access</div>
+                  <div className="mt-1 text-sm text-muted">
+                    Control room privacy and password protection for new joins.
+                  </div>
+                  <button
+                    onClick={openPasswordModal}
+                    disabled={roomSettingsBusy}
+                    className={`${sharedButtonClass} mt-4`}
+                  >
+                    {hasPassword ? "Change Password" : "Set Password"}
+                  </button>
+                </div>
+
+                <div className={modalSectionClass}>
+                  <div className={modalSectionTitleClass}>Theme Accent</div>
+                  <div className="mt-1 text-sm text-muted">
+                    Apply a room-wide visual accent across shared surfaces.
+                  </div>
+                  <div className="relative mt-4">
+                    <select
+                      value={themeAccent}
+                      onChange={(e) => updateThemeAccent(e.target.value)}
+                      disabled={roomSettingsBusy}
+                      className="h-11 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-8 text-center font-display text-sm font-semibold text-foreground outline-none [text-align-last:center] disabled:opacity-60"
+                    >
+                      {THEME_ACCENT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                      ▼
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs text-muted">Game Mode</div>
-              <div className="grid grid-cols-3 gap-2">
+
+              <div className="space-y-4">
+                <div className={modalSectionClass}>
+                  <div className={modalSectionTitleClass}>Game Mode</div>
+                  <div className="mt-1 text-sm text-muted">
+                    Choose the draft format used when the mini-game starts.
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
                 <button
                   onClick={() => updateGameModeStyle("round_robin")}
                   disabled={roomSettingsBusy}
                   className={[
-                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
                     gameModeStyle === "round_robin"
                       ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
                   ].join(" ")}
                 >
                   Round-Robin
@@ -1123,10 +1300,10 @@ export default function RoomPage() {
                   onClick={() => updateGameModeStyle("captain")}
                   disabled={roomSettingsBusy}
                   className={[
-                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
                     gameModeStyle === "captain"
                       ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
                   ].join(" ")}
                 >
                   Captain
@@ -1135,71 +1312,86 @@ export default function RoomPage() {
                   onClick={() => updateGameModeStyle("sprint")}
                   disabled={roomSettingsBusy}
                   className={[
-                    "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
+                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
                     gameModeStyle === "sprint"
                       ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
+                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
                   ].join(" ")}
                 >
                   Sprint
                 </button>
+                  </div>
+                  <div className="mt-3 text-xs text-muted text-center">
+                    {gameModeStyle === "sprint"
+                      ? "Sprint is the quickest mode for larger rooms."
+                      : "Recommended for 5 or fewer players."}
+                  </div>
+                </div>
+
+                <div className={modalSectionClass}>
+                  <div className={modalSectionTitleClass}>Scoring Rules</div>
+                  <div className="mt-1 text-sm text-muted">
+                    Tune duplicate pick rules and optional power-up rounds.
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <button
+                      onClick={toggleSameResultLock}
+                      disabled={roomSettingsBusy || gameModeStyle === "sprint"}
+                      className={[
+                        "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
+                        gameModeStyle === "sprint"
+                          ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
+                          : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      {roomSettingsBusy
+                        ? "Saving..."
+                        : gameModeStyle === "sprint"
+                          ? "Allow Identical Picks: ON (Sprint)"
+                          : allowIdenticalPicks
+                            ? "Allow Identical Picks: ON"
+                            : "Allow Identical Picks: OFF"}
+                    </button>
+                    <div className="text-xs text-muted text-center">
+                      {resultLockSubtext}
+                    </div>
+                    <button
+                      onClick={togglePowerups}
+                      disabled={roomSettingsBusy}
+                      className={[
+                        "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
+                        "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      {roomSettingsBusy
+                        ? "Saving..."
+                        : powerupsEnabled
+                          ? "Power-Ups: ON"
+                          : "Power-Ups: OFF"}
+                    </button>
+                    <div className="text-xs text-muted text-center">
+                      Adds a Power-Ups phase after Golden for this week.
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}>
+                  <div className={modalSectionTitleClass}>Danger Zone</div>
+                  <div className="mt-1 text-sm text-muted">
+                    Delete this room and remove it for every player.
+                  </div>
+                  <button
+                    onClick={deleteRoomAsLeader}
+                    disabled={deleteBusy}
+                    className={`${sharedButtonClass} mt-4 text-danger`}
+                  >
+                    {deleteBusy ? "Deleting room…" : "Delete Room"}
+                  </button>
+                </div>
               </div>
-              <div className="text-xs text-muted text-center">
-                {gameModeStyle === "sprint"
-                  ? "Sprint is the quickest mode for larger rooms."
-                  : "Recommended for 5 or fewer players."}
-              </div>
-            </div>
-            <button
-              onClick={toggleSameResultLock}
-              disabled={roomSettingsBusy || gameModeStyle === "sprint"}
-              className={[
-                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
-                gameModeStyle === "sprint"
-                  ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
-                  : "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
-              ].join(" ")}
-            >
-              {roomSettingsBusy
-                ? "Saving..."
-                : gameModeStyle === "sprint"
-                  ? "Allow Identical Picks: ON (Sprint)"
-                  : allowIdenticalPicks
-                    ? "Allow Identical Picks: ON"
-                    : "Allow Identical Picks: OFF"}
-            </button>
-            <div className="text-xs text-muted text-center">
-              {resultLockSubtext}
-            </div>
-            <button
-              onClick={togglePowerups}
-              disabled={roomSettingsBusy}
-              className={[
-                "w-full text-sm rounded-lg px-4 py-2 border disabled:opacity-60",
-                "bg-surface border-teal-500 text-foreground hover:bg-surface-2",
-              ].join(" ")}
-            >
-              {roomSettingsBusy
-                ? "Saving..."
-                : powerupsEnabled
-                  ? "Power-Ups: ON"
-                  : "Power-Ups: OFF"}
-            </button>
-            <div className="text-xs text-muted text-center">
-              Adds a Power-Ups phase after Golden for this week.
-            </div>
-            <div className="space-y-3">
-              <SpecialBreak />
-              <button
-                onClick={deleteRoomAsLeader}
-                disabled={deleteBusy}
-                className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-              >
-                {deleteBusy ? "Deleting room…" : "Delete Room"}
-              </button>
             </div>
       </ThemedModal>
-      <ThemedModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)}>
+      <ThemedModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} maxWidthClassName="max-w-lg">
             <ModalHeader
               title={hasPassword ? "Change Room Password" : "Set Room Password"}
               onClose={() => setPasswordModalOpen(false)}
@@ -1208,12 +1400,12 @@ export default function RoomPage() {
             {hasPassword && (
               <div className="space-y-1">
                 <label className="text-xs text-muted">Current Password</label>
-                <input
-                  type="password"
-                  value={currentPasswordDraft}
-                  onChange={(e) => setCurrentPasswordDraft(e.target.value)}
-                  className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
-                />
+              <input
+                type="password"
+                value={currentPasswordDraft}
+                onChange={(e) => setCurrentPasswordDraft(e.target.value)}
+                className={sharedInputClass}
+              />
               </div>
             )}
             <div className="space-y-1">
@@ -1222,7 +1414,7 @@ export default function RoomPage() {
                 type="password"
                 value={newPasswordDraft}
                 onChange={(e) => setNewPasswordDraft(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+                className={sharedInputClass}
               />
             </div>
             <div className="space-y-1">
@@ -1231,7 +1423,7 @@ export default function RoomPage() {
                 type="password"
                 value={confirmPasswordDraft}
                 onChange={(e) => setConfirmPasswordDraft(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 bg-input border border-teal-500 text-foreground"
+                className={sharedInputClass}
               />
             </div>
             {passwordError && (
@@ -1240,7 +1432,7 @@ export default function RoomPage() {
             <button
               onClick={saveRoomPassword}
               disabled={passwordBusy}
-              className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              className={sharedButtonClass}
             >
               {passwordBusy ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
             </button>

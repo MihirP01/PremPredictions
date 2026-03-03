@@ -37,11 +37,16 @@ export default function ModalExitButton({
         handlePress();
       }}
       className={[
-        "inline-flex h-10 items-center justify-center rounded-2xl border border-white/8 bg-black/15 px-4 text-sm text-foreground shadow-[0_12px_26px_rgba(3,8,20,0.16)] transition hover:border-white/14 hover:bg-black/20",
+        "inline-flex h-10 items-center justify-center rounded-2xl border px-4 text-sm text-foreground shadow-[0_12px_26px_rgba(3,8,20,0.16)] transition",
         className,
       ].join(" ")}
       aria-label={ariaLabel}
-      style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+      style={{
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+        borderColor: "var(--editorial-action-border)",
+        background: "var(--editorial-action-bg)",
+      }}
     >
       Exit
     </button>

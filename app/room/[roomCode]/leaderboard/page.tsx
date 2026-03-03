@@ -2,11 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { Clock3, Medal, RefreshCw, Trophy } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../../components/RoomSettingsMenu";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
+import SectionCard from "../../../../components/SectionCard";
+import SpecialBreak from "../../../../components/SpecialBreak";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
@@ -62,6 +64,73 @@ function podiumTier(rank: number) {
   return "bronze" as const;
 }
 
+type LeaderboardSelectFieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+};
+
+function LeaderboardSelectField({
+  id,
+  label,
+  value,
+  onChange,
+  children,
+}: LeaderboardSelectFieldProps) {
+  return (
+    <label className="space-y-2">
+      <span className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+        {label}
+      </span>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-12 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-4 pr-10 font-display text-sm font-semibold text-foreground outline-none [text-align-last:left] backdrop-blur-sm"
+        >
+          {children}
+        </select>
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.72rem] text-white/45">
+          ▼
+        </span>
+      </div>
+    </label>
+  );
+}
+
+type SummaryTileProps = {
+  label: string;
+  value: React.ReactNode;
+  note: React.ReactNode;
+  icon?: React.ReactNode;
+};
+
+function SummaryTile({ label, value, note, icon }: SummaryTileProps) {
+  return (
+    <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[0_14px_32px_rgba(3,8,20,0.14)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+            {label}
+          </div>
+          <div className="font-display text-[clamp(1.05rem,1.8vw,1.65rem)] font-semibold leading-none text-foreground">
+            {value}
+          </div>
+        </div>
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white/75">
+            {icon}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 text-xs text-muted">{note}</div>
+    </div>
+  );
+}
+
 function byName(a: Player, b: Player) {
   return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
 }
@@ -113,7 +182,6 @@ export default function LeaderboardMatrixPage() {
     "overall",
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
-  const settingsWrapMobileRef = useRef<HTMLDivElement | null>(null);
   const settingsWrapDesktopRef = useRef<HTMLDivElement | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -247,7 +315,6 @@ export default function LeaderboardMatrixPage() {
       ) {
         return;
       }
-      if (settingsWrapMobileRef.current?.contains(target)) return;
       if (settingsWrapDesktopRef.current?.contains(target)) return;
       setSettingsOpen(false);
     };
@@ -586,224 +653,289 @@ export default function LeaderboardMatrixPage() {
     }
   }
 
+  const topViewLabel =
+    topView === "current"
+      ? `Gameweek ${currentGw}`
+      : topView === "previous"
+        ? `Gameweek ${medalsGw}`
+        : "Season total";
+  const leadingPlayer = topThreePlayers[0] ?? null;
+  const leadingScore = leadingPlayer ? scoreForTopView(leadingPlayer.uid) : 0;
+  const leadingHasPred = leadingPlayer ? hasPredForTopView(leadingPlayer.uid) : false;
+  const headerActions = (
+    <div className="flex w-full items-center justify-end gap-2 sm:justify-between">
+      <div className="flex items-center gap-2 sm:mr-auto">
+        {isLeader && (
+          <div ref={settingsWrapDesktopRef} className="relative z-[120]">
+            <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+            <SettingsDropdownPanel open={settingsOpen} className="!left-auto !right-0 !z-[140]">
+              <div className="font-display font-semibold text-foreground">Leader Tools</div>
+              <div className="space-y-2">
+                <div className="text-xs text-muted">
+                  Recalculate score docs, then reload leaderboard data.
+                </div>
+                <button
+                  onClick={recalcAndRefreshScores}
+                  disabled={leaderToolBusy}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:opacity-60"
+                >
+                  {leaderToolBusy
+                    ? `Recalculating around GW${currentGw}...`
+                    : "Recalculate Scores"}
+                </button>
+              </div>
+            </SettingsDropdownPanel>
+          </div>
+        )}
+        <button
+          onClick={refreshLeaderboard}
+          disabled={busy || refreshing || refreshLockSeconds > 0}
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
+          aria-label="Refresh leaderboard"
+          title={
+            refreshLockSeconds > 0
+              ? `Refresh locked (${refreshLockSeconds}s)`
+              : "Refresh leaderboard"
+          }
+        >
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+        </button>
+      </div>
+      <div className="hidden sm:flex">
+        <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
+      </div>
+    </div>
+  );
   return (
     <PageShell>
-        <div className="relative z-30 space-y-3">
-          <div className="relative z-[90]">
-            <TopActionRow
-              title="Leaderboard"
-              subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-              actions={
-                <div className="ml-auto flex items-center gap-2">
-                  {isLeader && (
-                    <div ref={settingsWrapMobileRef} className="relative z-[100] sm:hidden">
-                      <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
-                      <SettingsDropdownPanel open={settingsOpen} className="!z-[120]">
-                        <div className="font-display font-semibold text-foreground">Leader Tools</div>
-                        <div className="space-y-2">
-                          <div className="text-xs text-muted">
-                            Recalculate score docs, then reload leaderboard data.
-                          </div>
-                          <button
-                            onClick={recalcAndRefreshScores}
-                            disabled={leaderToolBusy}
-                            className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                          >
-                            {leaderToolBusy
-                              ? `Recalculating around GW${currentGw}...`
-                              : "Recalculate Scores"}
-                          </button>
-                        </div>
-                      </SettingsDropdownPanel>
-                    </div>
-                  )}
-                  <button
-                    onClick={refreshLeaderboard}
-                    disabled={busy || refreshing || refreshLockSeconds > 0}
-                    className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex sm:hidden items-center justify-center page-action-btn disabled:opacity-60"
-                    aria-label="Refresh leaderboard"
-                    title={
-                      refreshLockSeconds > 0
-                        ? `Refresh locked (${refreshLockSeconds}s)`
-                        : "Refresh leaderboard"
-                    }
-                  >
-                    <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-                  </button>
-                  <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
-                </div>
-              }
-            />
-          </div>
+      <div className="space-y-3">
+        <TopActionRow
+          title="Leaderboard"
+          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+          actions={headerActions}
+        />
+      </div>
 
-          <div className="flex items-center justify-between gap-2">
-            {!!seasonOptions.length && (
-              <div className="relative z-0 w-[132px] sm:w-[140px]">
-                <label className="sr-only" htmlFor="season-select">
-                  Select season
-                </label>
-                <select
-                  id="season-select"
+      {error && (
+        <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          {error}
+        </div>
+      )}
+
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+              {!!seasonOptions.length && (
+                <LeaderboardSelectField
+                  id="leaderboard-season-select"
+                  label="Season"
                   value={seasonKey}
-                  onChange={(e) => setSeasonKey(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  onChange={setSeasonKey}
                 >
                   {seasonOptions.map((s) => (
                     <option key={s} value={s}>
                       {seasonLabel(s)}
                     </option>
                   ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                  ▼
-                </span>
-              </div>
-            )}
-            <div className="ml-auto hidden sm:flex items-center gap-2 page-actions-enter">
-              {isLeader && (
-                <div ref={settingsWrapDesktopRef} className="relative z-[100]">
-                  <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
-                  <SettingsDropdownPanel open={settingsOpen} className="!z-[120]">
-                    <div className="font-display font-semibold text-foreground">Leader Tools</div>
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted">
-                        Recalculate score docs, then reload leaderboard data.
-                      </div>
-                      <button
-                        onClick={recalcAndRefreshScores}
-                        disabled={leaderToolBusy}
-                        className="w-full text-sm rounded-lg px-4 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-                      >
-                        {leaderToolBusy
-                          ? `Recalculating around GW${currentGw}...`
-                          : "Recalculate Scores"}
-                      </button>
-                    </div>
-                  </SettingsDropdownPanel>
-                </div>
+                </LeaderboardSelectField>
               )}
-              <button
-                onClick={refreshLeaderboard}
-                disabled={busy || refreshing || refreshLockSeconds > 0}
-                className="h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex items-center justify-center page-action-btn disabled:opacity-60"
-                aria-label="Refresh leaderboard"
-                title={
-                  refreshLockSeconds > 0
-                    ? `Refresh locked (${refreshLockSeconds}s)`
-                    : "Refresh leaderboard"
-                }
-              >
-                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-              </button>
+              <div className="space-y-2">
+                <div className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Focus
+                </div>
+                <SliderSwitch
+                  options={[
+                    { value: "overall", label: "Overall" },
+                    { value: "current", label: `GW${currentGw}` },
+                    { value: "previous", label: `GW${medalsGw}` },
+                  ]}
+                  value={topView}
+                  onChange={setTopView}
+                  className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                  buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(255,255,255,0.03)_38%,rgba(56,189,248,0.05)_100%)] p-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                <div className="space-y-3">
+                  <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
+                    {topViewLabel}
+                  </div>
+                  <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
+                    Top three snapshot
+                  </div>
+                  <div className="max-w-2xl text-sm text-muted">
+                    A room-wide editorial view of current leaders, point separation, and the standing that matters for this scoring lens.
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <SummaryTile
+                    label="Leader"
+                    value={leadingPlayer ? leadingPlayer.displayName : "—"}
+                    note={
+                      leadingPlayer
+                        ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
+                        : "No scored entries yet"
+                    }
+                    icon={<Trophy size={16} />}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <SummaryTile
+                label="Current Week"
+                value={`GW${currentGw}`}
+                note={scoredGameweeks.includes(currentGw) ? "Score docs saved for this round." : "Waiting on saved score docs."}
+                icon={<Medal size={16} />}
+              />
+              <SummaryTile
+                label="Last Scored"
+                value={`GW${medalsGw}`}
+                note="Used as the previous podium comparison."
+                icon={<Clock3 size={16} />}
+              />
             </div>
           </div>
         </div>
+      </SectionCard>
 
-        {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
-            {error}
+      <SpecialBreak />
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Podium
+              </div>
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                Top three for {topViewLabel.toLowerCase()}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+              {rankedByTopView.length} players
+            </div>
           </div>
-        )}
-
-        <div
-          className="rounded-xl p-3 bg-surface-2 border border-teal-500 space-y-3"
-          style={{ animationDelay: "120ms", animationDuration: "520ms" }}
-        >
-          <SliderSwitch
-            options={[
-              { value: "overall", label: "Overall" },
-              { value: "current", label: `GW${currentGw}` },
-              { value: "previous", label: `GW${medalsGw}` },
-            ]}
-            value={topView}
-            onChange={setTopView}
-            className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-          />
-          <div className="mt-2 grid grid-cols-3 items-end gap-2">
+          <div className="mt-5 grid grid-cols-3 items-end gap-3">
             {podiumSlots.map((slot, idx) => {
               const points = slot.player ? scoreForTopView(slot.player.uid) : 0;
               const hasPred = slot.player ? hasPredForTopView(slot.player.uid) : false;
               const barHeight =
                 slot.tier === "gold"
-                  ? "96px"
+                  ? "132px"
                   : slot.tier === "silver"
-                    ? "76px"
-                    : "58px";
-              const barToneClass =
+                    ? "108px"
+                    : "86px";
+              const toneShell =
                 slot.tier === "gold"
-                  ? "metal-glow metal-glow-gold border-yellow-400/80 bg-[linear-gradient(90deg,rgba(250,204,21,0.36)_0%,rgba(250,204,21,0.18)_100%)]"
+                  ? "border-yellow-400/55 bg-[linear-gradient(180deg,rgba(250,204,21,0.22),rgba(255,255,255,0.02))]"
                   : slot.tier === "silver"
-                    ? "metal-glow metal-glow-silver border-gray-300/80 bg-[linear-gradient(90deg,rgba(209,213,219,0.34)_0%,rgba(209,213,219,0.16)_100%)]"
-                    : "metal-glow metal-glow-bronze border-amber-500/80 bg-[linear-gradient(90deg,rgba(245,158,11,0.34)_0%,rgba(245,158,11,0.16)_100%)]";
+                    ? "border-slate-300/45 bg-[linear-gradient(180deg,rgba(203,213,225,0.18),rgba(255,255,255,0.02))]"
+                    : "border-amber-500/50 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(255,255,255,0.02))]";
+              const toneBar =
+                slot.tier === "gold"
+                  ? "metal-glow metal-glow-gold border-yellow-400/80 bg-[linear-gradient(180deg,rgba(250,204,21,0.36),rgba(250,204,21,0.14))]"
+                  : slot.tier === "silver"
+                    ? "metal-glow metal-glow-silver border-slate-200/80 bg-[linear-gradient(180deg,rgba(203,213,225,0.32),rgba(203,213,225,0.12))]"
+                    : "metal-glow metal-glow-bronze border-amber-500/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.34),rgba(245,158,11,0.12))]";
               return (
-                <div key={`podium-slot-${idx}`} className="flex flex-col items-center gap-1">
-                  <div className="w-full text-center text-xs font-semibold min-h-[28px]">
+                <div key={`podium-slot-${idx}`} className="space-y-2">
+                  <div className="min-h-[2.75rem] px-1 text-center">
                     {slot.player ? (
-                      <div className="font-display">
+                      <div className="font-display text-sm font-semibold leading-tight text-foreground">
                         {slot.player.displayName}
                       </div>
                     ) : (
-                      <div className="font-display text-muted">—</div>
+                      <div className="font-display text-sm text-muted">—</div>
                     )}
                   </div>
-                  <div
-                    className={[
-                      "w-full rounded-t-lg border transition-all duration-500 ease-out font-display text-xs font-semibold text-foreground/90 flex items-center justify-center",
-                      barToneClass,
-                    ].join(" ")}
-                    style={{ height: barHeight }}
-                  >
-                    {podiumLabel(slot.position)}
-                  </div>
-                  <div className="font-display text-sm font-semibold text-foreground min-h-[20px]">
-                    {slot.player ? scoreLabel(points, hasPred) : "—"}
+                  <div className={`rounded-[22px] border p-3 ${toneShell}`}>
+                    <div
+                      className={[
+                        "flex w-full items-center justify-center rounded-[18px] border font-display text-base font-semibold text-foreground transition-all duration-500 ease-out",
+                        toneBar,
+                      ].join(" ")}
+                      style={{ height: barHeight }}
+                    >
+                      {podiumLabel(slot.position)}
+                    </div>
+                    <div className="mt-3 text-center font-display text-xl font-semibold text-foreground">
+                      {slot.player ? scoreLabel(points, hasPred) : "—"}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="rounded-lg border border-subtle bg-surface p-2">
-            <button
-              onClick={() => setFullPositionsExpanded((v) => !v)}
-              className="w-full rounded-lg border border-teal-500 bg-surface px-3 py-2 text-sm font-semibold text-foreground hover:bg-surface-2"
-            >
-              {fullPositionsExpanded ? "Hide Full Room Positions" : "Show Full Room Positions"}
-            </button>
-            <div
-              className={[
-                "grid overflow-hidden transition-all duration-300 ease-out",
-                fullPositionsExpanded ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0 mt-0",
-              ].join(" ")}
-            >
-              <div className="min-h-0 space-y-1">
-                {rankedByTopView.map((p, i) => (
-                  <div
-                    key={`${topView}-rank-${p.uid}`}
-                    className="flex items-center justify-between rounded-md border border-subtle px-2 py-1 text-sm"
-                  >
-                    <span className="font-display text-foreground">
-                      {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
-                      {user?.uid === p.uid ? (
-                        <span className={youPillClass()}>
-                          You
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="font-display font-semibold text-foreground">
-                      {scoreLabel(scoreForTopView(p.uid), hasPredForTopView(p.uid))}
-                    </span>
-                  </div>
-                ))}
-              </div>
+        </SectionCard>
+
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Full standings
+          </div>
+          <div className="mt-1 font-display text-xl font-semibold text-foreground">
+            Room positions
+          </div>
+          <div className="mt-2 text-sm text-muted">
+            Expand the full ranking ladder for the active leaderboard lens.
+          </div>
+          <button
+            onClick={() => setFullPositionsExpanded((v) => !v)}
+            className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+          >
+            {fullPositionsExpanded ? "Hide Full Room Positions" : "Show Full Room Positions"}
+          </button>
+          <div
+            className={[
+              "grid overflow-hidden transition-all duration-300 ease-out",
+              fullPositionsExpanded
+                ? "grid-rows-[1fr] opacity-100 mt-4"
+                : "grid-rows-[0fr] opacity-0 mt-0",
+            ].join(" ")}
+          >
+            <div className="min-h-0 space-y-2">
+              {rankedByTopView.map((p, i) => (
+                <div
+                  key={`${topView}-rank-${p.uid}`}
+                  className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm"
+                >
+                  <span className="font-display text-foreground">
+                    {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
+                    {user?.uid === p.uid ? <span className={youPillClass()}>You</span> : null}
+                  </span>
+                  <span className="font-display font-semibold text-foreground">
+                    {scoreLabel(scoreForTopView(p.uid), hasPredForTopView(p.uid))}
+                  </span>
+                </div>
+              ))}
             </div>
+          </div>
+        </SectionCard>
+      </div>
+
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Gameweek matrix
+            </div>
+            <div className="mt-1 font-display text-xl font-semibold text-foreground">
+              Compare weekly scoring across the room
+            </div>
+          </div>
+          <div className="hidden rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62 md:flex">
+            Through GW{currentGw}
           </div>
         </div>
 
-        <div
-          className="md:hidden rounded-xl p-3 bg-surface-2 border border-teal-500"
-          style={{ animationDelay: "460ms", animationDuration: "520ms" }}
-        >
+        <div className="mt-5 rounded-[22px] border border-white/8 bg-white/[0.02] p-3 md:hidden">
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => {
@@ -821,29 +953,23 @@ export default function LeaderboardMatrixPage() {
                 mobileSelectedGwIndex < 0 ||
                 mobileSelectedGwIndex >= mobileGwOptions.length - 1
               }
-              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
             >
               <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
             </button>
-            <div className="relative min-w-0 flex-1">
-              <label className="sr-only" htmlFor="mobile-gw-select">
-                Select gameweek
-              </label>
-              <select
+            <div className="min-w-0 flex-1">
+              <LeaderboardSelectField
                 id="mobile-gw-select"
-                value={selectedTableGw}
-                onChange={(e) => setSelectedTableGw(Number(e.target.value))}
-                className="w-full h-9 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500"
+                label="Mobile view"
+                value={String(selectedTableGw)}
+                onChange={(value) => setSelectedTableGw(Number(value))}
               >
                 {mobileGwOptions.map((gw) => (
-                  <option key={gw} value={gw}>
-                    GW{gw} Scores
+                  <option key={gw} value={String(gw)}>
+                    GW {gw} Scores
                   </option>
                 ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                ▼
-              </span>
+              </LeaderboardSelectField>
             </div>
             <button
               onClick={() => {
@@ -853,11 +979,8 @@ export default function LeaderboardMatrixPage() {
                 const nextIndex = Math.max(0, currentIndex - 1);
                 setSelectedTableGw(mobileGwOptions[nextIndex]);
               }}
-              disabled={
-                !mobileGwOptions.length ||
-                mobileSelectedGwIndex <= 0
-              }
-              className="h-9 w-9 rounded-lg border border-teal-500 bg-surface text-foreground disabled:opacity-40 inline-flex items-center justify-center p-0 leading-none"
+              disabled={!mobileGwOptions.length || mobileSelectedGwIndex <= 0}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
             >
               <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
             </button>
@@ -872,24 +995,20 @@ export default function LeaderboardMatrixPage() {
                 <div
                   key={`mobile-gw-${selectedTableGw}-${p.uid}`}
                   className={[
-                    "flex items-center justify-between rounded-lg border px-3 py-2",
+                    "flex items-center justify-between rounded-2xl border px-3 py-2.5",
                     rankToHighlight === 1
                       ? "metal-glow metal-glow-gold border-yellow-400/80 bg-yellow-400/15"
                       : rankToHighlight === 2
                         ? "metal-glow metal-glow-silver border-gray-300/80 bg-gray-300/15"
                         : rankToHighlight === 3
-                        ? "metal-glow metal-glow-bronze border-amber-500/80 bg-amber-500/15"
-                        : "border-teal-500 bg-surface",
+                          ? "metal-glow metal-glow-bronze border-amber-500/80 bg-amber-500/15"
+                          : "border-white/8 bg-white/[0.02]",
                   ].join(" ")}
                 >
                   <div className="font-display text-sm text-foreground">
                     {rankToHighlight > 0 && rankToHighlight <= 3 ? `${rankLabel(rankToHighlight)} ` : ""}
                     {p.displayName}
-                    {user?.uid === p.uid ? (
-                      <span className={youPillClass()}>
-                        You
-                      </span>
-                    ) : null}
+                    {user?.uid === p.uid ? <span className={youPillClass()}>You</span> : null}
                   </div>
                   <div className="font-display text-sm font-semibold text-foreground">
                     {scoreLabel(pts, hasPred)}
@@ -900,18 +1019,15 @@ export default function LeaderboardMatrixPage() {
           </div>
         </div>
 
-        <div
-          className="hidden md:block overflow-x-auto border border-teal-500 rounded-xl bg-surface-2"
-          style={{ animationDelay: "460ms", animationDuration: "520ms" }}
-        >
+        <div className="mt-5 hidden overflow-x-auto rounded-[22px] border border-white/8 bg-white/[0.02] md:block">
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-surface">
+            <thead className="bg-black/10">
               <tr>
-                <th className="w-[120px] p-3 text-left border-b border-subtle text-foreground sticky left-0 bg-surface z-10"></th>
+                <th className="sticky left-0 z-10 w-[120px] border-b border-subtle bg-black/10 p-3 text-left text-foreground"></th>
                 {sortedPlayers.map((p) => (
                   <th
                     key={p.uid}
-                    className="w-[120px] p-3 text-center border-b border-subtle font-semibold"
+                    className="w-[120px] border-b border-subtle p-3 text-center font-semibold"
                   >
                     <span className="font-display block truncate">{p.displayName}</span>
                   </th>
@@ -925,15 +1041,15 @@ export default function LeaderboardMatrixPage() {
                   key={gw}
                   className={[
                     "border-b border-subtle last:border-0",
-                    gw === currentGw ? "bg-blue-500/10" : "",
+                    gw === currentGw ? "bg-sky-400/8" : "",
                   ].join(" ")}
                 >
                   <td
                     className={[
-                      "w-[120px] p-3 font-semibold sticky left-0 z-10",
+                      "sticky left-0 z-10 w-[120px] p-3 font-semibold",
                       gw === currentGw
-                        ? "bg-blue-500/15 text-blue-300"
-                        : "bg-surface-2 text-foreground",
+                        ? "bg-sky-400/10 text-sky-200"
+                        : "bg-white/[0.02] text-foreground",
                     ].join(" ")}
                   >
                     <span className="font-display">GW{gw}</span>
@@ -945,36 +1061,37 @@ export default function LeaderboardMatrixPage() {
                         const rank = gwRankByUid?.[gw]?.[p.uid] ?? 0;
                         const rankToHighlight = cellPts > 0 ? rank : 0;
                         return (
-                      <span
-                        className={[
-                          "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
-                          rankToHighlight === 1
-                            ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
-                            : rankToHighlight === 2
-                              ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
-                              : rankToHighlight === 3
-                                ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
-                                : "",
-                        ].join(" ")}
-                      >
-                        {cellPts}
-                      </span>
+                          <span
+                            className={[
+                              "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
+                              rankToHighlight === 1
+                                ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
+                                : rankToHighlight === 2
+                                  ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
+                                  : rankToHighlight === 3
+                                    ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
+                                    : "",
+                            ].join(" ")}
+                          >
+                            {cellPts}
+                          </span>
                         );
                       })()}
                     </td>
                   ))}
                 </tr>
               ))}
-
             </tbody>
           </table>
         </div>
+      </SectionCard>
 
-        {(gwScoreComputedAt || leaderboardRefreshedAt) && (
-          <div
-            className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted"
-            style={{ animationDelay: "560ms", animationDuration: "520ms" }}
-          >
+      {(gwScoreComputedAt || leaderboardRefreshedAt) && (
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 text-xs text-muted">
+          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Audit trail
+          </div>
+          <div className="mt-3 space-y-1">
             {gwScoreComputedAt && (
               <div>GW{currentGw} scores last calculated: {fmtDateTime(gwScoreComputedAt)}</div>
             )}
@@ -982,7 +1099,8 @@ export default function LeaderboardMatrixPage() {
               <div>Leaderboard last refreshed: {fmtDateTime(leaderboardRefreshedAt)}</div>
             )}
           </div>
-        )}
+        </SectionCard>
+      )}
     </PageShell>
   );
 }

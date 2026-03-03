@@ -87,6 +87,73 @@ type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
 type MatchInfoTab = "lineups" | "stats" | "h2h" | "form";
 
+type FixturesSelectFieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+};
+
+type FixturesSummaryTileProps = {
+  label: string;
+  value: React.ReactNode;
+  note: React.ReactNode;
+  icon?: React.ReactNode;
+};
+
+function FixturesSelectField({
+  id,
+  label,
+  value,
+  onChange,
+  children,
+}: FixturesSelectFieldProps) {
+  return (
+    <label className="space-y-2">
+      <span className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+        {label}
+      </span>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-12 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-4 pr-10 font-display text-sm font-semibold text-foreground outline-none backdrop-blur-sm"
+        >
+          {children}
+        </select>
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.72rem] text-white/45">
+          ▼
+        </span>
+      </div>
+    </label>
+  );
+}
+
+function FixturesSummaryTile({ label, value, note, icon }: FixturesSummaryTileProps) {
+  return (
+    <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-4 shadow-[0_14px_32px_rgba(3,8,20,0.14)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            {label}
+          </div>
+          <div className="font-display text-[clamp(1.1rem,1.8vw,1.7rem)] font-semibold leading-none text-foreground">
+            {value}
+          </div>
+        </div>
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.035] text-white/75">
+            {icon}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 text-xs text-muted">{note}</div>
+    </div>
+  );
+}
+
 const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
   { key: "HOME", label: "Home" },
   { key: "TOTAL", label: "Combined" },
@@ -94,7 +161,6 @@ const TABLE_MODE_OPTIONS: Array<{ key: TableMode; label: string }> = [
 ];
 
 const BTN_3D = "btn-3d-accent";
-const SELECT_3D = "select-3d-accent";
 
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
@@ -801,6 +867,25 @@ export default function FixturesPage() {
         : null,
     [fixtures, matchInfoFixtureId],
   );
+  const fixtureList = fixtures ?? [];
+  const liveFixtureCount = useMemo(
+    () => fixtureList.filter((fixture) => isFixtureLiveWindow(fixture, nowMs)).length,
+    [fixtureList, nowMs],
+  );
+  const finishedFixtureCount = useMemo(
+    () => fixtureList.filter((fixture) => isFinalFixtureStatus(fixture.status)).length,
+    [fixtureList],
+  );
+  const currentSlateLabel =
+    liveFixtureCount > 0
+      ? `${liveFixtureCount} live ${liveFixtureCount === 1 ? "match" : "matches"}`
+      : finishedFixtureCount === fixtureList.length && fixtureList.length > 0
+        ? "Round complete"
+        : gw === seasonCurrentGw
+          ? "Awaiting kickoff"
+          : seasonCurrentGw != null && gw < seasonCurrentGw
+            ? "Archived slate"
+            : "Future slate";
 
   const h2hSummary = useMemo(() => {
     const rows = currentMatchInfo?.headToHead ?? [];
@@ -1425,13 +1510,13 @@ export default function FixturesPage() {
       <div className="relative z-30 space-y-3">
         <TopActionRow
           title="Fixtures"
-          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")} • GW ${gw}`}
+          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
           actions={
             <div className="ml-auto flex gap-2">
               <button
                 onClick={refreshFixtures}
                 disabled={refreshingFixtures || refreshLockSeconds > 0}
-                className={`h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 inline-flex sm:hidden items-center justify-center page-action-btn disabled:opacity-60 ${BTN_3D}`}
+                className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60 sm:hidden"
                 aria-label="Refresh fixtures"
                 title={
                   refreshLockSeconds > 0
@@ -1444,96 +1529,133 @@ export default function FixturesPage() {
                   className={refreshingFixtures ? "animate-spin" : ""}
                 />
               </button>
-              <PageBackButton
-                onClick={() => router.push(`/room/${roomCode}`)}
-                className={BTN_3D}
-              />
+              <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
             </div>
           }
         />
-
-        <SectionCard className="rounded-[22px] border border-white/8 bg-black/10 p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-2">
-            {!!seasonOptions.length && (
-              <div className="w-[132px] sm:w-[140px] relative">
-                <label className="sr-only" htmlFor="fixtures-season-select">
-                  Select season
-                </label>
-                <select
-                  id="fixtures-season-select"
-                  value={seasonKey}
-                  onChange={(e) => onSeasonChange(e.target.value)}
-                  className={`w-full h-10 rounded-lg border border-teal-500 bg-surface text-foreground text-sm font-semibold px-8 text-center appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500 ${SELECT_3D}`}
-                >
-                  {seasonOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {seasonLabel(s)}
-                    </option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                  ▼
-                </span>
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={refreshFixtures}
-                disabled={refreshingFixtures || refreshLockSeconds > 0}
-                className={`h-10 w-10 text-sm rounded-lg bg-surface border border-teal-500 text-foreground hover:bg-surface-2 hidden sm:inline-flex items-center justify-center page-action-btn disabled:opacity-60 ${BTN_3D}`}
-                aria-label="Refresh fixtures"
-                title={
-                  refreshLockSeconds > 0
-                    ? `Refresh locked (${refreshLockSeconds}s)`
-                    : "Refresh fixtures"
-                }
-              >
-                <RefreshCw
-                  size={16}
-                  className={refreshingFixtures ? "animate-spin" : ""}
-                />
-              </button>
-            </div>
-          </div>
-        </SectionCard>
       </div>
 
-        {/* GW nav */}
-        <GameweekNavigator
-          value={gw}
-          min={MIN_GW}
-          max={MAX_GW}
-          disabled={navLoading}
-          onChange={setGw}
-          buttonClassName={`
-            h-[clamp(2.45rem,3.2vw,2.85rem)] w-[clamp(2.45rem,3.2vw,2.85rem)]
-            flex items-center justify-center p-0 leading-none rounded-lg
-            bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-40
-            ${BTN_3D}
-          `}
-          selectClassName={`
-            w-full h-[clamp(2.45rem,3.2vw,2.85rem)] px-8 rounded-lg border border-teal-500
-            bg-surface text-foreground text-[clamp(0.85rem,1.1vw,1rem)] font-semibold text-center
-            appearance-none [text-align-last:center] focus:outline-none focus:ring-2 focus:ring-teal-500
-            ${SELECT_3D}
-          `}
-        />
-
-        <SectionCard className="rounded-xl p-3 bg-surface-2 border border-teal-500">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-xs font-semibold text-foreground">Prediction Key</div>
-            <SliderSwitch
-              options={[
-                { value: "full", label: "Full" },
-                { value: "compact", label: "Compact" },
-              ]}
-              value={compactMode ? "compact" : "full"}
-              onChange={(v) => setCompactModeValue(v === "compact")}
-              className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] min-w-[152px]"
-              buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+          <div className="space-y-3">
+            <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
+              Matchday desk
+            </div>
+            <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
+              GW{gw} fixture slate
+            </div>
+            <div className="max-w-2xl text-sm text-muted">
+              Review kickoff times, live results, and room predictions in one editorial match ledger. Current fixtures remain live while archived and future rounds keep a static schedule shell.
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <FixturesSummaryTile
+              label="Viewing"
+              value={`GW${gw}`}
+              note={`${gw === seasonCurrentGw ? "Current" : seasonCurrentGw != null && gw < seasonCurrentGw ? "Previous" : "Upcoming"} matchweek • ${fixtureList.length || 0} fixtures loaded`}
+              icon={<CircleDot size={16} />}
+            />
+            <FixturesSummaryTile
+              label="Slate status"
+              value={currentSlateLabel}
+              note={
+                refreshLockSeconds > 0
+                  ? `Manual refresh available in ${refreshLockSeconds}s`
+                  : refreshingFixtures
+                    ? "Refreshing fixture ledger now."
+                    : `${finishedFixtureCount} of ${fixtureList.length || 0} fixtures marked final`
+              }
+              icon={refreshingFixtures ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 text-[11px] text-muted">
+        </div>
+      </SectionCard>
+
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] xl:items-end">
+          {!!seasonOptions.length ? (
+            <FixturesSelectField
+              id="fixtures-season-select"
+              label="Season"
+              value={seasonKey}
+              onChange={onSeasonChange}
+            >
+              {seasonOptions.map((s) => (
+                <option key={s} value={s}>
+                  {seasonLabel(s)}
+                </option>
+              ))}
+            </FixturesSelectField>
+          ) : (
+            <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Season
+              </div>
+              <div className="mt-2 font-display text-sm font-semibold text-foreground">
+                {seasonLabel(seasonKey || "----")}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Matchweek selector
+            </div>
+            <GameweekNavigator
+              value={gw}
+              min={MIN_GW}
+              max={MAX_GW}
+              disabled={navLoading}
+              onChange={setGw}
+              buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
+              selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
+            />
+          </div>
+          <div className="hidden sm:flex xl:justify-end">
+            <button
+              onClick={refreshFixtures}
+              disabled={refreshingFixtures || refreshLockSeconds > 0}
+              className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
+              aria-label="Refresh fixtures"
+              title={
+                refreshLockSeconds > 0
+                  ? `Refresh locked (${refreshLockSeconds}s)`
+                  : "Refresh fixtures"
+              }
+            >
+              <RefreshCw
+                size={16}
+                className={refreshingFixtures ? "animate-spin" : ""}
+              />
+            </button>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Prediction key
+            </div>
+            <div className="mt-1 font-display text-xl font-semibold text-foreground">
+              Read room picks at a glance
+            </div>
+            <div className="mt-1 text-sm text-muted">
+              Use compact mode for a lighter fixture rail, or expand into the full room-readout layout.
+            </div>
+          </div>
+          <SliderSwitch
+            options={[
+              { value: "full", label: "Full" },
+              { value: "compact", label: "Compact" },
+            ]}
+            value={compactMode ? "compact" : "full"}
+            onChange={(v) => setCompactModeValue(v === "compact")}
+            className="relative grid min-w-[164px] overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+          />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-muted sm:grid-cols-3 lg:grid-cols-7">
             <div className="key-chip key-chip-result font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
               Correct Result
             </div>
@@ -1589,7 +1711,7 @@ export default function FixturesPage() {
         </SectionCard>
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
+          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
             {error}
           </div>
         )}
@@ -2005,14 +2127,19 @@ export default function FixturesPage() {
         </div>
 
         {(fixturesGeneratedAt || fixturesRefreshedAt) && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-xs text-muted">
-            {fixturesGeneratedAt && (
-              <div>Fixture snapshot time: {formatDateTimeLabel(fixturesGeneratedAt)}</div>
-            )}
-            {fixturesRefreshedAt && (
-              <div>Fixtures page last refreshed: {formatDateTimeLabel(fixturesRefreshedAt)}</div>
-            )}
-          </div>
+          <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] px-4 py-3">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Fixture ledger
+            </div>
+            <div className="mt-2 space-y-1 text-xs text-muted">
+              {fixturesGeneratedAt && (
+                <div>Fixture snapshot time: {formatDateTimeLabel(fixturesGeneratedAt)}</div>
+              )}
+              {fixturesRefreshedAt && (
+                <div>Fixtures page last refreshed: {formatDateTimeLabel(fixturesRefreshedAt)}</div>
+              )}
+            </div>
+          </SectionCard>
         )}
 
       <AnimatedModal
@@ -2022,7 +2149,7 @@ export default function FixturesPage() {
         lockBackground
         zIndexClassName="z-[90]"
         overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] shadow-[0_24px_56px_rgba(3,8,20,0.32)]"
       >
         <div className="h-full p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -2074,7 +2201,7 @@ export default function FixturesPage() {
               </div>
             )}
             {!matchInfoLoading && matchInfoError && (
-              <div className="rounded-lg border border-teal-500 bg-surface-2 p-3 text-sm text-danger">
+              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                 {matchInfoError}
               </div>
             )}

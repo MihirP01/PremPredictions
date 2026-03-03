@@ -590,80 +590,85 @@ export default function RevealPage() {
         />
 
         {error && (
-          <div className="rounded-xl p-3 bg-surface-2 border border-teal-500 text-danger">
+          <div className="rounded-[22px] border border-white/8 bg-black/20 px-4 py-3 text-sm text-danger shadow-[0_18px_40px_rgba(3,8,20,0.2)]">
             {error}
           </div>
         )}
 
-        <div className="border border-teal-500 rounded-xl p-3 bg-surface-2 space-y-1">
-          <div className="text-xs text-muted">
-            Next gameweek:{" "}
-            <span className="font-display text-foreground">GW {nextGw ?? "—"}</span>
-          </div>
-          {unlockAtMs != null && (
-            <>
-              <div className="text-xs text-muted">
-                Unlocks:{" "}
-                <span className="font-display text-foreground">
-                  {(() => {
-                    const p = formatUnlockDateParts(unlockAtMs);
-                    return (
-                      <>
-                        {p.day}
-                        <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                          {p.suffix}
-                        </span>{" "}
-                        {p.monthYear} {p.time}
-                      </>
-                    );
-                  })()}
-                </span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                {unlockCountdownRings.map((unit) => (
-                  <div key={unit.label} className="flex flex-col items-center gap-2">
-                    <div className="relative w-16 h-16 sm:w-[72px] sm:h-[72px]">
-                      <svg
-                        className="absolute inset-0 w-full h-full -rotate-90"
-                        viewBox="0 0 80 80"
-                        aria-hidden="true"
-                      >
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r="34"
-                          fill="none"
-                          stroke="rgba(var(--room-accent-rgb), 0.2)"
-                          strokeWidth="4"
-                        />
-                        <circle
-                          cx="40"
-                          cy="40"
-                          r="34"
-                          fill="none"
-                          stroke="rgb(var(--room-accent-rgb))"
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeDasharray={213.63}
-                          strokeDashoffset={
-                            213.63 - (Math.max(Math.min(unit.progress, 100), 0) / 100) * 213.63
-                          }
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="font-display text-lg sm:text-xl font-semibold text-foreground leading-none">
-                          {unit.value}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="font-display text-[11px] uppercase tracking-wide text-accent font-semibold">
-                      {unit.label}
-                    </div>
+        <div className="relative overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-1 shadow-[0_24px_56px_rgba(3,8,20,0.24)]">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Reveal desk
                   </div>
-                ))}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Scored week
+                    </span>
+                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                      GW {gw}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                    Next up
+                  </div>
+                  <div className="font-display text-lg font-semibold text-foreground">
+                    GW {nextGw ?? "—"}
+                  </div>
+                </div>
               </div>
-            </>
-          )}
+              {unlockAtMs != null && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                      Unlocks
+                    </span>
+                    <span className="font-display text-sm font-semibold text-foreground">
+                      {(() => {
+                        const p = formatUnlockDateParts(unlockAtMs);
+                        return (
+                          <>
+                            {p.day}
+                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                              {p.suffix}
+                            </span>{" "}
+                            {p.monthYear} {p.time}
+                          </>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {unlockCountdownRings.map((unit) => (
+                      <div
+                        key={unit.label}
+                        className="relative overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                      >
+                        <span
+                          className="absolute inset-x-0 top-0 h-px"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(90deg, transparent, rgba(var(--room-accent-rgb), 0.52), transparent)",
+                          }}
+                          aria-hidden
+                        />
+                        <div className="font-display text-[1.45rem] font-semibold leading-none text-foreground sm:text-[1.75rem]">
+                          {unit.value}
+                        </div>
+                        <div className="mt-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+                          {unit.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {!allLocked && (
@@ -684,19 +689,14 @@ export default function RevealPage() {
         )}
 
         <SpecialBreak />
-        <div className="text-center">
-          <div className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-foreground shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
-            Gameweek {gw}
-          </div>
-        </div>
-        <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {fixtureIds.map((fid, idx) => {
             const f = fixtureMap.get(fid);
             const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
             const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
             const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
             const clashBgStyle: React.CSSProperties = {
-              backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+              backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(9,12,22,0.94) 42%, rgba(9,12,22,0.94) 58%, ${hexToRgba(awayColor, 0.14)} 100%)`,
             };
             const dayBoundary = dayBoundaryByIdx[idx];
             const showDayHeader = !!dayBoundary?.showDayHeader;
@@ -734,11 +734,12 @@ export default function RevealPage() {
                     <span aria-hidden className="invisible w-full">_</span>
                   )}
                 </div>
-                <div
-                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-[clamp(0.75rem,1.1vw,1.25rem)]"
-                  style={clashBgStyle}
-                >
-                  <div className="space-y-2">
+                <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                  <div
+                    className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                    style={clashBgStyle}
+                  >
+                    <div className="space-y-3">
                   <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
                     {kickoffParts ? (
                       <div className="flex items-center justify-between gap-2">
@@ -842,90 +843,85 @@ export default function RevealPage() {
                     </>
                   )}
 
-                  <div className="text-xs text-muted text-center">Predictions</div>
-                  <div className="w-full flex flex-wrap justify-center gap-2">
-                    {playersSorted.map((uid) => {
-                      const sc = picksByUserFixture.get(`${uid}|${fid}`) || "";
-                      const g = goldensByUid[uid];
-                      const isGolden = g?.locked && g?.fixtureId === fid;
-                      const p = powerupsByUid[uid];
-                      const powerupType =
-                        p?.locked && p?.fixtureId === fid ? p.powerupType : null;
-                      const toneClass = "bg-surface border-teal-500";
-                      const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
-                      const goldenGlowClass = isGolden
-                        ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
-                        : "";
-                      return (
-                        <div
-                          key={`${fid}-${uid}`}
-                          className={[
-                            "relative min-w-0 !overflow-visible w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
-                          ].join(" ")}
-                        >
-                          {isGolden || powerupType ? (
-                            <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
-                              {isGolden ? (
-                                <Image
-                                  src="/icons/powerups/golden-pick-v2.svg"
-                                  alt=""
-                                  aria-hidden
-                                  width={16}
-                                  height={16}
-                                  className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                />
-                              ) : null}
-                              {powerupType ? (
-                                <Image
-                                  src={
-                                    powerupType === "ALL_IN"
-                                      ? "/icons/powerups/all-in-v2.svg"
-                                      : "/icons/powerups/safety-net-v2.svg"
-                                  }
-                                  alt=""
-                                  aria-hidden
-                                  width={16}
-                                  height={16}
-                                  className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                />
-                              ) : null}
-                            </span>
-                          ) : null}
-                          <div
-                            className={[
-                              "rounded-lg rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center border",
-                              toneClass,
-                              goldenBorderClass,
-                              goldenGlowClass,
-                              powerupType === "ALL_IN"
-                                ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
-                                : powerupType === "SAFETY_NET"
-                                  ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
-                                  : "",
-                            ].join(" ")}
-                          >
-                            <div
-                              className={[
-                                "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
-                                "text-muted",
-                              ].join(" ")}
-                            >
-                              {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                            </div>
-                            <div
-                              className={[
-                                "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap",
-                                "text-foreground",
-                              ].join(" ")}
-                            >
-                              {fmtScore(sc)}
-                            </div>
-                          </div>
+                      <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                          <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                            Prediction board
+                          </span>
+                          <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                            {playersSorted.length} {playersSorted.length === 1 ? "player" : "players"}
+                          </span>
                         </div>
-                      );
-                    })}
+                        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                          {playersSorted.map((uid) => {
+                            const sc = picksByUserFixture.get(`${uid}|${fid}`) || "";
+                            const g = goldensByUid[uid];
+                            const isGolden = g?.locked && g?.fixtureId === fid;
+                            const p = powerupsByUid[uid];
+                            const powerupType =
+                              p?.locked && p?.fixtureId === fid ? p.powerupType : null;
+                            const toneClass = "bg-surface border-teal-500";
+                            const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
+                            const goldenGlowClass = isGolden
+                              ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
+                              : "";
+                            return (
+                              <div key={`${fid}-${uid}`} className="relative min-w-0 !overflow-visible">
+                                {isGolden || powerupType ? (
+                                  <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
+                                    {isGolden ? (
+                                      <Image
+                                        src="/icons/powerups/golden-pick-v2.svg"
+                                        alt=""
+                                        aria-hidden
+                                        width={16}
+                                        height={16}
+                                        className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                      />
+                                    ) : null}
+                                    {powerupType ? (
+                                      <Image
+                                        src={
+                                          powerupType === "ALL_IN"
+                                            ? "/icons/powerups/all-in-v2.svg"
+                                            : "/icons/powerups/safety-net-v2.svg"
+                                        }
+                                        alt=""
+                                        aria-hidden
+                                        width={16}
+                                        height={16}
+                                        className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
+                                      />
+                                    ) : null}
+                                  </span>
+                                ) : null}
+                                <div
+                                  className={[
+                                    "rounded-[18px] rounded-tl-[22px] rounded-br-[22px] rounded-tr-none rounded-bl-none px-2.5 py-2 text-center border border-white/8 bg-white/[0.02]",
+                                    toneClass,
+                                    goldenBorderClass,
+                                    goldenGlowClass,
+                                    powerupType === "ALL_IN"
+                                      ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
+                                      : powerupType === "SAFETY_NET"
+                                        ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                        : "",
+                                  ].join(" ")}
+                                >
+                                  <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                    {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                                  </div>
+                                  <div className="font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap text-foreground">
+                                    {fmtScore(sc)}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
                 </div>
               </div>
             );

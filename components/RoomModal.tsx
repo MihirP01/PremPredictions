@@ -26,8 +26,16 @@ export function ThemedModal({
       portal
       lockBackground
       zIndexClassName="z-[90]"
-      overlayClassName="bg-[rgba(4,12,24,0.62)] backdrop-blur-sm"
-      panelClassName={`w-full ${maxWidthClassName} rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)] ${panelClassName}`.trim()}
+      overlayClassName="backdrop-blur-sm"
+      panelClassName={`w-full ${maxWidthClassName} rounded-[24px] border p-4 ${panelClassName}`.trim()}
+      overlayStyle={{ background: "var(--editorial-modal-overlay)" }}
+      panelStyle={{
+        borderColor: "var(--editorial-modal-border)",
+        background: "var(--editorial-modal-bg)",
+        boxShadow: "0 28px 68px rgba(3,8,20,0.42)",
+        backdropFilter: "blur(22px)",
+        WebkitBackdropFilter: "blur(22px)",
+      }}
     >
       {children}
     </AnimatedModal>
@@ -77,7 +85,13 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <ThemedModal open={open} onClose={onClose} maxWidthClassName="max-w-sm">
-      <div className="space-y-3 rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
+      <div
+        className="space-y-3 rounded-[22px] border p-4"
+        style={{
+          borderColor: "var(--editorial-action-border)",
+          background: "var(--editorial-action-bg)",
+        }}
+      >
         <div className="font-display text-lg font-semibold text-foreground">{title}</div>
         <div className="text-sm text-muted">{body}</div>
       </div>
@@ -85,7 +99,11 @@ export function ConfirmDialog({
         <button
           onClick={onClose}
           disabled={confirming}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-foreground transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
+          className="rounded-2xl border px-4 py-3 text-sm text-foreground transition disabled:opacity-60"
+          style={{
+            borderColor: "var(--editorial-action-border)",
+            background: "var(--editorial-action-bg)",
+          }}
         >
           {cancelLabel}
         </button>

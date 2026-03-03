@@ -24,13 +24,31 @@ export default function PageLayout({
   return (
     <div
       className={[
-        "w-full mx-auto page-shell-enter relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(160deg,rgba(9,18,34,0.96),rgba(10,27,46,0.94)_55%,rgba(14,45,63,0.92))] p-4 sm:p-6 shadow-[0_28px_70px_rgba(3,8,20,0.42)]",
+        "w-full mx-auto page-shell-enter relative overflow-hidden rounded-[30px] border p-4 sm:p-6",
         WIDTH_CLASS[width],
         className,
       ].join(" ")}
+      style={{
+        borderColor: "var(--editorial-shell-border)",
+        background: "var(--editorial-shell-bg)",
+        boxShadow: "var(--editorial-shell-shadow)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+      }}
     >
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-      <div className="pointer-events-none absolute right-8 top-8 h-20 w-20 rounded-full bg-sky-300/8 blur-3xl" />
+      <div
+        className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent to-transparent"
+        style={{ backgroundImage: "linear-gradient(90deg, transparent, var(--editorial-shell-hairline), transparent)" }}
+      />
+      <div
+        className="pointer-events-none absolute left-8 top-8 h-24 w-24 rounded-full blur-3xl"
+        style={{ background: "var(--editorial-shell-glow-a)" }}
+      />
+      <div
+        className="pointer-events-none absolute right-10 top-10 h-20 w-20 rounded-full blur-3xl"
+        style={{ background: "var(--editorial-shell-glow-b)" }}
+      />
+      <div className="pointer-events-none absolute inset-[1px] rounded-[29px] border border-white/[0.03]" />
       {children}
     </div>
   );

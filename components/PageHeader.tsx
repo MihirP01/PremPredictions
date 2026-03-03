@@ -48,23 +48,37 @@ export default function PageHeader({
   const showActionsOnMobile = hasMobileRenderableNode(actions);
 
   return (
-    <div className={["rounded-[22px] border border-white/8 bg-black/10 px-4 py-4 sm:px-5", className].join(" ")}>
+    <div
+      className={["rounded-[22px] border px-4 py-4 sm:px-5", className].join(" ")}
+      style={{
+        borderColor: "var(--editorial-header-border)",
+        background: "var(--editorial-header-bg)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+      }}
+    >
       <div className="space-y-2">
         {subtitle ? (
-          <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/52">
+          <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/50">
             {subtitle}
           </div>
         ) : null}
-        <h1 className="font-display text-[clamp(1.8rem,2.4vw,2.8rem)] font-semibold leading-tight text-foreground">
+        <h1 className="font-display text-[clamp(1.9rem,2.4vw,2.95rem)] font-semibold leading-[0.96] text-foreground">
           {title}
         </h1>
       </div>
       {showActions ? (
         <div
           className={[
-            "page-actions-enter flex-wrap items-center gap-2 rounded-[18px] border border-white/8 bg-white/[0.03] px-2 py-2 sm:ml-auto sm:flex",
+            "page-actions-enter flex-wrap items-center gap-2 rounded-[18px] border px-2 py-2 sm:ml-auto sm:flex",
             showActionsOnMobile ? "flex" : "hidden",
           ].join(" ")}
+          style={{
+            borderColor: "var(--editorial-action-border)",
+            background: "var(--editorial-action-bg)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+          }}
         >
           {actions}
         </div>

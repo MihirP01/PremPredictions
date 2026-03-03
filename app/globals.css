@@ -28,7 +28,7 @@
 
   --editorial-shell-bg:
     linear-gradient(145deg, rgba(8, 15, 25, 0.9), rgba(10, 18, 30, 0.82) 42%, rgba(14, 24, 40, 0.84) 100%);
-  --editorial-shell-border: rgba(255, 255, 255, 0.08);
+  --editorial-shell-border: rgba(214, 224, 236, 0.055);
   --editorial-shell-shadow: 0 34px 90px rgba(3, 7, 18, 0.44);
   --editorial-shell-hairline: rgba(255, 248, 235, 0.14);
   --editorial-shell-glow-a: rgba(245, 158, 11, 0.12);
@@ -36,36 +36,36 @@
 
   --editorial-panel-bg:
     linear-gradient(180deg, rgba(10, 17, 29, 0.78), rgba(10, 18, 32, 0.66) 100%);
-  --editorial-panel-border: rgba(255, 255, 255, 0.07);
+  --editorial-panel-border: rgba(214, 224, 236, 0.052);
   --editorial-panel-shadow: 0 18px 44px rgba(3, 8, 20, 0.2);
   --editorial-panel-glass: rgba(255, 255, 255, 0.035);
   --editorial-panel-rule: rgba(255, 248, 235, 0.11);
 
   --editorial-header-bg:
     linear-gradient(180deg, rgba(14, 22, 34, 0.64), rgba(10, 18, 28, 0.5));
-  --editorial-header-border: rgba(255, 255, 255, 0.07);
+  --editorial-header-border: rgba(214, 224, 236, 0.05);
   --editorial-action-bg: rgba(255, 255, 255, 0.045);
-  --editorial-action-border: rgba(255, 255, 255, 0.08);
+  --editorial-action-border: rgba(214, 224, 236, 0.055);
   --editorial-action-hover-bg: rgba(255, 255, 255, 0.07);
   --editorial-action-hover-border: rgba(255, 255, 255, 0.12);
 
   --editorial-nav-bg:
     linear-gradient(180deg, rgba(8, 15, 27, 0.9), rgba(10, 18, 31, 0.82));
-  --editorial-nav-border: rgba(255, 255, 255, 0.08);
+  --editorial-nav-border: rgba(214, 224, 236, 0.055);
   --editorial-nav-inner: rgba(255, 255, 255, 0.03);
   --editorial-nav-active:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(245, 158, 11, 0.1));
   --editorial-nav-active-border: rgba(255, 255, 255, 0.12);
 
   --editorial-segment-bg: rgba(255, 255, 255, 0.032);
-  --editorial-segment-border: rgba(255, 255, 255, 0.08);
+  --editorial-segment-border: rgba(214, 224, 236, 0.055);
   --editorial-segment-indicator:
     linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(245, 158, 11, 0.18));
   --editorial-segment-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(3, 8, 20, 0.12);
 
   --editorial-modal-bg:
     linear-gradient(180deg, rgba(9, 15, 26, 0.95), rgba(10, 18, 30, 0.92));
-  --editorial-modal-border: rgba(255, 255, 255, 0.08);
+  --editorial-modal-border: rgba(214, 224, 236, 0.058);
   --editorial-modal-overlay: rgba(3, 8, 20, 0.58);
 
   /* Solid fallback under Safari UI */
@@ -144,6 +144,16 @@ body > div {
 @media (min-width: 768px) {
   body > div {
     padding-top: 0;
+  }
+
+  :root {
+    --editorial-shell-border: rgba(214, 224, 236, 0.04);
+    --editorial-panel-border: rgba(214, 224, 236, 0.042);
+    --editorial-header-border: rgba(214, 224, 236, 0.042);
+    --editorial-action-border: rgba(214, 224, 236, 0.048);
+    --editorial-nav-border: rgba(214, 224, 236, 0.048);
+    --editorial-segment-border: rgba(214, 224, 236, 0.048);
+    --editorial-modal-border: rgba(214, 224, 236, 0.05);
   }
 }
 

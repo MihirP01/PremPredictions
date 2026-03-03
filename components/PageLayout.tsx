@@ -48,7 +48,7 @@ export default function PageLayout({
         className="pointer-events-none absolute right-10 top-10 h-20 w-20 rounded-full blur-3xl"
         style={{ background: "var(--editorial-shell-glow-b)" }}
       />
-      <div className="pointer-events-none absolute inset-[1px] rounded-[29px] border border-white/[0.03]" />
+      <div className="pointer-events-none absolute inset-[1px] rounded-[29px] border border-white/[0.03] sm:hidden" />
       {children}
     </div>
   );

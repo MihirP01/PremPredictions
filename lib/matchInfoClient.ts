@@ -66,6 +66,7 @@ export type MatchInfoStat = {
 export type MatchInfoData = {
   fixtureId: number;
   generatedAt: string;
+  liveWidgetUrl?: string | null;
   lineups: {
     phase?: "predicted" | "confirmed";
     home: MatchInfoLineupTeam;
@@ -93,6 +94,7 @@ function normalize(payload: unknown): MatchInfoData {
   return {
     fixtureId: Number(p.fixtureId ?? 0),
     generatedAt: String(p.generatedAt || ""),
+    liveWidgetUrl: p.liveWidgetUrl ? String(p.liveWidgetUrl) : null,
     lineups: {
       phase: p.lineups?.phase === "predicted" ? "predicted" : "confirmed",
       home: {
@@ -168,6 +170,7 @@ export async function getMatchInfoCached(
     kickoff: string;
     homeTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
     awayTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
+    force?: boolean;
   },
 ): Promise<MatchInfoData> {
   const id = Number(args.fixtureId);
@@ -178,18 +181,16 @@ export async function getMatchInfoCached(
 
   const key = keyFor(id, sk);
   const now = Date.now();
-  const mem = memCache.get(key);
-  if (mem && mem.expiresAt > now) return mem.data;
-  const stored = getStorage(key);
-  if (stored) {
-    memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-    return stored;
+  if (!args.force) {
+    const mem = memCache.get(key);
+    if (mem && mem.expiresAt > now) return mem.data;
+    const stored = getStorage(key);
+    if (stored) {
+      memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
+      return stored;
+    }
   }
-
-  const existing = pending.get(key);
-  if (existing) return existing;
-
-  const req = (async () => {
+  const runFetch = async () => {
     const params = new URLSearchParams({
       fixtureId: String(id),
       seasonKey: sk,
@@ -201,6 +202,7 @@ export async function getMatchInfoCached(
     if (args.homeTeam?.shortName) params.set("homeShortName", String(args.homeTeam.shortName));
     if (args.awayTeam?.tla) params.set("awayTla", String(args.awayTeam.tla));
     if (args.awayTeam?.shortName) params.set("awayShortName", String(args.awayTeam.shortName));
+    if (args.force) params.set("_t", String(Date.now()));
     const res = await fetch(
       `/api/match-info?${params.toString()}`,
       { cache: "no-store" },
@@ -208,9 +210,20 @@ export async function getMatchInfoCached(
     const body = (await res.json().catch(() => ({}))) as MatchInfoData & { error?: string };
     if (!res.ok) throw new Error(body?.error || `match-info ${res.status}`);
     const normalized = normalize(body);
-    setCached(key, normalized);
+    if (!args.force) {
+      setCached(key, normalized);
+    }
     return normalized;
-  })().finally(() => pending.delete(key));
+  };
+
+  if (args.force) {
+    return runFetch();
+  }
+
+  const existing = pending.get(key);
+  if (existing) return existing;
+
+  const req = runFetch().finally(() => pending.delete(key));
 
   pending.set(key, req);
   return req;

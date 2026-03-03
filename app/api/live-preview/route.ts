@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const FOTMOB_LEAGUE_ID = 47;
 const SEASON_START_MONTH_UTC = 7;
+const LIVE_PREVIEW_CACHE_MS = 250;
+
+type LivePreviewCacheEntry = {
+  season: string;
+  expiresAt: number;
+  matches: FotmobMatch[];
+};
+
+let livePreviewCache: LivePreviewCacheEntry | null = null;
+let livePreviewInFlight: Promise<FotmobMatch[]> | null = null;
 
 type FotmobStatus = {
   utcTime?: string;
@@ -155,6 +165,53 @@ function mapMatchToOverlay(match: FotmobMatch, forcedGameweek: number | null) {
   };
 }
 
+async function fetchFotmobMatches(season: string) {
+  const now = Date.now();
+  if (
+    livePreviewCache &&
+    livePreviewCache.season === season &&
+    livePreviewCache.expiresAt > now
+  ) {
+    return livePreviewCache.matches;
+  }
+
+  if (livePreviewInFlight) {
+    return livePreviewInFlight;
+  }
+
+  const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`;
+
+  livePreviewInFlight = (async () => {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`FotMob fetch failed (${response.status})`);
+    }
+
+    const data = await response.json().catch(() => null);
+    const matches = Array.isArray(data?.fixtures?.allMatches)
+      ? (data.fixtures.allMatches as FotmobMatch[])
+      : [];
+
+    livePreviewCache = {
+      season,
+      expiresAt: Date.now() + LIVE_PREVIEW_CACHE_MS,
+      matches,
+    };
+
+    return matches;
+  })();
+
+  try {
+    return await livePreviewInFlight;
+  } finally {
+    livePreviewInFlight = null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const gameweekParam = req.nextUrl.searchParams.get("gameweek");
   const requestedSeason = req.nextUrl.searchParams.get("seasonKey");
@@ -162,25 +219,8 @@ export async function GET(req: NextRequest) {
   const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
   const gameweek = Number.isFinite(Number(gameweekParam)) ? Number(gameweekParam) : null;
 
-  const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`;
-
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "FotMob fetch failed", status: response.status },
-        { status: 502 },
-      );
-    }
-
-    const data = await response.json().catch(() => null);
-    const matches = Array.isArray(data?.fixtures?.allMatches)
-      ? (data.fixtures.allMatches as FotmobMatch[])
-      : [];
+    const matches = await fetchFotmobMatches(season);
 
     const filtered = gameweek == null
       ? matches

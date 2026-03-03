@@ -43,8 +43,6 @@ import {
 } from "@/lib/powerupScoring";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import {
-  fixtureDayKey,
-  fixtureDayLabel,
   formatDateTimeLabel,
   formatDateWithOrdinal,
   formatKickoffParts,
@@ -266,6 +264,16 @@ function isFixtureLiveWindow(fixture: Fixture, nowMs: number) {
   if (!Number.isFinite(kickoffMs)) return false;
   if (kickoffMs > nowMs) return false;
   return !isFinalFixtureStatus(fixture.status);
+}
+
+function isExplicitLiveFixtureStatus(status?: string | null) {
+  const raw = String(status || "").trim();
+  const s = raw.toUpperCase();
+  if (!raw) return false;
+  if (s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") return false;
+  if (s === "FINISHED" || s === "FT" || s === "AWARDED") return false;
+  if (s === "CANCELLED" || s === "POSTPONED") return false;
+  return true;
 }
 
 function statusHeading(status: string) {
@@ -760,7 +768,6 @@ export default function FixturesPage() {
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
-  const [mountedPredictions, setMountedPredictions] = useState<Record<number, boolean>>({});
   const [gameDataEnabled, setGameDataEnabled] = useState(true);
   const [bootstrapped, setBootstrapped] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
@@ -784,7 +791,6 @@ export default function FixturesPage() {
   const initialFixturesLoadDoneRef = useRef(false);
   const fixturesLoadSeqRef = useRef(0);
   const fixturesLoadTimerRef = useRef<number | null>(null);
-  const predictionMountTimersRef = useRef<Record<number, number>>({});
 
   const scheduleTableSwap = useCallback((apply: () => void) => {
     if (tableSwapTimerRef.current) {
@@ -819,16 +825,17 @@ export default function FixturesPage() {
     () => (matchInfoFixtureId != null ? matchInfoByFixture[matchInfoFixtureId] ?? null : null),
     [matchInfoByFixture, matchInfoFixtureId],
   );
-
   const openMatchInfo = useCallback(
     async (fixture: Fixture) => {
       const fixtureId = fixture.fixtureId;
+      const shouldForceRefresh =
+        isExplicitLiveFixtureStatus(fixture.status) || isFinalFixtureStatus(fixture.status);
       setMatchInfoFixtureId(fixtureId);
       setMatchInfoTab("lineups");
       setMatchInfoOpen(true);
       setMatchInfoError(null);
 
-      if (matchInfoByFixture[fixtureId]) return;
+      if (matchInfoByFixture[fixtureId] && !shouldForceRefresh) return;
       if (!seasonKey) return;
 
       setMatchInfoLoading(true);
@@ -849,6 +856,7 @@ export default function FixturesPage() {
             tla: fixture.away?.tla || null,
             shortName: fixture.away?.shortName || null,
           },
+          force: shouldForceRefresh,
         });
         setMatchInfoByFixture((prev) => ({ ...prev, [fixtureId]: data }));
       } catch (e: unknown) {
@@ -867,7 +875,152 @@ export default function FixturesPage() {
         : null,
     [fixtures, matchInfoFixtureId],
   );
+  const refreshMatchInfoFixture = useCallback(
+    async (fixture: Fixture, options?: { showSpinner?: boolean; silent?: boolean }) => {
+      if (!seasonKey) return;
+      const showSpinner = options?.showSpinner === true;
+      const silent = options?.silent === true;
+      if (showSpinner) setMatchInfoLoading(true);
+      try {
+        const data = await getMatchInfoCached({
+          fixtureId: fixture.fixtureId,
+          seasonKey,
+          kickoff: fixture.kickoff,
+          homeTeam: {
+            id: fixture.home?.id,
+            name: fixture.home.name,
+            tla: fixture.home?.tla || null,
+            shortName: fixture.home?.shortName || null,
+          },
+          awayTeam: {
+            id: fixture.away?.id,
+            name: fixture.away.name,
+            tla: fixture.away?.tla || null,
+            shortName: fixture.away?.shortName || null,
+          },
+          force: true,
+        });
+        setMatchInfoByFixture((prev) => ({ ...prev, [fixture.fixtureId]: data }));
+        setMatchInfoError(null);
+      } catch (e: unknown) {
+        if (!silent) {
+          setMatchInfoError(e instanceof Error ? e.message : "Failed to refresh match info.");
+        }
+      } finally {
+        if (showSpinner) setMatchInfoLoading(false);
+      }
+    },
+    [seasonKey],
+  );
+
+  useEffect(() => {
+    if (!matchInfoOpen || !selectedMatchFixture || !currentMatchInfo) return;
+    if (!isExplicitLiveFixtureStatus(selectedMatchFixture.status)) return;
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      if (cancelled) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      await refreshMatchInfoFixture(selectedMatchFixture, { silent: true });
+    };
+
+    void refresh();
+    const interval = window.setInterval(() => {
+      void refresh();
+    }, 5000);
+
+    const onVisible = () => {
+      void refresh();
+    };
+
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [
+    currentMatchInfo,
+    matchInfoOpen,
+    matchInfoTab,
+    refreshMatchInfoFixture,
+    selectedMatchFixture,
+  ]);
+
   const fixtureList = fixtures ?? [];
+  const displayFixtures = useMemo(() => {
+    if (!fixtureList.length) return fixtureList;
+    if (seasonCurrentGw == null || gw !== seasonCurrentGw) return fixtureList;
+
+    const ranked = [...fixtureList];
+    ranked.sort((a, b) => {
+      const rank = (fixture: Fixture) => {
+        if (isFixtureLiveWindow(fixture, nowMs)) return 0;
+        if (!isFinalFixtureStatus(fixture.status)) return 1;
+        return 2;
+      };
+
+      const rankDiff = rank(a) - rank(b);
+      if (rankDiff !== 0) return rankDiff;
+
+      const aKickoff = Date.parse(String(a.kickoff || ""));
+      const bKickoff = Date.parse(String(b.kickoff || ""));
+      const aSafe = Number.isFinite(aKickoff) ? aKickoff : Number.MAX_SAFE_INTEGER;
+      const bSafe = Number.isFinite(bKickoff) ? bKickoff : Number.MAX_SAFE_INTEGER;
+      if (aSafe !== bSafe) return aSafe - bSafe;
+
+      return a.fixtureId - b.fixtureId;
+    });
+
+    return ranked;
+  }, [fixtureList, gw, nowMs, seasonCurrentGw]);
+  const fixtureSections = useMemo(() => {
+    const buckets = {
+      live: [] as Fixture[],
+      upcoming: [] as Fixture[],
+      completed: [] as Fixture[],
+    };
+
+    for (const fixture of displayFixtures) {
+      if (isFixtureLiveWindow(fixture, nowMs)) buckets.live.push(fixture);
+      else if (isFinalFixtureStatus(fixture.status)) buckets.completed.push(fixture);
+      else buckets.upcoming.push(fixture);
+    }
+
+    return [
+      { key: "live", label: "Live Now", items: buckets.live },
+      {
+        key: "upcoming",
+        label:
+          seasonCurrentGw != null && gw > seasonCurrentGw
+            ? "Scheduled"
+            : "Still to Play",
+        items: buckets.upcoming,
+        suffix:
+          seasonCurrentGw != null && gw > seasonCurrentGw && buckets.upcoming.length
+            ? (() => {
+                const nextKickoffMs = buckets.upcoming
+                  .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+                  .filter((kickoffMs) => Number.isFinite(kickoffMs))
+                  .sort((a, b) => a - b)[0];
+                if (!Number.isFinite(nextKickoffMs)) return null;
+                const daysUntil = Math.max(
+                  0,
+                  Math.ceil((nextKickoffMs - nowMs) / 86_400_000),
+                );
+                return `${daysUntil} ${daysUntil === 1 ? "Day" : "Days"}`;
+              })()
+            : null,
+      },
+      { key: "completed", label: "Final Scores", items: buckets.completed },
+    ].filter((section) => section.items.length > 0);
+  }, [displayFixtures, gw, nowMs, seasonCurrentGw]);
   const liveFixtureCount = useMemo(
     () => fixtureList.filter((fixture) => isFixtureLiveWindow(fixture, nowMs)).length,
     [fixtureList, nowMs],
@@ -1043,17 +1196,9 @@ export default function FixturesPage() {
 
   useEffect(() => {
     if (!fixtures?.length) return;
-    const timers = predictionMountTimersRef.current;
-    for (const key of Object.keys(timers)) {
-      window.clearTimeout(timers[Number(key)]);
-    }
-    predictionMountTimersRef.current = {};
     const next: Record<number, boolean> = {};
     for (const fx of fixtures) next[fx.fixtureId] = !compactMode;
     setExpandedFixtures(next);
-    const nextMounted: Record<number, boolean> = {};
-    for (const fx of fixtures) nextMounted[fx.fixtureId] = !compactMode;
-    setMountedPredictions(nextMounted);
   }, [compactMode, fixtures]);
 
   useEffect(() => {
@@ -1280,28 +1425,9 @@ export default function FixturesPage() {
   function toggleFixtureExpanded(fixtureId: number) {
     const currentExpanded = expandedFixtures[fixtureId] ?? !compactMode;
     const nextExpanded = !currentExpanded;
-    const existingTimer = predictionMountTimersRef.current[fixtureId];
-    if (existingTimer) {
-      window.clearTimeout(existingTimer);
-      delete predictionMountTimersRef.current[fixtureId];
-    }
 
     if (nextExpanded) {
       setGameDataEnabled(true);
-      predictionMountTimersRef.current[fixtureId] = window.setTimeout(() => {
-        setMountedPredictions((prev) =>
-          prev[fixtureId] ? prev : { ...prev, [fixtureId]: true },
-        );
-        delete predictionMountTimersRef.current[fixtureId];
-      }, 90);
-    } else {
-      predictionMountTimersRef.current[fixtureId] = window.setTimeout(() => {
-        setMountedPredictions((prev) => {
-          if (!prev[fixtureId]) return prev;
-          return { ...prev, [fixtureId]: false };
-        });
-        delete predictionMountTimersRef.current[fixtureId];
-      }, 180);
     }
 
     setExpandedFixtures((prev) => ({
@@ -1309,16 +1435,6 @@ export default function FixturesPage() {
       [fixtureId]: nextExpanded,
     }));
   }
-
-  useEffect(() => {
-    return () => {
-      const timers = predictionMountTimersRef.current;
-      for (const key of Object.keys(timers)) {
-        window.clearTimeout(timers[Number(key)]);
-      }
-      predictionMountTimersRef.current = {};
-    };
-  }, []);
 
   async function onSeasonChange(nextSeason: string) {
     setSeasonKey(nextSeason);
@@ -1417,7 +1533,7 @@ export default function FixturesPage() {
       if (hasLiveFixture) {
         liveRefreshInterval = window.setInterval(() => {
           void softRefreshLive();
-        }, 8000);
+        }, 1000);
         return;
       }
 
@@ -1718,7 +1834,7 @@ export default function FixturesPage() {
 
         {/* Fixtures */}
         <SpecialBreak />
-        <div className="grid items-start gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid items-start gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {isLoading && (
             <div className="col-span-full text-center text-muted inline-flex items-center gap-2 justify-center">
               <Loader2 size={14} className="animate-spin" />
@@ -1733,32 +1849,20 @@ export default function FixturesPage() {
           )}
 
           {!isLoading &&
-            fixtures.length > 0 &&
+            displayFixtures.length > 0 &&
             (() => {
-              const firstIdxByDay = new Map<string, number>();
-              const lastIdxByDay = new Map<string, number>();
-              fixtures.forEach((fixture, idx) => {
-                const dayKey = fixtureDayKey(fixture.kickoff);
-                if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
-                lastIdxByDay.set(dayKey, idx);
-              });
-
               const renderFixtureCard = (
                 f: Fixture,
                 idx: number,
-                showDayHeader: boolean,
-                showDayFooter: boolean,
-                dayLabel: string,
               ) => {
               const actual = f.result ?? null;
               const fixtureStatusHeading = statusHeading(f.status);
               const kickoffParts = formatKickoffParts(f.kickoff);
               const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
-              const showPredictions = mountedPredictions[f.fixtureId] ?? !compactMode;
               const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
               const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
               const clashBgStyle: React.CSSProperties = {
-                backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+                backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
               };
               return (
                 <div
@@ -1769,30 +1873,8 @@ export default function FixturesPage() {
                     animationDuration: "520ms",
                   }}
                 >
-                  <div className="h-4 sm:h-5 flex items-center justify-center">
-                    {showDayHeader ? (
-                      <div className="w-full flex items-center gap-2">
-                        <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                        <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
-                          {dayLabel}
-                        </span>
-                        <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                      </div>
-                    ) : showDayFooter ? (
-                      <div className="w-full flex items-center justify-center gap-1.5">
-                        <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-                        <span
-                          className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-                          aria-hidden
-                        />
-                        <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
-                      </div>
-                    ) : (
-                      <span aria-hidden className="invisible w-full">_</span>
-                    )}
-                  </div>
                 <div
-                  className="fixture-clash-bg border border-white/15 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.62rem,0.92vw,0.98rem)] pb-[clamp(0.42rem,0.76vw,0.72rem)] page-action-btn cursor-pointer"
+                  className="fixture-clash-bg relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.7rem,0.96vw,1.05rem)] pb-[clamp(0.58rem,0.84vw,0.82rem)] shadow-[0_18px_42px_rgba(3,8,20,0.22)] transition-[transform,border-color,box-shadow] duration-300 ease-out hover:border-white/12 hover:-translate-y-0.5 cursor-pointer"
                   style={clashBgStyle}
                   role="button"
                   tabIndex={0}
@@ -1804,7 +1886,7 @@ export default function FixturesPage() {
                     }
                   }}
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-3 rounded-[22px] border border-white/6 bg-black/14 px-3 py-3 backdrop-blur-[10px] sm:px-3.5 sm:py-3.5">
                     <div>
                       <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-2">
                         <div className="sm:hidden flex items-center justify-between gap-2">
@@ -1934,46 +2016,48 @@ export default function FixturesPage() {
                             e.stopPropagation();
                             openMatchInfo(f);
                           }}
-                          className="inline-flex items-center gap-1 rounded-md border border-teal-500 px-2 py-1 bg-surface text-foreground hover:bg-surface-2"
+                          className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
                         >
                           <Info size={12} />
                           Match Info
                         </button>
                       </div>
                     ) : null}
-                    <div className="flex items-center justify-center gap-1 text-xs text-muted">
-                      <span>{isExpanded ? "Hide" : "Show"} Predictions</span>
+                    <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted">
+                      <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
+                        {isExpanded ? "Hide" : "Show"} Predictions
+                      </span>
                       <ChevronDown
                         size={14}
-                        className={`transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                        className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
                       />
                     </div>
                   </div>
 
                   <div
                     className={[
-                      "grid overflow-hidden -mx-[clamp(0.75rem,1.1vw,1.25rem)] transition-[grid-template-rows,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                      "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                       isExpanded
-                        ? "grid-rows-[1fr] mt-1"
-                        : "grid-rows-[0fr] mt-0",
+                        ? "grid-rows-[1fr] opacity-100 mt-3"
+                        : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none",
                     ].join(" ")}
                   >
-                    <div className="min-h-0 overflow-visible px-[clamp(0.75rem,1.1vw,1.25rem)] pt-3 pb-2">
-                    {showPredictions ? (
-                      <div
-                        className={[
-                          "-mt-1 transition-opacity duration-220 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                          isExpanded
-                            ? "opacity-100 delay-75"
-                            : "opacity-0 delay-0 pointer-events-none",
-                        ].join(" ")}
-                      >
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                      <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                          Prediction board
+                        </span>
+                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                          {players.length} {players.length === 1 ? "player" : "players"}
+                        </span>
+                      </div>
                       {players.length === 0 ? (
                         <div className="text-sm text-muted">
                           No players found.
                         </div>
                       ) : (
-                        <div className="w-full flex flex-wrap justify-center gap-2">
+                        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
                           {players.map((p) => {
                           const pred =
                             picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
@@ -2032,9 +2116,7 @@ export default function FixturesPage() {
                           return (
                             <div
                               key={p.uid}
-                              className={[
-                                "relative min-w-0 !overflow-visible w-[calc(33.333%-0.35rem)] min-[360px]:w-[calc(25%-0.4rem)] min-[400px]:w-[calc(50%-0.25rem)] min-[460px]:w-[calc(33.333%-0.34rem)] lg:w-[calc(50%-0.25rem)] xl:w-[calc(33.333%-0.34rem)]",
-                              ].join(" ")}
+                              className="relative min-w-0 !overflow-visible"
                             >
                               {isGolden || powerupType ? (
                                 <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
@@ -2066,7 +2148,7 @@ export default function FixturesPage() {
                               ) : null}
                               <div
                                 className={[
-                                  "rounded-lg rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none px-2 py-2 text-center border",
+                                  "rounded-[18px] rounded-tl-[22px] rounded-br-[22px] rounded-tr-none rounded-bl-none px-2.5 py-2 text-center border border-white/8 bg-white/[0.02]",
                                   toneClass,
                                   goldenBorderClass,
                                   goldenGlowClass,
@@ -2100,9 +2182,7 @@ export default function FixturesPage() {
                           })}
                         </div>
                       )}
-
                       </div>
-                    ) : null}
                     </div>
                   </div>
                 </div>
@@ -2110,19 +2190,39 @@ export default function FixturesPage() {
               );
               };
 
-              return fixtures.map((fixture, idx) => {
-                const dayKey = fixtureDayKey(fixture.kickoff);
-                const showDayHeader = firstIdxByDay.get(dayKey) === idx;
-                const showDayFooter = lastIdxByDay.get(dayKey) === idx;
-                const dayLabel = fixtureDayLabel(fixture.kickoff);
-                return renderFixtureCard(
-                  fixture,
-                  idx,
-                  showDayHeader,
-                  showDayFooter,
-                  dayLabel,
-                );
-              });
+              return fixtureSections.map((section, sectionIdx) => (
+                <div
+                  key={section.key}
+                  className="space-y-3 sm:space-y-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
+                      <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
+                        Matchboard
+                      </div>
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <div className="font-display text-sm font-semibold text-foreground sm:text-base">
+                          {section.label}
+                        </div>
+                        {"suffix" in section && section.suffix ? (
+                          <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-white/40">
+                            {section.suffix}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
+                    <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
+                      {section.items.length}
+                    </span>
+                  </div>
+                  <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {section.items.map((fixture, idx) =>
+                      renderFixtureCard(fixture, sectionIdx * 20 + idx),
+                    )}
+                  </div>
+                </div>
+              ));
             })()}
         </div>
 
@@ -2148,16 +2248,20 @@ export default function FixturesPage() {
         portal
         lockBackground
         zIndexClassName="z-[90]"
-        overlayClassName="bg-black/50 backdrop-blur-sm"
-        panelClassName="w-[min(96vw,1120px)] h-[min(92vh,860px)] overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] shadow-[0_24px_56px_rgba(3,8,20,0.32)]"
+        overlayClassName="bg-[radial-gradient(circle_at_top,rgba(12,20,42,0.2),rgba(3,8,20,0.88)_48%,rgba(3,8,20,0.96)_100%)] backdrop-blur-sm"
+        panelClassName="w-[min(96vw,1180px)] h-[min(92vh,880px)] overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.985),rgba(10,16,28,0.97))] shadow-[0_28px_72px_rgba(3,8,20,0.44)]"
       >
-        <div className="h-full p-4 flex flex-col gap-3">
+        <div className="h-full p-3 sm:p-4 flex flex-col gap-3">
+          <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.006))] px-4 py-4 shadow-[0_18px_42px_rgba(3,8,20,0.24)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="font-display text-lg font-semibold text-foreground">
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+                Matchdesk
+              </div>
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">
                 Match Info
               </div>
-              <div className="text-xs text-muted">
+              <div className="mt-1 text-xs text-muted">
                 {selectedMatchFixture
                   ? `${teamAbbr({
                       name: selectedMatchFixture.home.name,
@@ -2177,7 +2281,9 @@ export default function FixturesPage() {
               className={`border-white/10 ${BTN_3D}`}
             />
           </div>
+          </div>
 
+          <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.014),rgba(255,255,255,0.004))] p-2 shadow-[0_14px_30px_rgba(3,8,20,0.18)]">
           <SliderSwitch
             options={[
               { value: "lineups", label: "Lineups" },
@@ -2190,18 +2296,19 @@ export default function FixturesPage() {
             className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
           />
+          </div>
 
           <SpecialBreak />
 
-          <div className="min-h-0 flex-1 overflow-auto no-scrollbar space-y-3 pr-1">
+          <div className="min-h-0 flex-1 overflow-auto no-scrollbar space-y-4 pr-1 pb-1">
             {matchInfoLoading && (
-              <div className="text-sm text-muted inline-flex items-center gap-2">
+              <div className="rounded-[22px] border border-white/8 bg-black/24 px-4 py-4 text-sm text-muted inline-flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin" />
                 <span>Loading match info…</span>
               </div>
             )}
             {!matchInfoLoading && matchInfoError && (
-              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              <div className="rounded-[22px] border border-rose-400/30 bg-rose-500/10 px-4 py-4 text-sm text-rose-200">
                 {matchInfoError}
               </div>
             )}
@@ -2263,7 +2370,7 @@ export default function FixturesPage() {
                         {lineupBlocksWithRows.map((block) => (
                           <div
                             key={`lineup-head-${block.side}`}
-                            className="rounded-xl border border-teal-500 bg-surface-2 px-3 py-2"
+                            className="rounded-[22px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
@@ -2282,7 +2389,7 @@ export default function FixturesPage() {
                                   {block.lineup.coach || "Manager TBD"}
                                 </div>
                               </div>
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-subtle bg-surface">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-black/16">
                                 {block.badge ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -2307,12 +2414,12 @@ export default function FixturesPage() {
                       </div>
 
                       {lineupBlocksWithRows.every((block) => block.lineup.starters.length === 0) ? (
-                        <div className="rounded-md border border-subtle bg-surface px-2.5 py-2 text-xs text-muted">
+                        <div className="rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 text-xs text-muted">
                           {emptyLineupLabel}
                         </div>
                       ) : (
                         <>
-                          <div className="sm:hidden rounded-xl border border-subtle bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_100%)] p-0">
+                          <div className="sm:hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.024)_0%,rgba(8,12,22,0.96)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
                             <div className="relative h-[960px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
                               <div className="absolute inset-x-1.5 top-1.5 h-[calc(50%-8px)] rounded-t-xl border border-white/8 border-b-0" />
                               <div className="absolute inset-x-1.5 bottom-1.5 h-[calc(50%-8px)] rounded-b-xl border border-white/8 border-t-0" />
@@ -2407,7 +2514,7 @@ export default function FixturesPage() {
                             </div>
                           </div>
 
-                          <div className="hidden sm:block rounded-xl border border-subtle bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(var(--room-accent-rgb),0.08)_100%)] p-0">
+                          <div className="hidden sm:block rounded-[24px] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.022)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(255,255,255,0.022)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
                             <div className="relative h-[620px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
                               <div className="absolute inset-y-1.5 left-1.5 w-[calc(50%-8px)] rounded-l-xl border border-white/8 border-r-0" />
                               <div className="absolute inset-y-1.5 right-1.5 w-[calc(50%-8px)] rounded-r-xl border border-white/8 border-l-0" />
@@ -2506,7 +2613,7 @@ export default function FixturesPage() {
                         {lineupBlocksWithRows.map((block) => (
                           <div
                             key={`bench-${block.side}`}
-                            className="rounded-xl border border-teal-500 bg-surface-2 p-3 space-y-3"
+                            className="rounded-[22px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
                           >
                             <div className="font-display text-[11px] uppercase tracking-wide text-muted">
                               {block.side === "home" ? "Home Bench" : "Away Bench"}
@@ -2516,10 +2623,10 @@ export default function FixturesPage() {
                                 block.lineup.subs.map((player) => (
                                   <div
                                     key={`${block.side}-sub-${player.id ?? player.name}`}
-                                    className="rounded-xl border border-subtle bg-surface px-2.5 py-2"
+                                    className="rounded-[18px] border border-white/8 bg-black/16 px-2.5 py-2"
                                   >
                                     <div className="flex items-start gap-2">
-                                      <div className="h-9 w-9 rounded-lg border border-subtle bg-surface-2 flex items-center justify-center overflow-hidden shrink-0">
+                                      <div className="h-9 w-9 rounded-lg border border-white/8 bg-white/[0.03] flex items-center justify-center overflow-hidden shrink-0">
                                         {player.photo ? (
                                           // eslint-disable-next-line @next/next/no-img-element
                                           <img
@@ -2612,7 +2719,7 @@ export default function FixturesPage() {
                                   {block.lineup.unavailable.map((player) => (
                                     <span
                                       key={`${block.side}-out-${player.id ?? player.name}`}
-                                      className="inline-flex items-center gap-1 rounded-full border border-subtle bg-surface px-2 py-1"
+                                      className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-black/16 px-2 py-1"
                                     >
                                       <span className="font-display text-[10px] text-foreground">
                                         {player.name}
@@ -2635,7 +2742,7 @@ export default function FixturesPage() {
                 {currentMatchInfo.stats.length ? currentMatchInfo.stats.map((row) => (
                   <div
                     key={`stat-${row.label}`}
-                    className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 rounded-lg border border-teal-500 bg-surface-2 px-3 py-2"
+                    className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]"
                   >
                     <span
                       className={[
@@ -2658,7 +2765,7 @@ export default function FixturesPage() {
                     </span>
                   </div>
                 )) : (
-                  <div className="rounded-lg border border-teal-500 bg-surface-2 p-3 text-sm text-muted">
+                  <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
                     No live match stats found.
                   </div>
                 )}
@@ -2667,7 +2774,7 @@ export default function FixturesPage() {
             {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "h2h" && (
               <div className="space-y-2">
                 {currentMatchInfo.headToHead.length ? currentMatchInfo.headToHead.map((m) => (
-                  <div key={`h2h-${m.id ?? m.utcDate}`} className="rounded-lg border border-teal-500 bg-surface-2 p-3">
+                  <div key={`h2h-${m.id ?? m.utcDate}`} className="rounded-[20px] border border-white/8 bg-black/24 p-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
                     <div className="grid grid-cols-[84px_minmax(0,1fr)_40px] items-center gap-2 text-xs">
                       <span className="font-display text-muted whitespace-nowrap">
                         {(() => {
@@ -2697,7 +2804,7 @@ export default function FixturesPage() {
                           })}
                           </span>
                         </span>
-                      <span className="inline-flex h-5 min-w-[30px] rounded-full border border-subtle bg-surface items-center justify-center px-1 justify-self-end">
+                      <span className="inline-flex h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 items-center justify-center px-1 justify-self-end">
                         <span className="font-display text-[9px] text-muted leading-none">
                           {competitionAbbr(m.competition?.name, m.competition?.code)}
                         </span>
@@ -2705,11 +2812,11 @@ export default function FixturesPage() {
                     </div>
                   </div>
                 )) : (
-                  <div className="rounded-lg border border-teal-500 bg-surface-2 p-3 text-sm text-muted">
+                  <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
                     No head-to-head data found.
                   </div>
                 )}
-                <div className="rounded-lg border border-teal-500 bg-surface-2 p-3">
+                <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
                   <div className="font-display text-[11px] text-muted text-center mb-2">
                     Last 5 H2H
                   </div>
@@ -2761,10 +2868,10 @@ export default function FixturesPage() {
                     tla: selectedMatchFixture?.away?.tla || null,
                   },
                 ]).map((block) => (
-                  <div key={block.side} className="rounded-lg border border-teal-500 bg-surface-2 p-3 space-y-2">
+                  <div key={block.side} className="rounded-[20px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-display text-sm font-semibold text-foreground">{block.label}</div>
-                      <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="h-7 w-7 rounded-xl border border-white/8 bg-black/14 flex items-center justify-center overflow-hidden shrink-0">
                         {block.badge ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -2810,7 +2917,7 @@ export default function FixturesPage() {
                                 {m.homeTeam.name}
                               </div>
                             </div>
-                            <span className="h-5 w-5 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-subtle bg-surface">
+                            <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
                               {m.homeTeam.badge ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -2834,7 +2941,7 @@ export default function FixturesPage() {
                             {fmtScore(m.result)}
                           </span>
                           <span className="min-w-0 flex items-center justify-start gap-1.5 text-left">
-                            <span className="h-5 w-5 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-subtle bg-surface">
+                            <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
                               {m.awayTeam.badge ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -2868,7 +2975,7 @@ export default function FixturesPage() {
                           </span>
                         </span>
                         <span className="inline-flex items-center justify-end gap-1.5 justify-self-end">
-                          <span className="h-5 min-w-[30px] rounded-full border border-subtle bg-surface inline-flex items-center justify-center px-1 shrink-0">
+                          <span className="h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 inline-flex items-center justify-center px-1 shrink-0">
                             <span className="font-display text-[9px] text-muted leading-none">
                               {competitionAbbr(m.competition?.name, m.competition?.code)}
                             </span>

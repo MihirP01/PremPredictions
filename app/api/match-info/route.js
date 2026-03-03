@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const FOTMOB_LEAGUE_ID = 47;
 const DEFAULT_HEADERS = {
   "User-Agent": "Mozilla/5.0",
@@ -146,6 +149,27 @@ function parseNextDataSafe(html) {
   } catch {
     return null;
   }
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "").replace(/&amp;/g, "&");
+}
+
+function extractLiveWidgetUrl(html) {
+  const match = String(html || "").match(
+    /<iframe[^>]*title="superLive"[^>]*src="([^"]+)"/i,
+  );
+  if (!match?.[1]) return null;
+  return decodeHtmlEntities(match[1]);
+}
+
+function absoluteFotmobUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("/")) return `https://www.fotmob.com${raw}`;
+  return `https://www.fotmob.com/${raw.replace(/^\/+/, "")}`;
 }
 
 async function fetchJson(url) {
@@ -332,6 +356,31 @@ function extractTopStats(statsRoot) {
     }));
 }
 
+async function extractLiveWidgetTopStats(liveWidgetUrl) {
+  const abs = absoluteFotmobUrl(liveWidgetUrl);
+  if (!abs) return null;
+  try {
+    const html = await fetchHtml(abs);
+    const nextData = parseNextDataSafe(html);
+    if (!nextData) return null;
+    const pageProps = nextData?.props?.pageProps || {};
+    const candidateRoots = [
+      pageProps?.content?.stats,
+      pageProps?.stats,
+      pageProps?.data?.stats,
+      pageProps?.match?.content?.stats,
+      pageProps?.fallback?.stats,
+    ];
+    for (const root of candidateRoots) {
+      const rows = extractTopStats(root);
+      if (rows.length) return rows;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function extractTeamFallback(nextData, teamId) {
   const fallback = nextData?.props?.pageProps?.fallback || {};
   return fallback[`team-${teamId}`] || null;
@@ -359,6 +408,16 @@ function deriveLineupPhase(kickoff) {
   if (!Number.isFinite(kickoffMs)) return "confirmed";
   const predictionWindowStartMs = kickoffMs - 75 * 60 * 1000;
   return Date.now() < predictionWindowStartMs ? "predicted" : "confirmed";
+}
+
+function isLiveLeagueStatus(status) {
+  return Boolean(
+    status &&
+      status.started &&
+      !status.finished &&
+      !status.awarded &&
+      !status.cancelled,
+  );
 }
 
 export async function GET(req) {
@@ -439,7 +498,17 @@ export async function GET(req) {
       away: mapLineupTeam(content?.lineup?.awayTeam),
     };
 
-    const stats = extractTopStats(content?.stats);
+    const liveWidgetUrl = isLiveLeagueStatus(leagueMatch?.status)
+      ? extractLiveWidgetUrl(matchHtml)
+      : null;
+
+    let stats = extractTopStats(content?.stats);
+    if (liveWidgetUrl) {
+      const liveWidgetStats = await extractLiveWidgetTopStats(liveWidgetUrl);
+      if (liveWidgetStats?.length) {
+        stats = liveWidgetStats;
+      }
+    }
 
     const form = {
       home: extractRecentForm(
@@ -454,6 +523,10 @@ export async function GET(req) {
       ),
     };
 
+    const cacheControl = isLiveLeagueStatus(leagueMatch?.status)
+      ? "no-store"
+      : "s-maxage=300, stale-while-revalidate=120";
+
     return NextResponse.json(
       {
         fixtureId,
@@ -462,10 +535,11 @@ export async function GET(req) {
         stats,
         headToHead,
         form,
+        liveWidgetUrl,
       },
       {
         headers: {
-          "Cache-Control": "s-maxage=300, stale-while-revalidate=120",
+          "Cache-Control": cacheControl,
         },
       },
     );

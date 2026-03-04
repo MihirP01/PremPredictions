@@ -852,32 +852,68 @@ export default function RoomPage() {
           </div>
         )}
 
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-            <div className="space-y-3">
-              <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
-                Room overview
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Room desk
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Active room
+                    </span>
+                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                      {roomCode}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                    Season
+                  </div>
+                  <div className="font-display text-lg font-semibold text-foreground">
+                    {seasonLabel(seasonKey || "----")}
+                  </div>
+                </div>
               </div>
-              <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
-                Matchday control centre
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                  Control centre
+                </span>
+                <span className="font-display text-sm font-semibold text-foreground">
+                  Live room snapshot
+                </span>
               </div>
-              <div className="max-w-2xl text-sm text-muted">
-                Navigate the room, review the live table, and manage the squad from one editorial dashboard.
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Players
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    {players.length}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Registered in this room right now.
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Mode
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    {gameModeStyle === "round_robin"
+                      ? "Round-Robin"
+                      : gameModeStyle === "captain"
+                        ? "Captain"
+                        : "Sprint"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {resultLockSubtext}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <HubSummaryTile
-                label="Room"
-                value={roomCode}
-                note={`${players.length} registered ${players.length === 1 ? "player" : "players"}`}
-                icon={<Trophy size={16} />}
-              />
-              <HubSummaryTile
-                label="Mode"
-                value={gameModeStyle === "round_robin" ? "Round-Robin" : gameModeStyle === "captain" ? "Captain" : "Sprint"}
-                note={resultLockSubtext}
-                icon={<Gamepad2 size={16} />}
-              />
             </div>
           </div>
         </SectionCard>

@@ -860,59 +860,50 @@ export default function RevealPage() {
                             const p = powerupsByUid[uid];
                             const powerupType =
                               p?.locked && p?.fixtureId === fid ? p.powerupType : null;
-                            const toneClass = "bg-surface border-teal-500";
+                            const toneClass =
+                              "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
+                            const powerupTypeClass =
+                              powerupType === "ALL_IN"
+                                ? "!border-orange-300/80 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.48),0_8px_18px_rgba(251,146,60,0.16)]"
+                                : powerupType === "SAFETY_NET"
+                                  ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                  : "";
                             const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
                             const goldenGlowClass = isGolden
-                              ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_8px_18px_rgba(250,204,21,0.16)]"
+                              ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
                               : "";
+                            const accentBarClass =
+                              powerupType === "ALL_IN"
+                                ? "from-orange-200 via-orange-300 to-orange-500/18"
+                                : powerupType === "SAFETY_NET"
+                                  ? "from-blue-200 via-blue-300 to-blue-500/18"
+                                  : isGolden
+                                    ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
+                                    : "from-white/24 via-white/10 to-transparent";
                             return (
                               <div key={`${fid}-${uid}`} className="relative min-w-0 !overflow-visible">
-                                {isGolden || powerupType ? (
-                                  <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
-                                    {isGolden ? (
-                                      <Image
-                                        src="/icons/powerups/golden-pick-v2.svg"
-                                        alt=""
-                                        aria-hidden
-                                        width={16}
-                                        height={16}
-                                        className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                      />
-                                    ) : null}
-                                    {powerupType ? (
-                                      <Image
-                                        src={
-                                          powerupType === "ALL_IN"
-                                            ? "/icons/powerups/all-in-v2.svg"
-                                            : "/icons/powerups/safety-net-v2.svg"
-                                        }
-                                        alt=""
-                                        aria-hidden
-                                        width={16}
-                                        height={16}
-                                        className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                      />
-                                    ) : null}
-                                  </span>
-                                ) : null}
                                 <div
                                   className={[
-                                    "rounded-[18px] rounded-tl-[22px] rounded-br-[22px] rounded-tr-none rounded-bl-none px-2.5 py-2 text-center border border-white/8 bg-white/[0.02]",
+                                    "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
                                     toneClass,
                                     goldenBorderClass,
                                     goldenGlowClass,
-                                    powerupType === "ALL_IN"
-                                      ? "border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
-                                      : powerupType === "SAFETY_NET"
-                                        ? "border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
-                                        : "",
+                                    powerupTypeClass,
                                   ].join(" ")}
                                 >
-                                  <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                    {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                                  </div>
-                                  <div className="font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums whitespace-nowrap text-foreground">
-                                    {fmtScore(sc)}
+                                  <div
+                                    className={[
+                                      "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                                      accentBarClass,
+                                    ].join(" ")}
+                                  />
+                                  <div className="relative pl-3">
+                                    <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                      {displayNamesByUid[uid] ?? uid.slice(0, 6)}
+                                    </div>
+                                    <span className="font-display text-[0.92rem] font-semibold text-foreground truncate">
+                                      {fmtScore(sc)}
+                                    </span>
                                   </div>
                                 </div>
                               </div>

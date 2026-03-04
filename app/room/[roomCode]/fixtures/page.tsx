@@ -767,6 +767,7 @@ export default function FixturesPage() {
   );
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
+  const [predictionKeyOpen, setPredictionKeyOpen] = useState(false);
   const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
   const [gameDataEnabled, setGameDataEnabled] = useState(true);
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -1632,7 +1633,7 @@ export default function FixturesPage() {
               <button
                 onClick={refreshFixtures}
                 disabled={refreshingFixtures || refreshLockSeconds > 0}
-                className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60 sm:hidden"
+                className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
                 aria-label="Refresh fixtures"
                 title={
                   refreshLockSeconds > 0
@@ -1651,180 +1652,184 @@ export default function FixturesPage() {
         />
       </div>
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-          <div className="space-y-3">
-            <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
-              Matchday desk
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-1.5">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                  Matchday desk
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                    Viewing slate
+                  </span>
+                  <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                    GW {gw}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                  Slate status
+                </div>
+                <div className="font-display text-lg font-semibold text-foreground">
+                  {currentSlateLabel}
+                </div>
+              </div>
             </div>
-            <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
-              GW{gw} fixture slate
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+              <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                Fixture ledger
+              </span>
+              <span className="font-display text-sm font-semibold text-foreground">
+                {gw === seasonCurrentGw
+                  ? "Current matchweek"
+                  : seasonCurrentGw != null && gw < seasonCurrentGw
+                    ? "Previous matchweek"
+                    : "Upcoming matchweek"}
+              </span>
             </div>
-            <div className="max-w-2xl text-sm text-muted">
-              Review kickoff times, live results, and room predictions in one editorial match ledger. Current fixtures remain live while archived and future rounds keep a static schedule shell.
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  Fixtures
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  {fixtureList.length || 0}
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  Loaded into the current ledger.
+                </div>
+              </div>
+              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  Completed
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  {finishedFixtureCount}
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  Finalised scorelines on this slate.
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <FixturesSummaryTile
-              label="Viewing"
-              value={`GW${gw}`}
-              note={`${gw === seasonCurrentGw ? "Current" : seasonCurrentGw != null && gw < seasonCurrentGw ? "Previous" : "Upcoming"} matchweek • ${fixtureList.length || 0} fixtures loaded`}
-              icon={<CircleDot size={16} />}
-            />
-            <FixturesSummaryTile
-              label="Slate status"
-              value={currentSlateLabel}
-              note={
-                refreshLockSeconds > 0
-                  ? `Manual refresh available in ${refreshLockSeconds}s`
-                  : refreshingFixtures
-                    ? "Refreshing fixture ledger now."
-                    : `${finishedFixtureCount} of ${fixtureList.length || 0} fixtures marked final`
-              }
-              icon={refreshingFixtures ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            />
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] xl:items-end">
-          {!!seasonOptions.length ? (
-            <FixturesSelectField
-              id="fixtures-season-select"
-              label="Season"
-              value={seasonKey}
-              onChange={onSeasonChange}
-            >
-              {seasonOptions.map((s) => (
-                <option key={s} value={s}>
-                  {seasonLabel(s)}
-                </option>
-              ))}
-            </FixturesSelectField>
-          ) : (
-            <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Season
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
+        <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Prediction key
+                </div>
+                <div className="mt-1 text-sm text-muted">
+                  Quick legend for result tones and chip outlines.
+                </div>
               </div>
-              <div className="mt-2 font-display text-sm font-semibold text-foreground">
-                {seasonLabel(seasonKey || "----")}
+              <button
+                type="button"
+                onClick={() => setPredictionKeyOpen((open) => !open)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.03] text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-white/12 hover:bg-white/[0.05] sm:hidden"
+                aria-expanded={predictionKeyOpen}
+                aria-label={predictionKeyOpen ? "Hide prediction key" : "Show prediction key"}
+              >
+                <ChevronDown
+                  size={16}
+                  className={[
+                    "transition-transform duration-200 ease-out",
+                    predictionKeyOpen ? "rotate-180" : "",
+                  ].join(" ")}
+                />
+              </button>
+            </div>
+            <div
+              className={[
+                "grid transition-all duration-300 ease-out sm:grid-rows-[1fr] sm:opacity-100",
+                predictionKeyOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 sm:opacity-100",
+              ].join(" ")}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3 sm:pt-0">
+              <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
+                  <div className="pl-3">
+                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                      Correct Result
+                    </div>
+                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                      Winner or draw called correctly.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
+                  <div className="pl-3">
+                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                      Exact Score
+                    </div>
+                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                      Full scoreline landed exactly.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
+                  <div className="pl-3">
+                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                      Powerup Hit
+                    </div>
+                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                      Chip override landed.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
+                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
+                  <div className="pl-3">
+                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                      Miss
+                    </div>
+                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                      No points landed on the fixture.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
+                <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                  <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
+                    Chips
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
+                      Golden Pick
+                    </span>
+                    <span className="inline-flex items-center justify-center rounded-[12px] border border-orange-300/55 bg-orange-400/[0.05] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground">
+                      All-In
+                    </span>
+                    <span className="inline-flex items-center justify-center rounded-[12px] border border-blue-300/55 bg-blue-400/[0.05] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground">
+                      Safety Net
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-          <div className="space-y-2">
-            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Matchweek selector
+              </div>
             </div>
-            <GameweekNavigator
-              value={gw}
-              min={MIN_GW}
-              max={MAX_GW}
-              disabled={navLoading}
-              onChange={setGw}
-              buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
-              selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
-            />
-          </div>
-          <div className="hidden sm:flex xl:justify-end">
-            <button
-              onClick={refreshFixtures}
-              disabled={refreshingFixtures || refreshLockSeconds > 0}
-              className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
-              aria-label="Refresh fixtures"
-              title={
-                refreshLockSeconds > 0
-                  ? `Refresh locked (${refreshLockSeconds}s)`
-                  : "Refresh fixtures"
-              }
-            >
-              <RefreshCw
-                size={16}
-                className={refreshingFixtures ? "animate-spin" : ""}
-              />
-            </button>
           </div>
         </div>
       </SectionCard>
-
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Prediction key
-            </div>
-            <div className="mt-1 font-display text-xl font-semibold text-foreground">
-              Read room picks at a glance
-            </div>
-            <div className="mt-1 text-sm text-muted">
-              Use compact mode for a lighter fixture rail, or expand into the full room-readout layout.
-            </div>
-          </div>
-          <SliderSwitch
-            options={[
-              { value: "full", label: "Full" },
-              { value: "compact", label: "Compact" },
-            ]}
-            value={compactMode ? "compact" : "full"}
-            onChange={(v) => setCompactModeValue(v === "compact")}
-            className="relative grid min-w-[164px] overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-          />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-muted sm:grid-cols-3 lg:grid-cols-7">
-            <div className="key-chip key-chip-result font-display rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-1 text-center">
-              Correct Result
-            </div>
-            <div className="key-chip key-chip-exact font-display rounded-md border border-purple-400/70 bg-purple-500/20 px-2 py-1 text-center">
-              Exact Score
-            </div>
-            <div className="key-chip font-display rounded-md border border-orange-400/80 bg-orange-500/20 px-2 py-1 text-center">
-              Powerup Hit
-            </div>
-            <div className="key-chip font-display rounded-md border border-slate-400/80 bg-slate-500/20 px-2 py-1 text-center">
-              Powerup Miss
-            </div>
-            <div className="font-display rounded-md border border-yellow-300/70 bg-transparent px-2 py-1 text-foreground">
-              <span className="inline-flex items-center justify-center gap-1.5 w-full">
-                <Image
-                  src="/icons/powerups/golden-pick-v2.svg"
-                  alt=""
-                  aria-hidden
-                  width={14}
-                  height={14}
-                  className="h-3.5 w-3.5 shrink-0"
-                />
-                <span>Golden Pick</span>
-              </span>
-            </div>
-            <div className="font-display rounded-md border border-red-400/80 bg-transparent px-2 py-1 text-foreground">
-              <span className="inline-flex items-center justify-center gap-1.5 w-full">
-                <Image
-                  src="/icons/powerups/all-in-v2.svg"
-                  alt=""
-                  aria-hidden
-                  width={14}
-                  height={14}
-                  className="h-3.5 w-3.5 shrink-0"
-                />
-                <span>All-In</span>
-              </span>
-            </div>
-            <div className="font-display rounded-md border border-blue-400/80 bg-transparent px-2 py-1 text-foreground">
-              <span className="inline-flex items-center justify-center gap-1.5 w-full">
-                <Image
-                  src="/icons/powerups/safety-net-v2.svg"
-                  alt=""
-                  aria-hidden
-                  width={14}
-                  height={14}
-                  className="h-3.5 w-3.5 shrink-0"
-                />
-                <span>Safety Net</span>
-              </span>
-            </div>
-          </div>
-        </SectionCard>
 
         {error && (
           <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
@@ -1833,17 +1838,84 @@ export default function FixturesPage() {
         )}
 
         {/* Fixtures */}
+
         <SpecialBreak />
-        <div className="grid items-start gap-x-3 sm:gap-x-4 gap-y-[6px] sm:gap-y-[8px] grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
+        <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,230px)_minmax(0,1fr)] xl:items-start">
+            <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              {!!seasonOptions.length ? (
+                <FixturesSelectField
+                  id="fixtures-season-select"
+                  label="Season"
+                  value={seasonKey}
+                  onChange={onSeasonChange}
+                >
+                  {seasonOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {seasonLabel(s)}
+                    </option>
+                  ))}
+                </FixturesSelectField>
+              ) : (
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Season
+                  </div>
+                  <div className="mt-2 font-display text-sm font-semibold text-foreground">
+                    {seasonLabel(seasonKey || "----")}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+              <div className="min-w-0 rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+                <div className="space-y-2">
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Matchweek selector
+                  </div>
+                  <GameweekNavigator
+                    value={gw}
+                    min={MIN_GW}
+                    max={MAX_GW}
+                    disabled={navLoading}
+                    onChange={setGw}
+                    buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
+                    selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
+                  />
+                </div>
+              </div>
+              <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+                <div className="space-y-2">
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Display mode
+                  </div>
+                  <SliderSwitch
+                    options={[
+                      { value: "full", label: "Full" },
+                      { value: "compact", label: "Compact" },
+                    ]}
+                    value={compactMode ? "compact" : "full"}
+                    onChange={(v) => setCompactModeValue(v === "compact")}
+                    className="relative grid w-full min-w-0 overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+        <div className="space-y-5 sm:space-y-6">
           {isLoading && (
-            <div className="col-span-full text-center text-muted inline-flex items-center gap-2 justify-center">
+            <div className="text-center text-muted inline-flex items-center gap-2 justify-center w-full">
               <Loader2 size={14} className="animate-spin" />
               <span>Loading fixtures…</span>
             </div>
           )}
 
           {!isLoading && fixtures.length === 0 && (
-            <div className="col-span-full text-center text-muted">
+            <div className="text-center text-muted">
               No fixtures available for this gameweek.
             </div>
           )}
@@ -1855,339 +1927,353 @@ export default function FixturesPage() {
                 f: Fixture,
                 idx: number,
               ) => {
-              const actual = f.result ?? null;
-              const fixtureStatusHeading = statusHeading(f.status);
-              const kickoffParts = formatKickoffParts(f.kickoff);
-              const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
-              const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
-              const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
-              const clashBgStyle: React.CSSProperties = {
-                backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
-              };
-              return (
-                <div
-                  key={f.fixtureId}
-                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
-                  style={{
-                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                    animationDuration: "520ms",
-                  }}
-                >
-                <div
-                  className="fixture-clash-bg relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-[clamp(0.75rem,1.1vw,1.25rem)] pt-[clamp(0.7rem,0.96vw,1.05rem)] pb-[clamp(0.58rem,0.84vw,0.82rem)] shadow-[0_18px_42px_rgba(3,8,20,0.22)] transition-[transform,border-color,box-shadow] duration-300 ease-out hover:border-white/12 hover:-translate-y-0.5 cursor-pointer"
-                  style={clashBgStyle}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleFixtureExpanded(f.fixtureId)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleFixtureExpanded(f.fixtureId);
-                    }
-                  }}
-                >
-                  <div className="space-y-3 rounded-[22px] border border-white/6 bg-black/14 px-3 py-3 backdrop-blur-[10px] sm:px-3.5 sm:py-3.5">
-                    <div>
-                      <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-2">
-                        <div className="sm:hidden flex items-center justify-between gap-2">
-                          <span className="font-display font-semibold">
-                            {kickoffParts.dayNum}
-                            <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
-                            {kickoffParts.monthYear}
-                          </span>
-                          <span className="font-display font-semibold">{kickoffParts.time}</span>
-                        </div>
-                        <div className="hidden sm:flex items-center justify-between gap-2">
-                          <span className="font-display font-semibold">
-                            {kickoffParts.dayNum}
-                            <sup className="text-[9px] ml-[1px]">{kickoffParts.suffix}</sup>{" "}
-                            {kickoffParts.monthYear}
-                          </span>
-                          <span className="font-display font-semibold">{kickoffParts.time}</span>
-                        </div>
-                      </div>
-                      <div className="sm:hidden">
-                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                          <div className="flex flex-col items-center text-center min-w-0">
-                            <TeamBadge
-                              name={f.home.name}
-                              tla={f.home.tla}
-                              shortName={f.home.shortName}
-                              badge={f.home.badge}
-                            />
-                            <TeamLabel
-                              name={f.home.name}
-                              tla={f.home.tla}
-                              shortName={f.home.shortName}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                              fullNameWindowPx={68}
-                            />
-                          </div>
-                          <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
-                            vs
-                          </span>
-                          <div className="flex flex-col items-center text-center min-w-0">
-                            <TeamBadge
-                              name={f.away.name}
-                              tla={f.away.tla}
-                              shortName={f.away.shortName}
-                              badge={f.away.badge}
-                            />
-                            <TeamLabel
-                              name={f.away.name}
-                              tla={f.away.tla}
-                              shortName={f.away.shortName}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                              fullNameWindowPx={68}
-                            />
-                          </div>
-                        </div>
-                      </div>
+                const actual = f.result ?? null;
+                const fixtureStatusHeading = statusHeading(f.status);
+                const kickoffParts = formatKickoffParts(f.kickoff);
+                const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
+                const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
+                const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
+                const clashBgStyle: React.CSSProperties = {
+                  backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
+                };
 
-                      <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            badge={f.home.badge}
-                          />
-                          <TeamLabel
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                            fullNameWindowPx={88}
-                          />
-                        </div>
-                        <span className="font-display text-xs font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
-                          vs
-                        </span>
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            badge={f.away.badge}
-                          />
-                          <TeamLabel
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                            fullNameWindowPx={88}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-display text-[clamp(0.85rem,1.1vw,1rem)] text-muted">
-                        {fixtureStatusHeading}
-                      </div>
-                      <div className="relative mx-auto mt-1 flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                        {Number(f.redCards?.home || 0) > 0 ? (
-                          <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                            <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                            <span>{f.redCards?.home}</span>
-                          </span>
-                        ) : null}
-                        <span className="inline-block text-center">{displayResult(f.status, actual)}</span>
-                        {Number(f.redCards?.away || 0) > 0 ? (
-                          <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                            <span>{f.redCards?.away}</span>
-                            <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    {SHOW_MATCH_INFO ? (
-                      <div className="flex items-center justify-center text-xs text-muted">
-                          <button
-                            type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openMatchInfo(f);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
-                        >
-                          <Info size={12} />
-                          Match Info
-                        </button>
-                      </div>
-                    ) : null}
-                    <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted">
-                      <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
-                        {isExpanded ? "Hide" : "Show"} Predictions
-                      </span>
-                      <ChevronDown
-                        size={14}
-                        className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-                      />
-                    </div>
-                  </div>
-
+                return (
                   <div
-                    className={[
-                      "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                      isExpanded
-                        ? "grid-rows-[1fr] opacity-100 mt-3"
-                        : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none",
-                    ].join(" ")}
+                    key={f.fixtureId}
+                    className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
+                    style={{
+                      animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                      animationDuration: "520ms",
+                    }}
                   >
-                    <div className="min-h-0 overflow-hidden">
-                      <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                      <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                          Prediction board
-                        </span>
-                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                          {players.length} {players.length === 1 ? "player" : "players"}
-                        </span>
-                      </div>
-                      {players.length === 0 ? (
-                        <div className="text-sm text-muted">
-                          No players found.
-                        </div>
-                      ) : (
-                        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
-                          {players.map((p) => {
-                          const pred =
-                            picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
-                          const golden = goldenByUid[p.uid];
-                          const isGolden =
-                            !!golden &&
-                            golden.fixtureId === f.fixtureId &&
-                            golden.score === pred;
-                          const powerup = powerupByUid[p.uid];
-                          const powerupType =
-                            powerup && powerup.locked && powerup.fixtureId === f.fixtureId
-                              ? powerup.powerupType
-                              : null;
-                          const powerupTypeClass =
-                            powerupType === "ALL_IN"
-                                ? "!border-red-400/85 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.55),0_8px_18px_rgba(248,113,113,0.16)]"
-                                : powerupType === "SAFETY_NET"
-                                  ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
-                                  : "";
-                          const predNorm = String(pred || "").trim();
-                          const actualNorm = String(actual || "").trim();
-                          const predictionTier = classifyPredictionTier(predNorm, actualNorm);
-                          const isExact = predictionTier === "exact";
-                          const isOutcomeOnly = predictionTier === "result";
-                          const powerupVisualState = getPowerupVisualState({
-                            powerupType,
-                            predictionTier,
-                          });
-                          const powerupHitToneClass =
-                            "key-chip bg-orange-500/20 border-orange-400/80 shadow-[0_0_0_1px_rgba(251,146,60,0.18)_inset,0_0_10px_rgba(251,146,60,0.12)]";
-                          const powerupMissToneClass =
-                            "key-chip bg-slate-500/20 border-slate-400/80 shadow-[0_0_0_1px_rgba(148,163,184,0.18)_inset,0_0_10px_rgba(148,163,184,0.1)]";
-                          const toneClass =
-                            powerupType === "ALL_IN"
-                              ? powerupVisualState === "powerup_hit"
-                                ? powerupHitToneClass
-                                : powerupVisualState === "powerup_miss"
-                                  ? powerupMissToneClass
-                                  : "bg-surface border-teal-500"
-                              : powerupVisualState === "powerup_hit"
-                                ? powerupHitToneClass
-                                : isExact
-                                  ? "key-chip key-chip-exact bg-purple-500/20 border-purple-400/70"
-                                  : isOutcomeOnly
-                                    ? "key-chip key-chip-result bg-emerald-500/20 border-emerald-400/70"
-                                    : "bg-surface border-teal-500";
-                          const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
-                          const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
-                          const goldenGlowClass = isGolden
-                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
-                            : "";
-                          const goldenIndicatorClass = isGoldenScored
-                            ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
-                            : "";
-
-                          return (
-                            <div
-                              key={p.uid}
-                              className="relative min-w-0 !overflow-visible"
-                            >
-                              {isGolden || powerupType ? (
-                                <span className="absolute -right-1.5 -top-1.5 z-10 inline-flex flex-col items-end gap-1">
-                                  {isGolden ? (
-                                    <Image
-                                      src="/icons/powerups/golden-pick-v2.svg"
-                                      alt=""
-                                      aria-hidden
-                                      width={16}
-                                      height={16}
-                                      className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                    />
-                                  ) : null}
-                                  {powerupType ? (
-                                    <Image
-                                      src={
-                                        powerupType === "ALL_IN"
-                                          ? "/icons/powerups/all-in-v2.svg"
-                                          : "/icons/powerups/safety-net-v2.svg"
-                                      }
-                                      alt=""
-                                      aria-hidden
-                                      width={16}
-                                      height={16}
-                                      className="h-4 w-4 drop-shadow-[0_2px_5px_rgba(0,0,0,0.35)]"
-                                    />
-                                  ) : null}
+                    <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                      <div
+                        className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                        style={clashBgStyle}
+                      >
+                        <div className="space-y-3">
+                          <div>
+                            <div className="mb-2 text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-display font-semibold">
+                                  {kickoffParts.dayNum}
+                                  <sup className="ml-[1px] text-[9px]">{kickoffParts.suffix}</sup>{" "}
+                                  {kickoffParts.monthYear}
                                 </span>
-                              ) : null}
-                              <div
-                                className={[
-                                  "rounded-[18px] rounded-tl-[22px] rounded-br-[22px] rounded-tr-none rounded-bl-none px-2.5 py-2 text-center border border-white/8 bg-white/[0.02]",
-                                  toneClass,
-                                  goldenBorderClass,
-                                  goldenGlowClass,
-                                  goldenIndicatorClass,
-                                  powerupTypeClass,
-                                ].join(" ")}
-                              >
-                                <div
-                                  className={[
-                                    "font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate",
-                                    "text-muted",
-                                  ].join(" ")}
-                                >
-                                  {p.displayName.length > 6
-                                    ? `${p.displayName.slice(0, 6)}`
-                                    : p.displayName}
-                                </div>
+                                <span className="font-display font-semibold">{kickoffParts.time}</span>
+                              </div>
+                            </div>
 
-                                <div
-                                  className={[
-                                    "font-display mt-1 flex w-full items-center justify-center gap-1 text-[clamp(0.7rem,1.1vw,1rem)] font-bold tabular-nums",
-                                    "whitespace-nowrap",
-                                    "text-foreground",
-                                  ].join(" ")}
-                                >
-                                  {fmtScore(pred)}
+                            <div className="sm:hidden">
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <div className="flex min-w-0 flex-col items-center text-center">
+                                  <TeamBadge
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    badge={f.home.badge}
+                                  />
+                                  <TeamLabel
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
+                                </div>
+                                <span className="inline-flex items-center justify-center font-display text-[10px] font-semibold uppercase text-muted">
+                                  vs
+                                </span>
+                                <div className="flex min-w-0 flex-col items-center text-center">
+                                  <TeamBadge
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    badge={f.away.badge}
+                                  />
+                                  <TeamLabel
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
                                 </div>
                               </div>
                             </div>
-                          );
-                          })}
+
+                            <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 sm:grid">
+                              <div className="flex min-w-0 flex-col items-center text-center">
+                                <TeamBadge
+                                  name={f.home.name}
+                                  tla={f.home.tla}
+                                  shortName={f.home.shortName}
+                                  badge={f.home.badge}
+                                />
+                                <TeamLabel
+                                  name={f.home.name}
+                                  tla={f.home.tla}
+                                  shortName={f.home.shortName}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
+                                />
+                              </div>
+                              <span className="inline-flex h-full items-center justify-center self-center font-display text-xs font-semibold uppercase text-muted">
+                                vs
+                              </span>
+                              <div className="flex min-w-0 flex-col items-center text-center">
+                                <TeamBadge
+                                  name={f.away.name}
+                                  tla={f.away.tla}
+                                  shortName={f.away.shortName}
+                                  badge={f.away.badge}
+                                />
+                                <TeamLabel
+                                  name={f.away.name}
+                                  tla={f.away.tla}
+                                  shortName={f.away.shortName}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                            <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                                Fixture board
+                              </span>
+                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                                {fixtureStatusHeading}
+                              </span>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="relative mx-auto flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
+                                {Number(f.redCards?.home || 0) > 0 ? (
+                                  <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                    <span>{f.redCards?.home}</span>
+                                  </span>
+                                ) : null}
+                                <span className="inline-block text-center">{displayResult(f.status, actual)}</span>
+                                {Number(f.redCards?.away || 0) > 0 ? (
+                                  <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                    <span>{f.redCards?.away}</span>
+                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {SHOW_MATCH_INFO ? (
+                                <div className="flex items-center justify-center text-xs text-muted">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openMatchInfo(f);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
+                                  >
+                                    <Info size={12} />
+                                    Match Info
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              <div
+                                className="flex cursor-pointer items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted transition-colors duration-200 hover:bg-white/[0.03]"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => toggleFixtureExpanded(f.fixtureId)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    toggleFixtureExpanded(f.fixtureId);
+                                  }
+                                }}
+                              >
+                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
+                                  {isExpanded ? "Hide" : "Show"} Predictions
+                                </span>
+                                <ChevronDown
+                                  size={14}
+                                  className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className={[
+                              "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                              isExpanded
+                                ? "mt-3 grid-rows-[1fr] opacity-100"
+                                : "mt-0 grid-rows-[0fr] opacity-0 pointer-events-none",
+                            ].join(" ")}
+                          >
+                            <div className="min-h-0 overflow-hidden">
+                              <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                                <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                                    Prediction board
+                                  </span>
+                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                                    {players.length} {players.length === 1 ? "player" : "players"}
+                                  </span>
+                                </div>
+                                {players.length === 0 ? (
+                                  <div className="text-sm text-muted">No players found.</div>
+                                ) : (
+                                  <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                                    {players.map((p) => {
+                                      const pred = picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
+                                      const golden = goldenByUid[p.uid];
+                                      const isGolden =
+                                        !!golden &&
+                                        golden.fixtureId === f.fixtureId &&
+                                        golden.score === pred;
+                                      const powerup = powerupByUid[p.uid];
+                                      const powerupType =
+                                        powerup &&
+                                        powerup.locked &&
+                                        powerup.fixtureId === f.fixtureId
+                                          ? powerup.powerupType
+                                          : null;
+                                      const powerupTypeClass =
+                                        powerupType === "ALL_IN"
+                                          ? "!border-orange-300/80 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.48),0_8px_18px_rgba(251,146,60,0.16)]"
+                                          : powerupType === "SAFETY_NET"
+                                            ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                            : "";
+                                      const predNorm = String(pred || "").trim();
+                                      const actualNorm = String(actual || "").trim();
+                                      const hasScoredResult = actualNorm.length > 0;
+                                      const predictionTier = hasScoredResult
+                                        ? classifyPredictionTier(predNorm, actualNorm)
+                                        : null;
+                                      const isExact = predictionTier === "exact";
+                                      const isOutcomeOnly = predictionTier === "result";
+                                      const powerupVisualState = hasScoredResult
+                                        ? getPowerupVisualState({
+                                            powerupType,
+                                            predictionTier,
+                                          })
+                                        : null;
+                                      const powerupHitToneClass =
+                                        "key-chip border-cyan-300/75 bg-[linear-gradient(145deg,rgba(34,211,238,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(34,211,238,0.22)_inset,0_12px_22px_rgba(34,211,238,0.12)]";
+                                      const powerupMissToneClass =
+                                        "key-chip border-red-300/45 bg-[linear-gradient(145deg,rgba(248,113,113,0.16),rgba(9,12,26,0.92)_58%,rgba(9,12,26,0.9))] shadow-[0_0_0_1px_rgba(248,113,113,0.14)_inset,0_12px_22px_rgba(127,29,29,0.16)]";
+                                      const neutralToneClass =
+                                        "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
+                                      const toneClass =
+                                        !hasScoredResult
+                                          ? neutralToneClass
+                                          : powerupType === "ALL_IN"
+                                            ? powerupVisualState === "powerup_hit"
+                                              ? powerupHitToneClass
+                                              : powerupMissToneClass
+                                            : powerupVisualState === "powerup_hit"
+                                              ? powerupHitToneClass
+                                              : isExact
+                                                ? "key-chip key-chip-exact border-purple-300/75 bg-[linear-gradient(145deg,rgba(168,85,247,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(216,180,254,0.2)_inset,0_12px_24px_rgba(168,85,247,0.15)]"
+                                                : isOutcomeOnly
+                                                  ? "key-chip key-chip-result border-emerald-300/75 bg-[linear-gradient(145deg,rgba(16,185,129,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(110,231,183,0.2)_inset,0_12px_24px_rgba(16,185,129,0.15)]"
+                                                  : powerupMissToneClass;
+                                      const accentBarClass =
+                                        powerupVisualState === "powerup_hit"
+                                          ? "from-cyan-200 via-cyan-300 to-cyan-500/20"
+                                          : powerupVisualState === "powerup_miss"
+                                            ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                            : isExact
+                                              ? "from-purple-200 via-purple-300 to-purple-500/20"
+                                              : isOutcomeOnly
+                                                ? "from-emerald-200 via-emerald-300 to-emerald-500/20"
+                                                : hasScoredResult && predictionTier === "miss"
+                                                  ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                                  : powerupType === "ALL_IN"
+                                                    ? "from-orange-200 via-orange-300 to-orange-500/18"
+                                                    : powerupType === "SAFETY_NET"
+                                                      ? "from-blue-200 via-blue-300 to-blue-500/18"
+                                                      : isGolden
+                                                        ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
+                                                        : "from-white/24 via-white/10 to-transparent";
+                                      const scoreBadgeClass =
+                                        !hasScoredResult
+                                          ? "text-foreground"
+                                          : powerupVisualState === "powerup_hit"
+                                            ? "text-cyan-100"
+                                            : powerupVisualState === "powerup_miss"
+                                              ? "text-red-100"
+                                              : isExact
+                                                ? "text-purple-100"
+                                                : isOutcomeOnly
+                                                  ? "text-emerald-100"
+                                                  : "text-foreground";
+                                      const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
+                                      const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
+                                      const goldenGlowClass = isGolden
+                                        ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
+                                        : "";
+                                      const goldenIndicatorClass = isGoldenScored
+                                        ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
+                                        : "";
+
+                                      return (
+                                        <div key={p.uid} className="relative min-w-0 !overflow-visible">
+                                          <div
+                                            className={[
+                                              "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
+                                              toneClass,
+                                              goldenBorderClass,
+                                              goldenGlowClass,
+                                              goldenIndicatorClass,
+                                              powerupTypeClass,
+                                            ].join(" ")}
+                                          >
+                                            <div
+                                              className={[
+                                                "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                                                accentBarClass,
+                                              ].join(" ")}
+                                            />
+                                            <div className="relative pl-3">
+                                              <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                                {p.displayName.length > 6
+                                                  ? p.displayName.slice(0, 6)
+                                                  : p.displayName}
+                                              </div>
+                                              <span
+                                                className={[
+                                                  "font-display text-[0.92rem] font-semibold text-foreground truncate",
+                                                  scoreBadgeClass,
+                                                ].join(" ")}
+                                              >
+                                                {fmtScore(pred)}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      )}
                       </div>
                     </div>
                   </div>
-                </div>
-                </div>
-              );
+                );
               };
 
               return fixtureSections.map((section, sectionIdx) => (

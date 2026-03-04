@@ -722,91 +722,117 @@ export default function LeaderboardMatrixPage() {
         </div>
       )}
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
-              {!!seasonOptions.length && (
-                <LeaderboardSelectField
-                  id="leaderboard-season-select"
-                  label="Season"
-                  value={seasonKey}
-                  onChange={setSeasonKey}
-                >
-                  {seasonOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {seasonLabel(s)}
-                    </option>
-                  ))}
-                </LeaderboardSelectField>
-              )}
-              <div className="space-y-2">
-                <div className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Focus
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-1.5">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                  Leaderboard desk
                 </div>
-                <SliderSwitch
-                  options={[
-                    { value: "overall", label: "Overall" },
-                    { value: "current", label: `GW${currentGw}` },
-                    { value: "previous", label: `GW${medalsGw}` },
-                  ]}
-                  value={topView}
-                  onChange={setTopView}
-                  className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                  buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(255,255,255,0.03)_38%,rgba(56,189,248,0.05)_100%)] p-5">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <div className="space-y-3">
-                  <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                    Viewing board
+                  </span>
+                  <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
                     {topViewLabel}
-                  </div>
-                  <div className="font-display text-[clamp(1.85rem,3vw,3rem)] font-semibold leading-[0.95] text-foreground">
-                    Top three snapshot
-                  </div>
-                  <div className="max-w-2xl text-sm text-muted">
-                    A room-wide editorial view of current leaders, point separation, and the standing that matters for this scoring lens.
-                  </div>
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <SummaryTile
-                    label="Leader"
-                    value={leadingPlayer ? leadingPlayer.displayName : "—"}
-                    note={
-                      leadingPlayer
-                        ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
-                        : "No scored entries yet"
-                    }
-                    icon={<Trophy size={16} />}
-                  />
+              </div>
+              <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                  Standings lens
+                </div>
+                <div className="font-display text-lg font-semibold text-foreground">
+                  {seasonLabel(seasonKey || "----")}
                 </div>
               </div>
             </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <SummaryTile
-                label="Current Week"
-                value={`GW${currentGw}`}
-                note={scoredGameweeks.includes(currentGw) ? "Score docs saved for this round." : "Waiting on saved score docs."}
-                icon={<Medal size={16} />}
-              />
-              <SummaryTile
-                label="Last Scored"
-                value={`GW${medalsGw}`}
-                note="Used as the previous podium comparison."
-                icon={<Clock3 size={16} />}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+              <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                Table board
+              </span>
+              <span className="font-display text-sm font-semibold text-foreground">
+                {topView === "overall" ? "Season ladder" : topView === "current" ? `Current GW ${currentGw}` : `Previous GW ${medalsGw}`}
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  Leader
+                </div>
+                <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                  {leadingPlayer ? leadingPlayer.displayName : "—"}
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  {leadingPlayer
+                    ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
+                    : "No scored entries yet"}
+                </div>
+              </div>
+              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  Current Week
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  GW{currentGw}
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  {scoredGameweeks.includes(currentGw) ? "Score docs saved for this round." : "Waiting on saved score docs."}
+                </div>
+              </div>
+              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  Last Scored
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  GW{medalsGw}
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  Used as the previous podium comparison.
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </SectionCard>
 
       <SpecialBreak />
+
+      <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+          {!!seasonOptions.length && (
+            <LeaderboardSelectField
+              id="leaderboard-season-select"
+              label="Season"
+              value={seasonKey}
+              onChange={setSeasonKey}
+            >
+              {seasonOptions.map((s) => (
+                <option key={s} value={s}>
+                  {seasonLabel(s)}
+                </option>
+              ))}
+            </LeaderboardSelectField>
+          )}
+          <div className="space-y-2">
+            <div className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Focus
+            </div>
+            <SliderSwitch
+              options={[
+                { value: "overall", label: "Overall" },
+                { value: "current", label: `GW${currentGw}` },
+                { value: "previous", label: `GW${medalsGw}` },
+              ]}
+              value={topView}
+              onChange={setTopView}
+              className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+            />
+          </div>
+        </div>
+      </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
@@ -960,7 +986,7 @@ export default function LeaderboardMatrixPage() {
             <div className="min-w-0 flex-1">
               <LeaderboardSelectField
                 id="mobile-gw-select"
-                label="Mobile view"
+                label=""
                 value={String(selectedTableGw)}
                 onChange={(value) => setSelectedTableGw(Number(value))}
               >

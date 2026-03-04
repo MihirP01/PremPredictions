@@ -255,7 +255,7 @@ function MetricTile({ label, value, note, rank = 0, icon }: MetricTileProps) {
         <div className="min-h-[1.25rem] text-xs text-muted">{note ?? "\u00a0"}</div>
         {rank > 0 ? (
           <div className={`rounded-full border px-2.5 py-1 font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${tone.badge}`}>
-            Rank #{rank}
+            #{rank}
           </div>
         ) : null}
       </div>
@@ -663,45 +663,116 @@ export default function RoomStatsPage() {
       <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
         <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
           <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              {!!seasonOptions.length && (
+            <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+              <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                        Stats desk
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                          Viewing profile
+                        </span>
+                        <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                          {selectedPlayer?.displayName || "No player"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                        Scope
+                      </div>
+                      <div className="font-display text-lg font-semibold text-foreground">
+                        {selectedGwNumber == null ? "Season to date" : `GW ${selectedGwNumber}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                      Performance ledger
+                    </span>
+                    <span className="font-display text-sm font-semibold text-foreground">
+                      {seasonLabel(seasonKey || "----")}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                        Room Rank
+                      </div>
+                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                        #{roomRank}/{players.length || 1}
+                      </div>
+                      <div className="mt-1 text-xs text-muted">Standing in the selected scope.</div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                        Total Points
+                      </div>
+                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                        {displayStats?.totalPoints ?? 0}
+                      </div>
+                      <div className="mt-1 text-xs text-muted">Points banked in this ledger.</div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                        Most Used
+                      </div>
+                      <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                        {displayStats ? mostUsedPowerupLabel(displayStats.powerupUsage) : "None"}
+                      </div>
+                      <div className="mt-1 text-xs text-muted">Preferred chip usage pattern.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <SpecialBreak />
+
+            <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+              <div className="grid gap-3 md:grid-cols-3">
+                {!!seasonOptions.length && (
+                  <StatsSelectField
+                    id="stats-season-select"
+                    label="Season"
+                    value={seasonKey}
+                    onChange={setSeasonKey}
+                  >
+                    {seasonOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {seasonLabel(s)}
+                      </option>
+                    ))}
+                  </StatsSelectField>
+                )}
                 <StatsSelectField
-                  id="stats-season-select"
-                  label="Season"
-                  value={seasonKey}
-                  onChange={setSeasonKey}
+                  label="Player"
+                  value={effectiveSelectedUid}
+                  onChange={setSelectedUid}
                 >
-                  {seasonOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {seasonLabel(s)}
+                  {players.map((p) => (
+                    <option className="font-display" key={p.uid} value={p.uid}>
+                      {p.displayName}
                     </option>
                   ))}
                 </StatsSelectField>
-              )}
-              <StatsSelectField
-                label="Player"
-                value={effectiveSelectedUid}
-                onChange={setSelectedUid}
-              >
-                {players.map((p) => (
-                  <option className="font-display" key={p.uid} value={p.uid}>
-                    {p.displayName}
-                  </option>
-                ))}
-              </StatsSelectField>
-              <StatsSelectField
-                id="stats-gw-filter-select"
-                label="Scope"
-                value={effectiveGwFilter}
-                onChange={setSelectedGwFilter}
-              >
-                <option value="all">All GWs</option>
-                {allScoredGws.map((gw) => (
-                  <option key={`gw-filter-${gw}`} value={String(gw)}>
-                    GW {gw}
-                  </option>
-                ))}
-              </StatsSelectField>
+                <StatsSelectField
+                  id="stats-gw-filter-select"
+                  label="Scope"
+                  value={effectiveGwFilter}
+                  onChange={setSelectedGwFilter}
+                >
+                  <option value="all">All GWs</option>
+                  {allScoredGws.map((gw) => (
+                    <option key={`gw-filter-${gw}`} value={String(gw)}>
+                      GW {gw}
+                    </option>
+                  ))}
+                </StatsSelectField>
+              </div>
             </div>
 
             {error ? (
@@ -719,44 +790,7 @@ export default function RoomStatsPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(255,255,255,0.03)_38%,rgba(56,189,248,0.05)_100%)] p-5">
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.95fr)]">
-                    <div className="space-y-3">
-                      <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.2em] text-white/48">
-                        {scopedLabel}
-                      </div>
-                      <div className="font-display text-[clamp(1.9rem,3vw,3.1rem)] font-semibold leading-[0.95] text-foreground">
-                        {selectedPlayer.displayName}
-                      </div>
-                      <div className="max-w-2xl text-sm text-muted">
-                        A compact editorial view of scoring output, prediction accuracy, power-up swing, and weekly form.
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
-                          Room Ranking
-                        </div>
-                        <div className="mt-2 font-display text-2xl font-semibold text-foreground">
-                          #{roomRank}/{players.length || 1}
-                        </div>
-                        <div className="mt-2 text-xs text-muted">Standing in the current scope.</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-black/10 p-4">
-                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/46">
-                          Most Used
-                        </div>
-                        <div className="mt-2 font-display text-lg font-semibold text-foreground">
-                          {mostUsedPowerupLabel(displayStats.powerupUsage)}
-                        </div>
-                        <div className="mt-2 text-xs text-muted">Preferred chip usage pattern.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 <SpecialBreak />
-
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <MetricTile
                     label="Total Points"

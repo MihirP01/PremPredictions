@@ -660,8 +660,7 @@ export default function RoomStatsPage() {
         />
       </div>
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 sm:p-5">
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
               <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
@@ -1058,7 +1057,6 @@ export default function RoomStatsPage() {
             </div>
           </SectionCard>
         </div>
-      </SectionCard>
     </PageShell>
   );
 }

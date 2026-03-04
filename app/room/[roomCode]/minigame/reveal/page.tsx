@@ -864,9 +864,9 @@ export default function RevealPage() {
                               "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
                             const powerupTypeClass =
                               powerupType === "ALL_IN"
-                                ? "!border-orange-300/80 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.48),0_8px_18px_rgba(251,146,60,0.16)]"
+                                ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
                                 : powerupType === "SAFETY_NET"
-                                  ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                  ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
                                   : "";
                             const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
                             const goldenGlowClass = isGolden
@@ -874,9 +874,9 @@ export default function RevealPage() {
                               : "";
                             const accentBarClass =
                               powerupType === "ALL_IN"
-                                ? "from-orange-200 via-orange-300 to-orange-500/18"
+                                ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
                                 : powerupType === "SAFETY_NET"
-                                  ? "from-blue-200 via-blue-300 to-blue-500/18"
+                                  ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
                                   : isGolden
                                     ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
                                     : "from-white/24 via-white/10 to-transparent";

@@ -114,14 +114,14 @@ const POWERUP_OPTIONS = [
     type: "ALL_IN" as const,
     label: "All-In",
     icon: "/icons/powerups/all-in-v2.svg",
-    className: "border-red-300/75 bg-red-500/10",
+    className: "border-amber-600/70 bg-amber-950/30",
     help: "Exact score = 6, else 0.",
   },
   {
     type: "SAFETY_NET" as const,
     label: "Safety Net",
     icon: "/icons/powerups/safety-net-v2.svg",
-    className: "border-blue-300/75 bg-blue-500/10",
+    className: "border-sky-700/70 bg-sky-950/40",
     help: "If 0 points, becomes 1.",
   },
 ];
@@ -387,48 +387,48 @@ export default function PowerupsPage() {
   const myPowerupTheme =
     myPowerup?.powerupType === "ALL_IN"
       ? {
-          border: "border-red-400/75",
-          bg: "bg-[linear-gradient(180deg,rgba(239,68,68,0.14)_0%,rgba(239,68,68,0.05)_100%)]",
-          shadow: "shadow-[0_10px_24px_rgba(239,68,68,0.16)]",
-          pill: "border-red-300/75 bg-red-400/20",
-          pick: "border-red-300/70 bg-[linear-gradient(135deg,rgba(239,68,68,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
-          progress: "border-red-300/60",
-          bar: "bg-[linear-gradient(90deg,rgba(239,68,68,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+          border: "border-amber-600/70",
+          bg: "bg-[linear-gradient(180deg,rgba(120,53,15,0.18)_0%,rgba(120,53,15,0.08)_100%)]",
+          shadow: "shadow-[0_10px_24px_rgba(120,53,15,0.14)]",
+          pill: "border-amber-600/70 bg-amber-950/40",
+          pick: "border-amber-600/70 bg-[linear-gradient(135deg,rgba(120,53,15,0.2)_0%,rgba(69,26,3,0.1)_100%)]",
+          progress: "border-amber-600/50",
+          bar: "bg-[linear-gradient(90deg,rgba(180,83,9,0.82)_0%,rgba(120,53,15,0.95)_100%)]",
         }
       : myPowerup?.powerupType === "SAFETY_NET"
         ? {
-            border: "border-blue-400/75",
-            bg: "bg-[linear-gradient(180deg,rgba(59,130,246,0.14)_0%,rgba(59,130,246,0.05)_100%)]",
-            shadow: "shadow-[0_10px_24px_rgba(59,130,246,0.16)]",
-            pill: "border-blue-300/75 bg-blue-400/20",
-            pick: "border-blue-300/70 bg-[linear-gradient(135deg,rgba(59,130,246,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
-            progress: "border-blue-300/60",
-            bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+            border: "border-sky-700/75",
+            bg: "bg-[linear-gradient(180deg,rgba(3,37,65,0.22)_0%,rgba(8,47,73,0.1)_100%)]",
+            shadow: "shadow-[0_10px_24px_rgba(8,47,73,0.14)]",
+            pill: "border-sky-700/70 bg-sky-950/45",
+            pick: "border-sky-700/70 bg-[linear-gradient(135deg,rgba(3,37,65,0.24)_0%,rgba(8,47,73,0.12)_100%)]",
+            progress: "border-sky-700/55",
+            bar: "bg-[linear-gradient(90deg,rgba(3,105,161,0.82)_0%,rgba(8,47,73,0.95)_100%)]",
           }
         : {
-            border: "border-blue-400/75",
-            bg: "bg-[linear-gradient(180deg,rgba(59,130,246,0.14)_0%,rgba(59,130,246,0.05)_100%)]",
-            shadow: "shadow-[0_10px_24px_rgba(59,130,246,0.16)]",
-            pill: "border-blue-300/75 bg-blue-400/20",
-            pick: "border-blue-300/70 bg-[linear-gradient(135deg,rgba(59,130,246,0.18)_0%,rgba(45,212,191,0.14)_100%)]",
-            progress: "border-blue-300/60",
-          bar: "bg-[linear-gradient(90deg,rgba(59,130,246,0.95)_0%,rgba(45,212,191,0.9)_100%)]",
+            border: "border-sky-700/75",
+            bg: "bg-[linear-gradient(180deg,rgba(3,37,65,0.22)_0%,rgba(8,47,73,0.1)_100%)]",
+            shadow: "shadow-[0_10px_24px_rgba(8,47,73,0.14)]",
+            pill: "border-sky-700/70 bg-sky-950/45",
+            pick: "border-sky-700/70 bg-[linear-gradient(135deg,rgba(3,37,65,0.24)_0%,rgba(8,47,73,0.12)_100%)]",
+            progress: "border-sky-700/55",
+          bar: "bg-[linear-gradient(90deg,rgba(3,105,161,0.82)_0%,rgba(8,47,73,0.95)_100%)]",
         };
   const roomLockTheme =
     selectedPowerupType === "ALL_IN"
       ? {
-          box: "border-red-300/65 bg-[linear-gradient(180deg,rgba(248,113,113,0.2)_0%,rgba(239,68,68,0.07)_100%)]",
-          pill: "border-red-300/70 bg-red-500/15",
-          pct: "text-red-200",
-          progress: "border-red-300/60",
-          bar: "bg-[linear-gradient(90deg,rgba(248,113,113,0.65),rgba(239,68,68,0.98))] shadow-[0_0_12px_rgba(239,68,68,0.35)]",
+          box: "border-amber-600/55 bg-[linear-gradient(180deg,rgba(120,53,15,0.22)_0%,rgba(69,26,3,0.1)_100%)]",
+          pill: "border-amber-600/65 bg-amber-950/35",
+          pct: "text-amber-200",
+          progress: "border-amber-600/50",
+          bar: "bg-[linear-gradient(90deg,rgba(180,83,9,0.6),rgba(120,53,15,0.95))] shadow-[0_0_12px_rgba(120,53,15,0.28)]",
         }
       : {
-          box: "border-blue-300/65 bg-[linear-gradient(180deg,rgba(96,165,250,0.2)_0%,rgba(59,130,246,0.07)_100%)]",
-          pill: "border-blue-300/70 bg-blue-500/15",
-          pct: "text-blue-200",
-          progress: "border-blue-300/60",
-          bar: "bg-[linear-gradient(90deg,rgba(96,165,250,0.65),rgba(59,130,246,0.98))] shadow-[0_0_12px_rgba(59,130,246,0.35)]",
+          box: "border-sky-700/55 bg-[linear-gradient(180deg,rgba(3,37,65,0.24)_0%,rgba(8,47,73,0.1)_100%)]",
+          pill: "border-sky-700/65 bg-sky-950/35",
+          pct: "text-sky-200",
+          progress: "border-sky-700/50",
+          bar: "bg-[linear-gradient(90deg,rgba(3,105,161,0.6),rgba(8,47,73,0.92))] shadow-[0_0_12px_rgba(8,47,73,0.28)]",
         };
   const myGoldenFixtureId = user ? goldensByUid[user.uid]?.fixtureId ?? null : null;
 
@@ -638,12 +638,12 @@ export default function PowerupsPage() {
                 const isGoldenFixture = myGoldenFixtureId != null && fid === myGoldenFixtureId;
                 const pickToneClass =
                   selectedPowerupType === "ALL_IN"
-                    ? "border-red-400/75 bg-red-500/10 shadow-[0_0_0_1px_rgba(248,113,113,0.2)_inset]"
-                    : "border-blue-400/75 bg-blue-500/10 shadow-[0_0_0_1px_rgba(96,165,250,0.2)_inset]";
+                    ? "border-amber-600/70 bg-amber-950/28 shadow-[0_0_0_1px_rgba(120,53,15,0.22)_inset]"
+                    : "border-sky-700/70 bg-sky-950/35 shadow-[0_0_0_1px_rgba(8,47,73,0.2)_inset]";
                 const selectedFixtureToneClass =
                   selectedPowerupType === "ALL_IN"
-                    ? "border-red-400/90 bg-[rgba(239,68,68,0.08)] shadow-[0_8px_18px_rgba(239,68,68,0.18),inset_0_0_0_1px_rgba(248,113,113,0.22)]"
-                    : "border-blue-400/90 bg-[rgba(59,130,246,0.08)] shadow-[0_8px_18px_rgba(59,130,246,0.18),inset_0_0_0_1px_rgba(96,165,250,0.22)]";
+                    ? "border-amber-600/80 bg-[rgba(120,53,15,0.1)] shadow-[0_8px_18px_rgba(120,53,15,0.14),inset_0_0_0_1px_rgba(180,83,9,0.22)]"
+                    : "border-sky-700/80 bg-[rgba(8,47,73,0.12)] shadow-[0_8px_18px_rgba(8,47,73,0.14),inset_0_0_0_1px_rgba(3,105,161,0.2)]";
                 const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
                 const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
                 const clashBgStyle: React.CSSProperties = {

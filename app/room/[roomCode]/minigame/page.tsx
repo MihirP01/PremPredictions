@@ -590,10 +590,6 @@ export default function MiniGameLobbyPage() {
       setError("Season/gameweek not loaded yet.");
       return;
     }
-    if (roomPlayers.length < 2) {
-      setError("Need at least 2 players to play the mini-game.");
-      return;
-    }
     if (lockAtMs != null && nowMs >= lockAtMs) {
       setError("Deadline missed for this gameweek. Mini-game is locked.");
       return;
@@ -764,8 +760,8 @@ export default function MiniGameLobbyPage() {
     <>
       <PageShell width="standard">
         <TopActionRow
-          title="Mini-Game Lobby"
-          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""} • ${modeLabel}`}
+          title="Predictions Lobby"
+          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
           actions={<PageBackButton onClick={onBack} />}
         />
 
@@ -775,80 +771,74 @@ export default function MiniGameLobbyPage() {
           </div>
         ) : null}
 
-        <SectionCard className="rounded-[28px] border border-white/8 bg-[linear-gradient(145deg,rgba(245,158,11,0.06),rgba(255,255,255,0.025)_38%,rgba(56,189,248,0.045)_100%)] p-5 sm:p-6">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-            <div className="space-y-3">
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Matchday desk
-              </div>
-              <div className="font-display text-[clamp(1.9rem,3vw,3.2rem)] font-semibold leading-[0.95] text-foreground">
-                GW{gameweek ?? "—"} lobby control
-              </div>
-              <div className="max-w-2xl text-sm text-muted">
-                Final pre-kickoff checkpoint for room readiness, game style confirmation, and deadline tracking before the mini-game opens.
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <LobbyStatTile
-                label="Ready"
-                value={`${readyCount}/${roomPlayersCount || 0}`}
-                note={allPlayersReady ? "All players are marked in." : `${missingCount} still missing.`}
-              />
-              <LobbyStatTile
-                label="Mode"
-                value={modeLabel}
-                note={`Picks ${allowIdenticalPicks ? "can repeat" : "must stay unique"}`}
-              />
-            </div>
-          </div>
-        </SectionCard>
-
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Format desk
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1.5">
+                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                      Predictions desk
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                        Gameweek
+                      </span>
+                      <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                        GW {gameweek ?? "—"} Predictions
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
+                      Gameweek status
+                    </div>
+                    <div className="font-display text-lg font-semibold text-foreground">
+                      {isLocked ? "Missed" : allPlayersReady ? "Open" : `${missingCount} missing`}
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">Game configuration</div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                    Control centre
+                  </span>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      onClick={() => setModeGuideOpen(true)}
+                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
+                    >
+                      Guide
+                    </button>
+                    {isLeader ? (
+                      <button
+                        onClick={() => setModeSettingsOpen(true)}
+                        className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
+                      >
+                        Mode
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <LobbyStatTile label="Style" value={modeLabel} note="Current room format" />
+                  <LobbyStatTile
+                    label="Identical Picks"
+                    value={allowIdenticalPicks ? "ON" : "OFF"}
+                    note={allowIdenticalPicks ? "Parallel-friendly picks." : "Unique picks enforced."}
+                  />
+                  <LobbyStatTile
+                    label="Power-Ups"
+                    value={powerupsEnabled ? "ON" : "OFF"}
+                    note={powerupsEnabled ? "Extra chip round enabled." : "Standard scoring only."}
+                  />
+                </div>
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Lobby readout
+                  </div>
+                  <div className="mt-2 text-sm text-muted">{currentModeSummary}</div>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  onClick={() => setModeGuideOpen(true)}
-                  className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
-                >
-                  Guide
-                </button>
-                {isLeader ? (
-                  <button
-                    onClick={() => setModeSettingsOpen(true)}
-                    className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
-                  >
-                    Mode
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <LobbyStatTile label="Style" value={modeLabel} note="Current room format" />
-              <LobbyStatTile
-                label="Identical Picks"
-                value={allowIdenticalPicks ? "ON" : "OFF"}
-                note={allowIdenticalPicks ? "Parallel-friendly picks." : "Unique picks enforced."}
-              />
-              <LobbyStatTile
-                label="Power-Ups"
-                value={powerupsEnabled ? "ON" : "OFF"}
-                note={powerupsEnabled ? "Extra chip round enabled." : "Standard scoring only."}
-              />
-            </div>
-
-            <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
-              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Lobby readout
-              </div>
-              <div className="mt-2 text-sm text-muted">{currentModeSummary}</div>
             </div>
           </SectionCard>
 
@@ -926,8 +916,8 @@ export default function MiniGameLobbyPage() {
           </SectionCard>
         </div>
 
-        <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
             <div>
               <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                 Ready board
@@ -967,18 +957,16 @@ export default function MiniGameLobbyPage() {
             )}
               </div>
             </div>
+          </SectionCard>
 
+          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
             <div className="space-y-4">
-              <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+              <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
                 <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                   Launch gate
                 </div>
                 <div className="mt-1 font-display text-xl font-semibold text-foreground">Start conditions</div>
                 <div className="mt-3 space-y-3 text-sm text-muted">
-                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
-                    <span>Minimum players</span>
-                    <span className="font-display font-semibold text-foreground">{roomPlayersCount}/2</span>
-                  </div>
                   <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
                     <span>Lobby readiness</span>
                     <span className="font-display font-semibold text-foreground">{allPlayersReady ? "Ready" : "Pending"}</span>
@@ -997,7 +985,6 @@ export default function MiniGameLobbyPage() {
                     disabled={
                       starting ||
                       gameweek == null ||
-                      roomPlayersCount < 2 ||
                       !allPlayersReady ||
                       isLocked
                     }
@@ -1006,11 +993,9 @@ export default function MiniGameLobbyPage() {
                     {starting ? "Starting…" : "Start Mini-game"}
                   </button>
                   <div className="mt-3 text-xs text-muted">
-                    {roomPlayersCount < 2
-                      ? "At least two room players are needed before launch."
-                      : allPlayersReady
-                        ? "All conditions are met. Launch when ready."
-                        : "Launch remains locked until every room player is marked Ready."}
+                    {allPlayersReady
+                      ? "All conditions are met. Launch when ready."
+                      : "Launch remains locked until every room player is marked Ready."}
                   </div>
                 </div>
               ) : isLocked ? (
@@ -1024,8 +1009,8 @@ export default function MiniGameLobbyPage() {
                 </div>
               )}
             </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
+        </div>
       </PageShell>
       <ThemedModal
         open={modeGuideOpen}

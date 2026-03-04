@@ -179,7 +179,7 @@ export default function LeaderboardMatrixPage() {
   const [scoredGameweeks, setScoredGameweeks] = useState<number[]>([]);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
   const [topView, setTopView] = useState<"overall" | "current" | "previous">(
-    "overall",
+    "current",
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
   const settingsWrapDesktopRef = useRef<HTMLDivElement | null>(null);
@@ -821,9 +821,9 @@ export default function LeaderboardMatrixPage() {
             </div>
             <SliderSwitch
               options={[
+                { value: "current", label: "Current" },
                 { value: "overall", label: "Overall" },
-                { value: "current", label: `GW${currentGw}` },
-                { value: "previous", label: `GW${medalsGw}` },
+                { value: "previous", label: "Previous" },
               ]}
               value={topView}
               onChange={setTopView}

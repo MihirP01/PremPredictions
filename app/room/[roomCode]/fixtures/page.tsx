@@ -1815,10 +1815,10 @@ export default function FixturesPage() {
                     <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
                       Golden Pick
                     </span>
-                    <span className="inline-flex items-center justify-center rounded-[12px] border border-orange-300/55 bg-orange-400/[0.05] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground">
+                    <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
                       All-In
                     </span>
-                    <span className="inline-flex items-center justify-center rounded-[12px] border border-blue-300/55 bg-blue-400/[0.05] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground">
+                    <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
                       Safety Net
                     </span>
                   </div>
@@ -2150,9 +2150,9 @@ export default function FixturesPage() {
                                           : null;
                                       const powerupTypeClass =
                                         powerupType === "ALL_IN"
-                                          ? "!border-orange-300/80 shadow-[inset_0_0_0_1px_rgba(251,146,60,0.48),0_8px_18px_rgba(251,146,60,0.16)]"
+                                          ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
                                           : powerupType === "SAFETY_NET"
-                                            ? "!border-blue-400/85 shadow-[inset_0_0_0_1px_rgba(96,165,250,0.55),0_8px_18px_rgba(96,165,250,0.16)]"
+                                            ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
                                             : "";
                                       const predNorm = String(pred || "").trim();
                                       const actualNorm = String(actual || "").trim();
@@ -2200,9 +2200,9 @@ export default function FixturesPage() {
                                                 : hasScoredResult && predictionTier === "miss"
                                                   ? "from-red-200/80 via-red-300/60 to-red-500/12"
                                                   : powerupType === "ALL_IN"
-                                                    ? "from-orange-200 via-orange-300 to-orange-500/18"
+                                                    ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
                                                     : powerupType === "SAFETY_NET"
-                                                      ? "from-blue-200 via-blue-300 to-blue-500/18"
+                                                      ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
                                                       : isGolden
                                                         ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
                                                         : "from-white/24 via-white/10 to-transparent";

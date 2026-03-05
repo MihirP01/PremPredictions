@@ -36,4 +36,6 @@ export default function PageBackButton({
   );
 }
 
-(PageBackButton as typeof PageBackButton & { hidesOnMobile?: boolean }).hidesOnMobile = true;
+(
+  PageBackButton as typeof PageBackButton & { hidesOnMobile?: boolean }
+).hidesOnMobile = true;

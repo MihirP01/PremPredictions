@@ -24,7 +24,8 @@ export async function resolveDisplayName({
       );
       if (roomPlayerSnap.exists()) {
         const roomData = roomPlayerSnap.data() as RoomPlayerDoc;
-        const roomName = String(roomData?.nickName || "").trim() || roomData?.displayName;
+        const roomName =
+          String(roomData?.nickName || "").trim() || roomData?.displayName;
         if (roomName) return roomName;
       }
     } catch {

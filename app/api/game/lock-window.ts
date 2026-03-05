@@ -90,13 +90,16 @@ export async function loadGwFixturesWithLockWindow(
 
   const eligibleFixtures = fixtures
     .filter((f) => {
-      const status = String(f.status || "").toUpperCase().trim();
+      const status = String(f.status || "")
+        .toUpperCase()
+        .trim();
       return !INELIGIBLE_DRAFT_STATUSES.has(status);
     })
     .sort((a, b) => {
       const ka = Date.parse(String(a.kickoff || ""));
       const kb = Date.parse(String(b.kickoff || ""));
-      if (Number.isFinite(ka) && Number.isFinite(kb) && ka !== kb) return ka - kb;
+      if (Number.isFinite(ka) && Number.isFinite(kb) && ka !== kb)
+        return ka - kb;
       const ia = Number(a.fixtureId);
       const ib = Number(b.fixtureId);
       if (Number.isFinite(ia) && Number.isFinite(ib)) return ia - ib;
@@ -113,7 +116,9 @@ export async function loadGwFixturesWithLockWindow(
     .sort((a, b) => a - b);
 
   if (fixtureIds.length === 0) {
-    throw new Error("No eligible fixtures for this GW (played/postponed/cancelled).");
+    throw new Error(
+      "No eligible fixtures for this GW (played/postponed/cancelled).",
+    );
   }
   if (kickoffTimes.length === 0) throw new Error("Fixtures missing kickoff");
 

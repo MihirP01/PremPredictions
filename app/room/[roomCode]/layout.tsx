@@ -88,16 +88,27 @@ type RoomDoc = {
   };
 };
 
-export default function RoomScopedLayout({ children }: { children: React.ReactNode }) {
+export default function RoomScopedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const params = useParams<{ roomCode: string }>();
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const roomCode = useMemo(() => String(params.roomCode || "").toUpperCase(), [params.roomCode]);
+  const roomCode = useMemo(
+    () => String(params.roomCode || "").toUpperCase(),
+    [params.roomCode],
+  );
   const [accentKey, setAccentKey] = useState<string>("teal");
   const [showBootOverlay, setShowBootOverlay] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
-  const [bootHint, setBootHint] = useState<{ seasonKey: string; gw: number; gameState: string } | null>(null);
+  const [bootHint, setBootHint] = useState<{
+    seasonKey: string;
+    gw: number;
+    gameState: string;
+  } | null>(null);
   const redirectedRef = useRef(false);
   const initialVarsRef = useRef<{ bg: string; solid: string } | null>(null);
   const bootedRef = useRef(false);
@@ -115,7 +126,11 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
     const forceToRoomGate = () => {
       if (redirectedRef.current) return;
       redirectedRef.current = true;
-      setDoc(doc(db, "users", user.uid), { currentRoomCode: null }, { merge: true }).catch(() => {});
+      setDoc(
+        doc(db, "users", user.uid),
+        { currentRoomCode: null },
+        { merge: true },
+      ).catch(() => {});
       router.replace("/room-gate?kicked=1");
     };
     const unsub = onSnapshot(
@@ -156,7 +171,10 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
         await warmInFlightRef.current;
         return;
       }
-      if (bootedRef.current && Date.now() - lastWarmAtRef.current < RESUME_WARM_COOLDOWN_MS) {
+      if (
+        bootedRef.current &&
+        Date.now() - lastWarmAtRef.current < RESUME_WARM_COOLDOWN_MS
+      ) {
         return;
       }
       if (!bootedRef.current) {
@@ -167,10 +185,15 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
       const run = (async () => {
         try {
           const bootstrap = await getRoomBootstrapCached(roomCode);
-          if (bootstrap?.seasonKey && Number.isFinite(bootstrap?.currentGameweek)) {
+          if (
+            bootstrap?.seasonKey &&
+            Number.isFinite(bootstrap?.currentGameweek)
+          ) {
             const gw = bootstrap.currentGameweek;
             const season = bootstrap.seasonKey;
-            const gameState = String(bootstrap.gameState || "").trim().toUpperCase();
+            const gameState = String(bootstrap.gameState || "")
+              .trim()
+              .toUpperCase();
             if (!cancelled) setBootHint({ seasonKey: season, gw, gameState });
             const warmKey = `${roomCode}:${season}:gw-${gw}`;
             if (warmedDataKeyRef.current !== warmKey) {
@@ -179,7 +202,12 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
               void getRoomGameStateCached(roomCode, season, gw).catch(() => {});
 
               const scheduleIdle = (fn: () => void) => {
-                const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+                const w = window as Window & {
+                  requestIdleCallback?: (
+                    cb: () => void,
+                    opts?: { timeout: number },
+                  ) => number;
+                };
                 if (w.requestIdleCallback) {
                   const id = w.requestIdleCallback(fn, { timeout: 1200 });
                   idleTasksRef.current.push(id);
@@ -204,7 +232,8 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
           if (overlayTimer != null) window.clearTimeout(overlayTimer);
           if (!cancelled) {
             setBootProgress(100);
-            if (bootHideTimerRef.current) window.clearTimeout(bootHideTimerRef.current);
+            if (bootHideTimerRef.current)
+              window.clearTimeout(bootHideTimerRef.current);
             bootHideTimerRef.current = window.setTimeout(() => {
               if (!cancelled) setShowBootOverlay(false);
               bootHideTimerRef.current = null;
@@ -236,7 +265,9 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
         window.clearTimeout(bootHideTimerRef.current);
         bootHideTimerRef.current = null;
       }
-      const w = window as Window & { cancelIdleCallback?: (id: number) => void };
+      const w = window as Window & {
+        cancelIdleCallback?: (id: number) => void;
+      };
       idleTasksRef.current.forEach((id) => {
         if (w.cancelIdleCallback) w.cancelIdleCallback(id);
         else window.clearTimeout(id);
@@ -258,7 +289,8 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
     }
 
     setBootProgress((prev) => Math.max(prev, 8));
-    if (bootProgressTimerRef.current) window.clearInterval(bootProgressTimerRef.current);
+    if (bootProgressTimerRef.current)
+      window.clearInterval(bootProgressTimerRef.current);
     bootProgressTimerRef.current = window.setInterval(() => {
       setBootProgress((prev) => {
         if (prev >= 92) return prev;
@@ -277,13 +309,17 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
   }, [showBootOverlay]);
 
   useEffect(() => {
-    if (!roomCode || !bootHint?.seasonKey || !Number.isFinite(bootHint.gw)) return;
+    if (!roomCode || !bootHint?.seasonKey || !Number.isFinite(bootHint.gw))
+      return;
     const key = `${roomCode}:${bootHint.seasonKey}:${bootHint.gw}:${bootHint.gameState}`;
     if (prefetchedKeyRef.current === key) return;
     prefetchedKeyRef.current = key;
 
     const base = `/room/${roomCode}`;
-    const predictionsHref = bootHint.gameState === "REVEAL" ? `${base}/minigame/reveal` : `${base}/minigame`;
+    const predictionsHref =
+      bootHint.gameState === "REVEAL"
+        ? `${base}/minigame/reveal`
+        : `${base}/minigame`;
     const routes = [
       `${base}`,
       `${base}/fixtures`,
@@ -327,8 +363,14 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
 
     const applyBg = () => {
-      root.style.setProperty("--app-bg", prefersDark.matches ? accent.bgDark : accent.bgLight);
-      root.style.setProperty("--app-solid", prefersDark.matches ? accent.solidDark : accent.solidLight);
+      root.style.setProperty(
+        "--app-bg",
+        prefersDark.matches ? accent.bgDark : accent.bgLight,
+      );
+      root.style.setProperty(
+        "--app-solid",
+        prefersDark.matches ? accent.solidDark : accent.solidLight,
+      );
     };
 
     applyBg();
@@ -340,7 +382,9 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
 
   return (
     <div
-      className={hideBottomNav ? "room-theme" : "room-theme room-has-bottom-nav"}
+      className={
+        hideBottomNav ? "room-theme" : "room-theme room-has-bottom-nav"
+      }
       style={
         {
           "--room-accent": accent.hex,
@@ -352,9 +396,18 @@ export default function RoomScopedLayout({ children }: { children: React.ReactNo
     >
       {showBootOverlay ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[rgba(4,12,24,0.68)] px-6 backdrop-blur-sm">
-          <div className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]" style={{ "--boot-fill": `${Math.max(0, 100 - bootProgress)}%` } as React.CSSProperties}>
+          <div
+            className="relative mx-auto w-fit font-display text-[clamp(3.8rem,18vw,7rem)] font-semibold leading-none tracking-[-0.03em]"
+            style={
+              {
+                "--boot-fill": `${Math.max(0, 100 - bootProgress)}%`,
+              } as React.CSSProperties
+            }
+          >
             <span className="select-none text-white/10">{bootProgress}%</span>
-            <span className="boot-liquid-fill absolute inset-0 select-none">{bootProgress}%</span>
+            <span className="boot-liquid-fill absolute inset-0 select-none">
+              {bootProgress}%
+            </span>
           </div>
         </div>
       ) : null}

@@ -81,8 +81,12 @@ export default function AnimatedModal({
       if (target.closest("[data-modal-panel='true']")) return;
       event.preventDefault();
     };
-    document.addEventListener("touchmove", blockBackgroundScroll, { passive: false });
-    document.addEventListener("wheel", blockBackgroundScroll, { passive: false });
+    document.addEventListener("touchmove", blockBackgroundScroll, {
+      passive: false,
+    });
+    document.addEventListener("wheel", blockBackgroundScroll, {
+      passive: false,
+    });
 
     return () => {
       document.removeEventListener("touchmove", blockBackgroundScroll);
@@ -102,7 +106,9 @@ export default function AnimatedModal({
 
   let modalThemeStyle: React.CSSProperties | undefined;
   if (mounted && typeof document !== "undefined") {
-    const themeRoot = document.querySelector(".room-theme") as HTMLElement | null;
+    const themeRoot = document.querySelector(
+      ".room-theme",
+    ) as HTMLElement | null;
     if (themeRoot) {
       const computed = window.getComputedStyle(themeRoot);
       const accent = computed.getPropertyValue("--room-accent").trim();
@@ -136,7 +142,9 @@ export default function AnimatedModal({
         data-modal-panel="true"
         className={[
           "transition-all duration-200 ease-out",
-          open ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-1.5 scale-[0.985]",
+          open
+            ? "opacity-100 translate-y-0 scale-100"
+            : "opacity-0 translate-y-1.5 scale-[0.985]",
           panelClassName,
         ]
           .filter(Boolean)

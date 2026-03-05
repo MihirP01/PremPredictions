@@ -31,8 +31,12 @@ export function getBasePointsFromScores(
   const parsedPred = parseScore(pred);
   const parsedActual = parseScore(actual);
   if (!parsedPred || !parsedActual) return 0;
-  if (parsedPred.h === parsedActual.h && parsedPred.a === parsedActual.a) return 2;
-  if (outcome(parsedPred.h, parsedPred.a) === outcome(parsedActual.h, parsedActual.a)) {
+  if (parsedPred.h === parsedActual.h && parsedPred.a === parsedActual.a)
+    return 2;
+  if (
+    outcome(parsedPred.h, parsedPred.a) ===
+    outcome(parsedActual.h, parsedActual.a)
+  ) {
     return 1;
   }
   return 0;
@@ -48,8 +52,12 @@ export function classifyPredictionTier(
   const parsedPred = parseScore(pred);
   if (!parsedPred) return "miss";
 
-  if (parsedPred.h === parsedActual.h && parsedPred.a === parsedActual.a) return "exact";
-  if (outcome(parsedPred.h, parsedPred.a) === outcome(parsedActual.h, parsedActual.a)) {
+  if (parsedPred.h === parsedActual.h && parsedPred.a === parsedActual.a)
+    return "exact";
+  if (
+    outcome(parsedPred.h, parsedPred.a) ===
+    outcome(parsedActual.h, parsedActual.a)
+  ) {
     return "result";
   }
   return "miss";

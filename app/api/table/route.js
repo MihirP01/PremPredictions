@@ -5,7 +5,8 @@ const SEASON_START_MONTH_UTC = 7; // Aug
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
-  const startYear = now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
+  const startYear =
+    now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
   const yyStart = String(startYear % 100).padStart(2, "0");
   const yyEnd = String((startYear + 1) % 100).padStart(2, "0");
   return `${yyStart}${yyEnd}`;
@@ -85,34 +86,31 @@ export async function GET(req) {
     : {};
   const tlaByTeamId = new Map(
     Array.isArray(teamsData?.teams)
-      ? teamsData.teams.map((t) => [Number(t?.id), String(t?.tla || "").toUpperCase()])
+      ? teamsData.teams.map((t) => [
+          Number(t?.id),
+          String(t?.tla || "").toUpperCase(),
+        ])
       : [],
   );
 
   const mapRows = (rows = []) =>
     rows.map((row) => ({
-    position: Number(row.position ?? 0),
-    team: {
-      name: row?.team?.name || "Club",
-      tla:
-        row?.team?.tla ||
-        tlaByTeamId.get(Number(row?.team?.id)) ||
-        null,
-      shortName:
-        row?.team?.shortName ||
-        row?.team?.tla ||
-        row?.team?.name ||
-        "Club",
-      badge: row?.team?.crest || null,
-    },
-    playedGames: Number(row.playedGames ?? 0),
-    won: Number(row.won ?? 0),
-    draw: Number(row.draw ?? 0),
-    lost: Number(row.lost ?? 0),
-    goalsScored: Number(row.goalsFor ?? 0),
-    goalsAgainst: Number(row.goalsAgainst ?? 0),
-    goalDifference: Number(row.goalDifference ?? 0),
-    points: Number(row.points ?? 0),
+      position: Number(row.position ?? 0),
+      team: {
+        name: row?.team?.name || "Club",
+        tla: row?.team?.tla || tlaByTeamId.get(Number(row?.team?.id)) || null,
+        shortName:
+          row?.team?.shortName || row?.team?.tla || row?.team?.name || "Club",
+        badge: row?.team?.crest || null,
+      },
+      playedGames: Number(row.playedGames ?? 0),
+      won: Number(row.won ?? 0),
+      draw: Number(row.draw ?? 0),
+      lost: Number(row.lost ?? 0),
+      goalsScored: Number(row.goalsFor ?? 0),
+      goalsAgainst: Number(row.goalsAgainst ?? 0),
+      goalDifference: Number(row.goalDifference ?? 0),
+      points: Number(row.points ?? 0),
     }));
 
   const standingsTotal = mapRows(

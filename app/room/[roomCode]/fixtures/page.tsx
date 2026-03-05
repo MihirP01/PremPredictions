@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -48,19 +54,27 @@ import {
   formatKickoffParts,
 } from "@/lib/dateDisplay";
 import { teamAbbr } from "@/lib/teamDisplay";
-import {
-  collection,
-  onSnapshot,
-  query,
-} from "firebase/firestore";
+import { collection, onSnapshot, query } from "firebase/firestore";
 
 type Fixture = {
   fixtureId: number;
   gameweek: number;
   kickoff: string; // ISO
   status: string;
-  home: { id?: number; name: string; tla?: string | null; shortName?: string; badge?: string | null };
-  away: { id?: number; name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  home: {
+    id?: number;
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
+  away: {
+    id?: number;
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
   result?: string | null; // "2-1" if finished
   redCards?: { home: number; away: number } | null;
 };
@@ -129,7 +143,12 @@ function FixturesSelectField({
   );
 }
 
-function FixturesSummaryTile({ label, value, note, icon }: FixturesSummaryTileProps) {
+function FixturesSummaryTile({
+  label,
+  value,
+  note,
+  icon,
+}: FixturesSummaryTileProps) {
   return (
     <div className="rounded-[22px] border border-white/8 bg-white/[0.025] p-4 shadow-[0_14px_32px_rgba(3,8,20,0.14)]">
       <div className="flex items-start justify-between gap-3">
@@ -210,14 +229,17 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+function colorForTeam(
+  tla?: string | null,
+  shortName?: string | null,
+  name?: string | null,
+) {
   const key = String(tla || shortName || name || "")
     .trim()
     .toUpperCase()
     .slice(0, 3);
   return TEAM_COLOR_BY_TLA[key] || "#475569";
 }
-
 
 function fmtScore(s?: string | null) {
   if (!s) return "—";
@@ -249,7 +271,9 @@ function displayResult(status: string, actual: string | null) {
 }
 
 function isFinalFixtureStatus(status?: string | null) {
-  const s = String(status || "").trim().toUpperCase();
+  const s = String(status || "")
+    .trim()
+    .toUpperCase();
   return (
     s === "FINISHED" ||
     s === "FT" ||
@@ -270,7 +294,8 @@ function isExplicitLiveFixtureStatus(status?: string | null) {
   const raw = String(status || "").trim();
   const s = raw.toUpperCase();
   if (!raw) return false;
-  if (s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") return false;
+  if (s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD")
+    return false;
   if (s === "FINISHED" || s === "FT" || s === "AWARDED") return false;
   if (s === "CANCELLED" || s === "POSTPONED") return false;
   return true;
@@ -279,7 +304,13 @@ function isExplicitLiveFixtureStatus(status?: string | null) {
 function statusHeading(status: string) {
   const raw = String(status || "").trim();
   const s = raw.toUpperCase();
-  if (!raw || s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") {
+  if (
+    !raw ||
+    s === "TIMED" ||
+    s === "SCHEDULED" ||
+    s === "NOT_STARTED" ||
+    s === "TBD"
+  ) {
     return "Scheduled";
   }
   if (s === "FINISHED" || s === "FT" || s === "AWARDED") return "FT";
@@ -332,7 +363,10 @@ function mergeFixtureResults(prev: Fixture[] | null, next: Fixture[]) {
   });
 }
 
-function mergeFixtureLiveOverlay(prev: Fixture[] | null, overlay: LiveOverlayFixture[]) {
+function mergeFixtureLiveOverlay(
+  prev: Fixture[] | null,
+  overlay: LiveOverlayFixture[],
+) {
   if (!prev?.length || !overlay.length) return prev;
   const overlayByKey = new Map(
     overlay.map((fixture) => [overlayKeyForFixture(fixture), fixture]),
@@ -386,7 +420,9 @@ function formatShortKickoff(iso: string) {
 }
 
 function isFixtureStartedForLineups(status?: string | null) {
-  const s = String(status || "").trim().toUpperCase();
+  const s = String(status || "")
+    .trim()
+    .toUpperCase();
   if (!s) return false;
   if (
     s === "TIMED" ||
@@ -407,13 +443,22 @@ function playerMetaValue(player: MatchInfoPlayer, showRating: boolean) {
 }
 
 function substitutionSummary(player: MatchInfoPlayer) {
-  const items = Array.isArray(player.substitutionEvents) ? player.substitutionEvents : [];
+  const items = Array.isArray(player.substitutionEvents)
+    ? player.substitutionEvents
+    : [];
   if (!items.length) return null;
   return items
     .map((event) => {
       const type = String(event?.type || "").toLowerCase();
-      const label = type === "subin" ? "ON" : type === "subout" ? "OFF" : type.toUpperCase();
-      const time = Number.isFinite(Number(event?.time)) ? `${Number(event?.time)}'` : "";
+      const label =
+        type === "subin"
+          ? "ON"
+          : type === "subout"
+            ? "OFF"
+            : type.toUpperCase();
+      const time = Number.isFinite(Number(event?.time))
+        ? `${Number(event?.time)}'`
+        : "";
       return [label, time].filter(Boolean).join(" ");
     })
     .filter(Boolean)
@@ -421,7 +466,9 @@ function substitutionSummary(player: MatchInfoPlayer) {
 }
 
 function latestSubstitution(player: MatchInfoPlayer) {
-  const items = Array.isArray(player.substitutionEvents) ? player.substitutionEvents : [];
+  const items = Array.isArray(player.substitutionEvents)
+    ? player.substitutionEvents
+    : [];
   if (!items.length) return null;
   const event = items[items.length - 1];
   const type = String(event?.type || "").toLowerCase();
@@ -471,11 +518,16 @@ function comparePitchSlot(a: MatchInfoPlayer, b: MatchInfoPlayer) {
   return aX - bX;
 }
 
-function buildFormationRows(players: MatchInfoPlayer[], formation?: string | null) {
+function buildFormationRows(
+  players: MatchInfoPlayer[],
+  formation?: string | null,
+) {
   const formationRows = parseFormationRows(formation);
   const sorted = [...players].sort(comparePitchSlot);
 
-  const keeperIndex = sorted.findIndex((player) => player.positionLabel === "GK");
+  const keeperIndex = sorted.findIndex(
+    (player) => player.positionLabel === "GK",
+  );
   const keeper =
     keeperIndex >= 0 ? sorted[keeperIndex] : sorted.length ? sorted[0] : null;
   const outfield = sorted.filter((player) => player !== keeper);
@@ -489,14 +541,16 @@ function buildFormationRows(players: MatchInfoPlayer[], formation?: string | nul
       let cursor = 0;
 
       formationRows.forEach((count) => {
-        const row = outfield
-          .slice(cursor, cursor + count)
-          .sort((a, b) => {
-            const aX = Number.isFinite(Number(a.layout?.x)) ? Number(a.layout?.x) : 0.5;
-            const bX = Number.isFinite(Number(b.layout?.x)) ? Number(b.layout?.x) : 0.5;
-            if (aX !== bX) return aX - bX;
-            return comparePitchSlot(a, b);
-          });
+        const row = outfield.slice(cursor, cursor + count).sort((a, b) => {
+          const aX = Number.isFinite(Number(a.layout?.x))
+            ? Number(a.layout?.x)
+            : 0.5;
+          const bX = Number.isFinite(Number(b.layout?.x))
+            ? Number(b.layout?.x)
+            : 0.5;
+          if (aX !== bX) return aX - bX;
+          return comparePitchSlot(a, b);
+        });
         cursor += count;
         outRows.push(row);
       });
@@ -532,11 +586,14 @@ function formationRowRole(row: MatchInfoPlayer[]) {
     return acc;
   }, {});
 
-  return (["DEF", "MID", "FWD", "GK"] as const).reduce<string | null>((best, role) => {
-    if ((counts[role] || 0) === 0) return best;
-    if (!best) return role;
-    return (counts[role] || 0) > (counts[best] || 0) ? role : best;
-  }, null);
+  return (["DEF", "MID", "FWD", "GK"] as const).reduce<string | null>(
+    (best, role) => {
+      if ((counts[role] || 0) === 0) return best;
+      if (!best) return role;
+      return (counts[role] || 0) > (counts[best] || 0) ? role : best;
+    },
+    null,
+  );
 }
 
 function formationFanOffsetPx(
@@ -568,7 +625,11 @@ function PitchMarker({
 }) {
   const subEvent = latestSubstitution(player);
   const isCrowdedMobile = size === "mobile" && crowded;
-  const markerSize = isCrowdedMobile ? "h-9 w-9" : size === "mobile" ? "h-10 w-10" : "h-11 w-11";
+  const markerSize = isCrowdedMobile
+    ? "h-9 w-9"
+    : size === "mobile"
+      ? "h-10 w-10"
+      : "h-11 w-11";
   const valueMinWidth = isCrowdedMobile
     ? "min-w-[34px]"
     : size === "mobile"
@@ -577,10 +638,18 @@ function PitchMarker({
   const shellWidthClass = isCrowdedMobile ? "w-[54px]" : "w-[66px] sm:w-[72px]";
   const nameTextClass = isCrowdedMobile ? "text-[8px]" : "text-[9px]";
   const tagTextClass = isCrowdedMobile ? "text-[7px]" : "text-[8px]";
-  const ratingPillPosClass = isCrowdedMobile ? "-right-1.5 -top-[10px]" : "-right-2 -top-[10px]";
-  const disciplinePosClass = isCrowdedMobile ? "-right-1 top-[42%]" : "-right-1.5 top-[42%]";
-  const assistPosClass = isCrowdedMobile ? "-left-2.5 -bottom-1.5" : "-left-3 -bottom-1.5";
-  const goalPosClass = isCrowdedMobile ? "-right-2.5 -bottom-1.5" : "-right-3 -bottom-1.5";
+  const ratingPillPosClass = isCrowdedMobile
+    ? "-right-1.5 -top-[10px]"
+    : "-right-2 -top-[10px]";
+  const disciplinePosClass = isCrowdedMobile
+    ? "-right-1 top-[42%]"
+    : "-right-1.5 top-[42%]";
+  const assistPosClass = isCrowdedMobile
+    ? "-left-2.5 -bottom-1.5"
+    : "-left-3 -bottom-1.5";
+  const goalPosClass = isCrowdedMobile
+    ? "-right-2.5 -bottom-1.5"
+    : "-right-3 -bottom-1.5";
   const yellowCards = Math.max(0, Number(player.yellowCardCount || 0));
   const redCards = Math.max(0, Number(player.redCardCount || 0));
   const hasSecondYellowDismissal = redCards > 0 && yellowCards > 0;
@@ -629,7 +698,9 @@ function PitchMarker({
           </span>
         </span>
         {redCards > 0 || yellowCards > 0 ? (
-          <span className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 items-center`}>
+          <span
+            className={`absolute ${disciplinePosClass} inline-flex -translate-y-1/2 items-center`}
+          >
             {hasSecondYellowDismissal ? (
               <span className="relative inline-flex h-3 w-4 items-center">
                 <span
@@ -692,7 +763,9 @@ function PitchMarker({
           </span>
         ) : null}
         {Number(player.assistCount || 0) > 0 ? (
-          <span className={`absolute ${assistPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-sky-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}>
+          <span
+            className={`absolute ${assistPosClass} inline-flex items-center gap-0.5 rounded-full border border-subtle bg-surface-2 px-1 py-0.5 font-display text-[8px] font-semibold text-sky-300 shadow-[0_3px_8px_rgba(0,0,0,0.22)]`}
+          >
             <span className="tabular-nums">{player.assistCount}</span>
             <Footprints size={7} strokeWidth={2.1} />
           </span>
@@ -768,14 +841,19 @@ export default function FixturesPage() {
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [predictionKeyOpen, setPredictionKeyOpen] = useState(false);
-  const [expandedFixtures, setExpandedFixtures] = useState<Record<number, boolean>>({});
+  const [displayModeOpen, setDisplayModeOpen] = useState(true);
+  const [expandedFixtures, setExpandedFixtures] = useState<
+    Record<number, boolean>
+  >({});
   const [gameDataEnabled, setGameDataEnabled] = useState(true);
   const [bootstrapped, setBootstrapped] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableMode, setTableMode] = useState<TableMode>("TOTAL");
   const [tableView, setTableView] = useState<TableView>("FULL");
-  const [tableRowsByMode, setTableRowsByMode] = useState<Record<TableMode, TableRow[]>>({
+  const [tableRowsByMode, setTableRowsByMode] = useState<
+    Record<TableMode, TableRow[]>
+  >({
     HOME: [],
     TOTAL: [],
     AWAY: [],
@@ -784,11 +862,15 @@ export default function FixturesPage() {
   const [tableAnimatingOut, setTableAnimatingOut] = useState(false);
   const tableSwapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [matchInfoOpen, setMatchInfoOpen] = useState(false);
-  const [matchInfoFixtureId, setMatchInfoFixtureId] = useState<number | null>(null);
+  const [matchInfoFixtureId, setMatchInfoFixtureId] = useState<number | null>(
+    null,
+  );
   const [matchInfoTab, setMatchInfoTab] = useState<MatchInfoTab>("h2h");
   const [matchInfoLoading, setMatchInfoLoading] = useState(false);
   const [matchInfoError, setMatchInfoError] = useState<string | null>(null);
-  const [matchInfoByFixture, setMatchInfoByFixture] = useState<Record<number, MatchInfoData>>({});
+  const [matchInfoByFixture, setMatchInfoByFixture] = useState<
+    Record<number, MatchInfoData>
+  >({});
   const initialFixturesLoadDoneRef = useRef(false);
   const fixturesLoadSeqRef = useRef(0);
   const fixturesLoadTimerRef = useRef<number | null>(null);
@@ -823,14 +905,27 @@ export default function FixturesPage() {
   );
 
   const currentMatchInfo = useMemo(
-    () => (matchInfoFixtureId != null ? matchInfoByFixture[matchInfoFixtureId] ?? null : null),
+    () =>
+      matchInfoFixtureId != null
+        ? (matchInfoByFixture[matchInfoFixtureId] ?? null)
+        : null,
     [matchInfoByFixture, matchInfoFixtureId],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(min-width: 640px)").matches) {
+      setPredictionKeyOpen(true);
+      setDisplayModeOpen(true);
+    }
+  }, []);
+
   const openMatchInfo = useCallback(
     async (fixture: Fixture) => {
       const fixtureId = fixture.fixtureId;
       const shouldForceRefresh =
-        isExplicitLiveFixtureStatus(fixture.status) || isFinalFixtureStatus(fixture.status);
+        isExplicitLiveFixtureStatus(fixture.status) ||
+        isFinalFixtureStatus(fixture.status);
       setMatchInfoFixtureId(fixtureId);
       setMatchInfoTab("lineups");
       setMatchInfoOpen(true);
@@ -861,7 +956,9 @@ export default function FixturesPage() {
         });
         setMatchInfoByFixture((prev) => ({ ...prev, [fixtureId]: data }));
       } catch (e: unknown) {
-        setMatchInfoError(e instanceof Error ? e.message : "Failed to load match info.");
+        setMatchInfoError(
+          e instanceof Error ? e.message : "Failed to load match info.",
+        );
       } finally {
         setMatchInfoLoading(false);
       }
@@ -872,12 +969,16 @@ export default function FixturesPage() {
   const selectedMatchFixture = useMemo(
     () =>
       matchInfoFixtureId != null
-        ? (fixtures ?? []).find((f) => f.fixtureId === matchInfoFixtureId) ?? null
+        ? ((fixtures ?? []).find((f) => f.fixtureId === matchInfoFixtureId) ??
+          null)
         : null,
     [fixtures, matchInfoFixtureId],
   );
   const refreshMatchInfoFixture = useCallback(
-    async (fixture: Fixture, options?: { showSpinner?: boolean; silent?: boolean }) => {
+    async (
+      fixture: Fixture,
+      options?: { showSpinner?: boolean; silent?: boolean },
+    ) => {
       if (!seasonKey) return;
       const showSpinner = options?.showSpinner === true;
       const silent = options?.silent === true;
@@ -901,11 +1002,16 @@ export default function FixturesPage() {
           },
           force: true,
         });
-        setMatchInfoByFixture((prev) => ({ ...prev, [fixture.fixtureId]: data }));
+        setMatchInfoByFixture((prev) => ({
+          ...prev,
+          [fixture.fixtureId]: data,
+        }));
         setMatchInfoError(null);
       } catch (e: unknown) {
         if (!silent) {
-          setMatchInfoError(e instanceof Error ? e.message : "Failed to refresh match info.");
+          setMatchInfoError(
+            e instanceof Error ? e.message : "Failed to refresh match info.",
+          );
         }
       } finally {
         if (showSpinner) setMatchInfoLoading(false);
@@ -922,7 +1028,11 @@ export default function FixturesPage() {
 
     const refresh = async () => {
       if (cancelled) return;
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      )
+        return;
       await refreshMatchInfoFixture(selectedMatchFixture, { silent: true });
     };
 
@@ -972,8 +1082,12 @@ export default function FixturesPage() {
 
       const aKickoff = Date.parse(String(a.kickoff || ""));
       const bKickoff = Date.parse(String(b.kickoff || ""));
-      const aSafe = Number.isFinite(aKickoff) ? aKickoff : Number.MAX_SAFE_INTEGER;
-      const bSafe = Number.isFinite(bKickoff) ? bKickoff : Number.MAX_SAFE_INTEGER;
+      const aSafe = Number.isFinite(aKickoff)
+        ? aKickoff
+        : Number.MAX_SAFE_INTEGER;
+      const bSafe = Number.isFinite(bKickoff)
+        ? bKickoff
+        : Number.MAX_SAFE_INTEGER;
       if (aSafe !== bSafe) return aSafe - bSafe;
 
       return a.fixtureId - b.fixtureId;
@@ -990,7 +1104,8 @@ export default function FixturesPage() {
 
     for (const fixture of displayFixtures) {
       if (isFixtureLiveWindow(fixture, nowMs)) buckets.live.push(fixture);
-      else if (isFinalFixtureStatus(fixture.status)) buckets.completed.push(fixture);
+      else if (isFinalFixtureStatus(fixture.status))
+        buckets.completed.push(fixture);
       else buckets.upcoming.push(fixture);
     }
 
@@ -1004,7 +1119,9 @@ export default function FixturesPage() {
             : "Still to Play",
         items: buckets.upcoming,
         suffix:
-          seasonCurrentGw != null && gw > seasonCurrentGw && buckets.upcoming.length
+          seasonCurrentGw != null &&
+          gw > seasonCurrentGw &&
+          buckets.upcoming.length
             ? (() => {
                 const nextKickoffMs = buckets.upcoming
                   .map((fixture) => Date.parse(String(fixture.kickoff || "")))
@@ -1023,11 +1140,15 @@ export default function FixturesPage() {
     ].filter((section) => section.items.length > 0);
   }, [displayFixtures, gw, nowMs, seasonCurrentGw]);
   const liveFixtureCount = useMemo(
-    () => fixtureList.filter((fixture) => isFixtureLiveWindow(fixture, nowMs)).length,
+    () =>
+      fixtureList.filter((fixture) => isFixtureLiveWindow(fixture, nowMs))
+        .length,
     [fixtureList, nowMs],
   );
   const finishedFixtureCount = useMemo(
-    () => fixtureList.filter((fixture) => isFinalFixtureStatus(fixture.status)).length,
+    () =>
+      fixtureList.filter((fixture) => isFinalFixtureStatus(fixture.status))
+        .length,
     [fixtureList],
   );
   const currentSlateLabel =
@@ -1043,8 +1164,12 @@ export default function FixturesPage() {
 
   const h2hSummary = useMemo(() => {
     const rows = currentMatchInfo?.headToHead ?? [];
-    const homeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
-    const awayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
+    const homeName = normalizeTeamNameForCompare(
+      selectedMatchFixture?.home?.name,
+    );
+    const awayName = normalizeTeamNameForCompare(
+      selectedMatchFixture?.away?.name,
+    );
     let homeWins = 0;
     let awayWins = 0;
     let draws = 0;
@@ -1069,13 +1194,21 @@ export default function FixturesPage() {
     }
 
     return { homeWins, draws, awayWins };
-  }, [currentMatchInfo?.headToHead, selectedMatchFixture?.away?.name, selectedMatchFixture?.home?.name]);
+  }, [
+    currentMatchInfo?.headToHead,
+    selectedMatchFixture?.away?.name,
+    selectedMatchFixture?.home?.name,
+  ]);
 
   const h2hTeamLabel = useCallback(
     (team: { name: string; tla?: string | null }) => {
       const teamName = normalizeTeamNameForCompare(team.name);
-      const selectedHomeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
-      const selectedAwayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
+      const selectedHomeName = normalizeTeamNameForCompare(
+        selectedMatchFixture?.home?.name,
+      );
+      const selectedAwayName = normalizeTeamNameForCompare(
+        selectedMatchFixture?.away?.name,
+      );
 
       if (teamName && teamName === selectedHomeName) {
         return teamAbbr({
@@ -1110,10 +1243,18 @@ export default function FixturesPage() {
   );
 
   const formTeamLabel = useCallback(
-    (team: { name: string; tla?: string | null; shortName?: string | null }) => {
+    (team: {
+      name: string;
+      tla?: string | null;
+      shortName?: string | null;
+    }) => {
       const teamName = normalizeTeamNameForCompare(team.name);
-      const selectedHomeName = normalizeTeamNameForCompare(selectedMatchFixture?.home?.name);
-      const selectedAwayName = normalizeTeamNameForCompare(selectedMatchFixture?.away?.name);
+      const selectedHomeName = normalizeTeamNameForCompare(
+        selectedMatchFixture?.home?.name,
+      );
+      const selectedAwayName = normalizeTeamNameForCompare(
+        selectedMatchFixture?.away?.name,
+      );
 
       if (teamName && teamName === selectedHomeName) {
         return teamAbbr({
@@ -1154,19 +1295,15 @@ export default function FixturesPage() {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const current = Number(data.currentGameweek ?? 1);
-        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const options = Array.isArray(data.seasonOptions)
+          ? data.seasonOptions
+          : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
           setGw(Number.isFinite(current) ? current : 1);
           setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
           setSeasonKey(season);
-          setSeasonOptions(
-            options.length
-              ? options
-              : season
-                ? [season]
-                : [],
-          );
+          setSeasonOptions(options.length ? options : season ? [season] : []);
         }
       } catch {
         if (!cancelled) {
@@ -1225,7 +1362,8 @@ export default function FixturesPage() {
         if (cancelled || !cached.length) return;
         const seeded: Player[] = cached.map((p) => ({
           uid: p.uid,
-          displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+          displayName:
+            String(p.nickName || "").trim() || p.displayName || "Player",
         }));
         setPlayers(seeded);
       } catch {
@@ -1245,7 +1383,9 @@ export default function FixturesPage() {
             };
           })
           .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+            a.displayName.localeCompare(b.displayName, undefined, {
+              sensitivity: "base",
+            }),
           );
         setPlayers(list);
       },
@@ -1469,7 +1609,11 @@ export default function FixturesPage() {
         const nextCurrent = Number(data.currentGameweek ?? 1);
         if (!Number.isFinite(nextCurrent)) return;
         setSeasonCurrentGw(nextCurrent);
-        if (prevCurrent != null && gw === prevCurrent && nextCurrent !== prevCurrent) {
+        if (
+          prevCurrent != null &&
+          gw === prevCurrent &&
+          nextCurrent !== prevCurrent
+        ) {
           setGw(nextCurrent);
         }
       } catch {
@@ -1479,7 +1623,11 @@ export default function FixturesPage() {
 
     const softRefreshLive = async () => {
       if (cancelled || refreshingFixtures || matchInfoOpen || tableOpen) return;
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      )
+        return;
       if (seasonCurrentGw != null && gw !== seasonCurrentGw) return;
 
       try {
@@ -1521,7 +1669,8 @@ export default function FixturesPage() {
         refreshingFixtures ||
         matchInfoOpen ||
         tableOpen ||
-        (typeof document !== "undefined" && document.visibilityState !== "visible") ||
+        (typeof document !== "undefined" &&
+          document.visibilityState !== "visible") ||
         seasonCurrentGw == null ||
         gw !== seasonCurrentGw ||
         !fixtures?.length
@@ -1530,7 +1679,9 @@ export default function FixturesPage() {
       }
 
       const now = Date.now();
-      const hasLiveFixture = fixtures.some((fixture) => isFixtureLiveWindow(fixture, now));
+      const hasLiveFixture = fixtures.some((fixture) =>
+        isFixtureLiveWindow(fixture, now),
+      );
       if (hasLiveFixture) {
         liveRefreshInterval = window.setInterval(() => {
           void softRefreshLive();
@@ -1544,14 +1695,21 @@ export default function FixturesPage() {
         .sort((a, b) => a - b)[0];
 
       if (!Number.isFinite(nextKickoffMs)) return;
-      const waitMs = Math.max(250, Math.min(nextKickoffMs - now + 500, 2_147_000_000));
+      const waitMs = Math.max(
+        250,
+        Math.min(nextKickoffMs - now + 500, 2_147_000_000),
+      );
       nextKickoffTimer = window.setTimeout(() => {
         void softRefreshLive();
       }, waitMs);
     };
 
     const onVisible = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible"
+      )
+        return;
       void syncCurrentGw();
       void softRefreshLive();
       scheduleLivePolling();
@@ -1622,14 +1780,23 @@ export default function FixturesPage() {
     void getTableCached(seasonKey).catch(() => {});
   }, [seasonKey]);
 
+  const standardSectionCardClass =
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
+
   return (
-    <PageShell width="wide">
+    <PageShell
+      width="wide"
+      shellChrome={false}
+      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+      contentClassName="relative z-[1] space-y-4"
+    >
       <div className="relative z-30 space-y-3">
         <TopActionRow
           title="Fixtures"
           subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+          className="flex items-start justify-between gap-3 sm:items-end"
           actions={
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-1">
               <button
                 onClick={refreshFixtures}
                 disabled={refreshingFixtures || refreshLockSeconds > 0}
@@ -1646,7 +1813,9 @@ export default function FixturesPage() {
                   className={refreshingFixtures ? "animate-spin" : ""}
                 />
               </button>
-              <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
+              <PageBackButton
+                onClick={() => router.push(`/room/${roomCode}`)}
+              />
             </div>
           }
         />
@@ -1669,14 +1838,6 @@ export default function FixturesPage() {
                   </span>
                 </div>
               </div>
-              <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                  Slate status
-                </div>
-                <div className="font-display text-lg font-semibold text-foreground">
-                  {currentSlateLabel}
-                </div>
-              </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
               <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
@@ -1690,37 +1851,20 @@ export default function FixturesPage() {
                     : "Upcoming matchweek"}
               </span>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                  Fixtures
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  {fixtureList.length || 0}
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  Loaded into the current ledger.
-                </div>
-              </div>
+            <div className="grid gap-1 sm:grid-cols-1">
               <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
                   Completed
                 </div>
                 <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  {finishedFixtureCount}
+                  {finishedFixtureCount} / {fixtureList.length || 0}
                 </div>
                 <div className="mt-1 text-xs text-muted">
                   Finalised scorelines on this slate.
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </SectionCard>
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
-        <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
-          <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -1733,12 +1877,17 @@ export default function FixturesPage() {
               <button
                 type="button"
                 onClick={() => setPredictionKeyOpen((open) => !open)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.03] text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-white/12 hover:bg-white/[0.05] sm:hidden"
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72 transition hover:border-white/18 hover:text-foreground"
                 aria-expanded={predictionKeyOpen}
-                aria-label={predictionKeyOpen ? "Hide prediction key" : "Show prediction key"}
+                aria-label={
+                  predictionKeyOpen
+                    ? "Collapse prediction key"
+                    : "Expand prediction key"
+                }
               >
+                <span>{predictionKeyOpen ? "Close" : "Open"}</span>
                 <ChevronDown
-                  size={16}
+                  size={14}
                   className={[
                     "transition-transform duration-200 ease-out",
                     predictionKeyOpen ? "rotate-180" : "",
@@ -1748,98 +1897,106 @@ export default function FixturesPage() {
             </div>
             <div
               className={[
-                "grid transition-all duration-300 ease-out sm:grid-rows-[1fr] sm:opacity-100",
-                predictionKeyOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 sm:opacity-100",
+                "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
+                predictionKeyOpen
+                  ? "mt-2 grid-rows-[1fr] opacity-100 translate-y-0"
+                  : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
               ].join(" ")}
             >
-              <div className="min-h-0 overflow-hidden">
-                <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3 sm:pt-0">
-              <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
-                  <div className="pl-3">
-                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                      Correct Result
+              <div
+                className={[
+                  "min-h-0 overflow-hidden transition-all duration-300 ease-out",
+                  predictionKeyOpen
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 translate-y-1",
+                ].join(" ")}
+              >
+                <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3">
+                  <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
+                      <div className="pl-3">
+                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                          Correct Result
+                        </div>
+                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                          Winner or draw called correctly.
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                      Winner or draw called correctly.
+                  </div>
+                  <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
+                      <div className="pl-3">
+                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                          Exact Score
+                        </div>
+                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                          Full scoreline landed exactly.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
+                      <div className="pl-3">
+                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                          Powerup Hit
+                        </div>
+                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                          Chip override landed.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
+                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
+                      <div className="pl-3">
+                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                          Miss
+                        </div>
+                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                          No points landed on the fixture.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
+                    <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                      <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
+                        Chips
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
+                          Golden Pick
+                        </span>
+                        <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
+                          All-In
+                        </span>
+                        <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
+                          Safety Net
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
-                  <div className="pl-3">
-                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                      Exact Score
-                    </div>
-                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                      Full scoreline landed exactly.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
-                  <div className="pl-3">
-                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                      Powerup Hit
-                    </div>
-                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                      Chip override landed.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
-                  <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
-                  <div className="pl-3">
-                    <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                      Miss
-                    </div>
-                    <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                      No points landed on the fixture.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
-                <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                  <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
-                    Chips
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
-                      Golden Pick
-                    </span>
-                    <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
-                      All-In
-                    </span>
-                    <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
-                      Safety Net
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
               </div>
             </div>
           </div>
         </div>
       </SectionCard>
 
-        {error && (
-          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
+      {error && (
+        <SectionCard className={standardSectionCardClass}>
+          <div className="text-sm text-rose-300">{error}</div>
+        </SectionCard>
+      )}
 
-        {/* Fixtures */}
+      {/* Fixtures */}
 
-        <SpecialBreak />
       <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
         <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,230px)_minmax(0,1fr)] xl:items-start">
@@ -1887,126 +2044,140 @@ export default function FixturesPage() {
               </div>
               <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
                 <div className="space-y-2">
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Display mode
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Display mode
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDisplayModeOpen((open) => !open)}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72 transition hover:border-white/18 hover:text-foreground"
+                      aria-expanded={displayModeOpen}
+                      aria-label={
+                        displayModeOpen
+                          ? "Collapse display mode"
+                          : "Expand display mode"
+                      }
+                    >
+                      <span>
+                        {displayModeOpen ? "Collapse mode" : "Expand mode"}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={[
+                          "transition-transform duration-200 ease-out",
+                          displayModeOpen ? "rotate-180" : "",
+                        ].join(" ")}
+                      />
+                    </button>
                   </div>
-                  <SliderSwitch
-                    options={[
-                      { value: "full", label: "Full" },
-                      { value: "compact", label: "Compact" },
-                    ]}
-                    value={compactMode ? "compact" : "full"}
-                    onChange={(v) => setCompactModeValue(v === "compact")}
-                    className="relative grid w-full min-w-0 overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-                  />
+                  <div
+                    className={[
+                      "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
+                      displayModeOpen
+                        ? "mt-1 grid-rows-[1fr] opacity-100 translate-y-0"
+                        : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
+                    ].join(" ")}
+                  >
+                    <div
+                      className={[
+                        "min-h-0 transition-all duration-300 ease-out",
+                        displayModeOpen
+                          ? "opacity-100 translate-y-0"
+                          : "opacity-0 translate-y-1",
+                      ].join(" ")}
+                    >
+                      <SliderSwitch
+                        options={[
+                          { value: "full", label: "Full" },
+                          { value: "compact", label: "Compact" },
+                        ]}
+                        value={compactMode ? "compact" : "full"}
+                        onChange={(v) => setCompactModeValue(v === "compact")}
+                        className="relative grid w-full min-w-0 overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </SectionCard>
-        <div className="space-y-5 sm:space-y-6">
-          {isLoading && (
-            <div className="text-center text-muted inline-flex items-center gap-2 justify-center w-full">
+      <div className="space-y-5 sm:space-y-6">
+        {isLoading && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="inline-flex w-full items-center justify-center gap-2 text-sm text-muted">
               <Loader2 size={14} className="animate-spin" />
               <span>Loading fixtures…</span>
             </div>
-          )}
+          </SectionCard>
+        )}
 
-          {!isLoading && fixtures.length === 0 && (
-            <div className="text-center text-muted">
+        {!isLoading && fixtures.length === 0 && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-center text-sm text-muted">
               No fixtures available for this gameweek.
             </div>
-          )}
+          </SectionCard>
+        )}
 
-          {!isLoading &&
-            displayFixtures.length > 0 &&
-            (() => {
-              const renderFixtureCard = (
-                f: Fixture,
-                idx: number,
-              ) => {
-                const actual = f.result ?? null;
-                const fixtureStatusHeading = statusHeading(f.status);
-                const kickoffParts = formatKickoffParts(f.kickoff);
-                const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
-                const homeColor = colorForTeam(f.home.tla, f.home.shortName, f.home.name);
-                const awayColor = colorForTeam(f.away.tla, f.away.shortName, f.away.name);
-                const clashBgStyle: React.CSSProperties = {
-                  backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
-                };
+        {!isLoading &&
+          displayFixtures.length > 0 &&
+          (() => {
+            const renderFixtureCard = (f: Fixture, idx: number) => {
+              const actual = f.result ?? null;
+              const fixtureStatusHeading = statusHeading(f.status);
+              const kickoffParts = formatKickoffParts(f.kickoff);
+              const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
+              const homeColor = colorForTeam(
+                f.home.tla,
+                f.home.shortName,
+                f.home.name,
+              );
+              const awayColor = colorForTeam(
+                f.away.tla,
+                f.away.shortName,
+                f.away.name,
+              );
+              const clashBgStyle: React.CSSProperties = {
+                backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
+              };
 
-                return (
-                  <div
-                    key={f.fixtureId}
-                    className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
-                    style={{
-                      animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                      animationDuration: "520ms",
-                    }}
-                  >
-                    <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
-                      <div
-                        className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
-                        style={clashBgStyle}
-                      >
-                        <div className="space-y-3">
-                          <div>
-                            <div className="mb-2 text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-display font-semibold">
-                                  {kickoffParts.dayNum}
-                                  <sup className="ml-[1px] text-[9px]">{kickoffParts.suffix}</sup>{" "}
-                                  {kickoffParts.monthYear}
-                                </span>
-                                <span className="font-display font-semibold">{kickoffParts.time}</span>
-                              </div>
+              return (
+                <div
+                  key={f.fixtureId}
+                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
+                  style={{
+                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                    animationDuration: "520ms",
+                  }}
+                >
+                  <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                    <div
+                      className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                      style={clashBgStyle}
+                    >
+                      <div className="space-y-3">
+                        <div>
+                          <div className="mb-2 text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-display font-semibold">
+                                {kickoffParts.dayNum}
+                                <sup className="ml-[1px] text-[9px]">
+                                  {kickoffParts.suffix}
+                                </sup>{" "}
+                                {kickoffParts.monthYear}
+                              </span>
+                              <span className="font-display font-semibold">
+                                {kickoffParts.time}
+                              </span>
                             </div>
+                          </div>
 
-                            <div className="sm:hidden">
-                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                                <div className="flex min-w-0 flex-col items-center text-center">
-                                  <TeamBadge
-                                    name={f.home.name}
-                                    tla={f.home.tla}
-                                    shortName={f.home.shortName}
-                                    badge={f.home.badge}
-                                  />
-                                  <TeamLabel
-                                    name={f.home.name}
-                                    tla={f.home.tla}
-                                    shortName={f.home.shortName}
-                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                    fullNameWindowPx={68}
-                                  />
-                                </div>
-                                <span className="inline-flex items-center justify-center font-display text-[10px] font-semibold uppercase text-muted">
-                                  vs
-                                </span>
-                                <div className="flex min-w-0 flex-col items-center text-center">
-                                  <TeamBadge
-                                    name={f.away.name}
-                                    tla={f.away.tla}
-                                    shortName={f.away.shortName}
-                                    badge={f.away.badge}
-                                  />
-                                  <TeamLabel
-                                    name={f.away.name}
-                                    tla={f.away.tla}
-                                    shortName={f.away.shortName}
-                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                    fullNameWindowPx={68}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 sm:grid">
+                          <div className="sm:hidden">
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                               <div className="flex min-w-0 flex-col items-center text-center">
                                 <TeamBadge
                                   name={f.home.name}
@@ -2018,13 +2189,13 @@ export default function FixturesPage() {
                                   name={f.home.name}
                                   tla={f.home.tla}
                                   shortName={f.home.shortName}
-                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                                  fullNameWindowPx={88}
+                                  wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                  fullNameWindowPx={68}
                                 />
                               </div>
-                              <span className="inline-flex h-full items-center justify-center self-center font-display text-xs font-semibold uppercase text-muted">
+                              <span className="inline-flex items-center justify-center font-display text-[10px] font-semibold uppercase text-muted">
                                 vs
                               </span>
                               <div className="flex min-w-0 flex-col items-center text-center">
@@ -2038,295 +2209,360 @@ export default function FixturesPage() {
                                   name={f.away.name}
                                   tla={f.away.tla}
                                   shortName={f.away.shortName}
-                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                                  fullNameWindowPx={88}
+                                  wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                  fullNameWindowPx={68}
                                 />
                               </div>
                             </div>
                           </div>
 
-                          <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                            <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                                Fixture board
-                              </span>
-                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                                {fixtureStatusHeading}
-                              </span>
+                          <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 sm:grid">
+                            <div className="flex min-w-0 flex-col items-center text-center">
+                              <TeamBadge
+                                name={f.home.name}
+                                tla={f.home.tla}
+                                shortName={f.home.shortName}
+                                badge={f.home.badge}
+                              />
+                              <TeamLabel
+                                name={f.home.name}
+                                tla={f.home.tla}
+                                shortName={f.home.shortName}
+                                wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                fullNameWindowPx={88}
+                              />
                             </div>
-                            <div className="space-y-3">
-                              <div className="relative mx-auto flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                                {Number(f.redCards?.home || 0) > 0 ? (
-                                  <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                                    <span>{f.redCards?.home}</span>
-                                  </span>
-                                ) : null}
-                                <span className="inline-block text-center">{displayResult(f.status, actual)}</span>
-                                {Number(f.redCards?.away || 0) > 0 ? (
-                                  <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                                    <span>{f.redCards?.away}</span>
-                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                                  </span>
-                                ) : null}
-                              </div>
+                            <span className="inline-flex h-full items-center justify-center self-center font-display text-xs font-semibold uppercase text-muted">
+                              vs
+                            </span>
+                            <div className="flex min-w-0 flex-col items-center text-center">
+                              <TeamBadge
+                                name={f.away.name}
+                                tla={f.away.tla}
+                                shortName={f.away.shortName}
+                                badge={f.away.badge}
+                              />
+                              <TeamLabel
+                                name={f.away.name}
+                                tla={f.away.tla}
+                                shortName={f.away.shortName}
+                                wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                fullNameWindowPx={88}
+                              />
+                            </div>
+                          </div>
+                        </div>
 
-                              {SHOW_MATCH_INFO ? (
-                                <div className="flex items-center justify-center text-xs text-muted">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openMatchInfo(f);
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
-                                  >
-                                    <Info size={12} />
-                                    Match Info
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              <div
-                                className="flex cursor-pointer items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted transition-colors duration-200 hover:bg-white/[0.03]"
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => toggleFixtureExpanded(f.fixtureId)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    toggleFixtureExpanded(f.fixtureId);
-                                  }
-                                }}
-                              >
-                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
-                                  {isExpanded ? "Hide" : "Show"} Predictions
+                        <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                          <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                              Fixture board
+                            </span>
+                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                              {fixtureStatusHeading}
+                            </span>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="relative mx-auto flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
+                              {Number(f.redCards?.home || 0) > 0 ? (
+                                <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                  <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                  <span>{f.redCards?.home}</span>
                                 </span>
-                                <ChevronDown
-                                  size={14}
-                                  className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-                                />
+                              ) : null}
+                              <span className="inline-block text-center">
+                                {displayResult(f.status, actual)}
+                              </span>
+                              {Number(f.redCards?.away || 0) > 0 ? (
+                                <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                  <span>{f.redCards?.away}</span>
+                                  <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {SHOW_MATCH_INFO ? (
+                              <div className="flex items-center justify-center text-xs text-muted">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openMatchInfo(f);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
+                                >
+                                  <Info size={12} />
+                                  Match Info
+                                </button>
                               </div>
+                            ) : null}
+
+                            <div
+                              className="flex cursor-pointer items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted transition-colors duration-200 hover:bg-white/[0.03]"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggleFixtureExpanded(f.fixtureId)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleFixtureExpanded(f.fixtureId);
+                                }
+                              }}
+                            >
+                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
+                                {isExpanded ? "Hide" : "Show"} Predictions
+                              </span>
+                              <ChevronDown
+                                size={14}
+                                className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                              />
                             </div>
                           </div>
+                        </div>
 
-                          <div
-                            className={[
-                              "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                              isExpanded
-                                ? "mt-3 grid-rows-[1fr] opacity-100"
-                                : "mt-0 grid-rows-[0fr] opacity-0 pointer-events-none",
-                            ].join(" ")}
-                          >
-                            <div className="min-h-0 overflow-hidden">
-                              <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                                <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                                    Prediction board
-                                  </span>
-                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                                    {players.length} {players.length === 1 ? "player" : "players"}
-                                  </span>
+                        <div
+                          className={[
+                            "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                            isExpanded
+                              ? "mt-3 grid-rows-[1fr] opacity-100"
+                              : "mt-0 grid-rows-[0fr] opacity-0 pointer-events-none",
+                          ].join(" ")}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                              <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                                  Prediction board
+                                </span>
+                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                                  {players.length}{" "}
+                                  {players.length === 1 ? "player" : "players"}
+                                </span>
+                              </div>
+                              {players.length === 0 ? (
+                                <div className="text-sm text-muted">
+                                  No players found.
                                 </div>
-                                {players.length === 0 ? (
-                                  <div className="text-sm text-muted">No players found.</div>
-                                ) : (
-                                  <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
-                                    {players.map((p) => {
-                                      const pred = picksByFixture?.[f.fixtureId]?.[p.uid] ?? "";
-                                      const golden = goldenByUid[p.uid];
-                                      const isGolden =
-                                        !!golden &&
-                                        golden.fixtureId === f.fixtureId &&
-                                        golden.score === pred;
-                                      const powerup = powerupByUid[p.uid];
-                                      const powerupType =
-                                        powerup &&
-                                        powerup.locked &&
-                                        powerup.fixtureId === f.fixtureId
-                                          ? powerup.powerupType
-                                          : null;
-                                      const powerupTypeClass =
-                                        powerupType === "ALL_IN"
-                                          ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
-                                          : powerupType === "SAFETY_NET"
-                                            ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
-                                            : "";
-                                      const predNorm = String(pred || "").trim();
-                                      const actualNorm = String(actual || "").trim();
-                                      const hasScoredResult = actualNorm.length > 0;
-                                      const predictionTier = hasScoredResult
-                                        ? classifyPredictionTier(predNorm, actualNorm)
+                              ) : (
+                                <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                                  {players.map((p) => {
+                                    const pred =
+                                      picksByFixture?.[f.fixtureId]?.[p.uid] ??
+                                      "";
+                                    const golden = goldenByUid[p.uid];
+                                    const isGolden =
+                                      !!golden &&
+                                      golden.fixtureId === f.fixtureId &&
+                                      golden.score === pred;
+                                    const powerup = powerupByUid[p.uid];
+                                    const powerupType =
+                                      powerup &&
+                                      powerup.locked &&
+                                      powerup.fixtureId === f.fixtureId
+                                        ? powerup.powerupType
                                         : null;
-                                      const isExact = predictionTier === "exact";
-                                      const isOutcomeOnly = predictionTier === "result";
-                                      const powerupVisualState = hasScoredResult
-                                        ? getPowerupVisualState({
-                                            powerupType,
-                                            predictionTier,
-                                          })
-                                        : null;
-                                      const powerupHitToneClass =
-                                        "key-chip border-cyan-300/75 bg-[linear-gradient(145deg,rgba(34,211,238,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(34,211,238,0.22)_inset,0_12px_22px_rgba(34,211,238,0.12)]";
-                                      const powerupMissToneClass =
-                                        "key-chip border-red-300/45 bg-[linear-gradient(145deg,rgba(248,113,113,0.16),rgba(9,12,26,0.92)_58%,rgba(9,12,26,0.9))] shadow-[0_0_0_1px_rgba(248,113,113,0.14)_inset,0_12px_22px_rgba(127,29,29,0.16)]";
-                                      const neutralToneClass =
-                                        "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
-                                      const toneClass =
-                                        !hasScoredResult
-                                          ? neutralToneClass
-                                          : powerupType === "ALL_IN"
-                                            ? powerupVisualState === "powerup_hit"
-                                              ? powerupHitToneClass
-                                              : powerupMissToneClass
-                                            : powerupVisualState === "powerup_hit"
-                                              ? powerupHitToneClass
-                                              : isExact
-                                                ? "key-chip key-chip-exact border-purple-300/75 bg-[linear-gradient(145deg,rgba(168,85,247,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(216,180,254,0.2)_inset,0_12px_24px_rgba(168,85,247,0.15)]"
-                                                : isOutcomeOnly
-                                                  ? "key-chip key-chip-result border-emerald-300/75 bg-[linear-gradient(145deg,rgba(16,185,129,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(110,231,183,0.2)_inset,0_12px_24px_rgba(16,185,129,0.15)]"
-                                                  : powerupMissToneClass;
-                                      const accentBarClass =
-                                        powerupVisualState === "powerup_hit"
-                                          ? "from-cyan-200 via-cyan-300 to-cyan-500/20"
-                                          : powerupVisualState === "powerup_miss"
-                                            ? "from-red-200/80 via-red-300/60 to-red-500/12"
-                                            : isExact
-                                              ? "from-purple-200 via-purple-300 to-purple-500/20"
-                                              : isOutcomeOnly
-                                                ? "from-emerald-200 via-emerald-300 to-emerald-500/20"
-                                                : hasScoredResult && predictionTier === "miss"
-                                                  ? "from-red-200/80 via-red-300/60 to-red-500/12"
-                                                  : powerupType === "ALL_IN"
-                                                    ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
-                                                    : powerupType === "SAFETY_NET"
-                                                      ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
-                                                      : isGolden
-                                                        ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
-                                                        : "from-white/24 via-white/10 to-transparent";
-                                      const scoreBadgeClass =
-                                        !hasScoredResult
-                                          ? "text-foreground"
-                                          : powerupVisualState === "powerup_hit"
-                                            ? "text-cyan-100"
-                                            : powerupVisualState === "powerup_miss"
-                                              ? "text-red-100"
-                                              : isExact
-                                                ? "text-purple-100"
-                                                : isOutcomeOnly
-                                                  ? "text-emerald-100"
-                                                  : "text-foreground";
-                                      const isGoldenScored = isGolden && (isExact || isOutcomeOnly);
-                                      const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
-                                      const goldenGlowClass = isGolden
-                                        ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
-                                        : "";
-                                      const goldenIndicatorClass = isGoldenScored
-                                        ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
-                                        : "";
+                                    const powerupTypeClass =
+                                      powerupType === "ALL_IN"
+                                        ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
+                                        : powerupType === "SAFETY_NET"
+                                          ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
+                                          : "";
+                                    const predNorm = String(pred || "").trim();
+                                    const actualNorm = String(
+                                      actual || "",
+                                    ).trim();
+                                    const hasScoredResult =
+                                      actualNorm.length > 0;
+                                    const predictionTier = hasScoredResult
+                                      ? classifyPredictionTier(
+                                          predNorm,
+                                          actualNorm,
+                                        )
+                                      : null;
+                                    const isExact = predictionTier === "exact";
+                                    const isOutcomeOnly =
+                                      predictionTier === "result";
+                                    const powerupVisualState = hasScoredResult
+                                      ? getPowerupVisualState({
+                                          powerupType,
+                                          predictionTier,
+                                        })
+                                      : null;
+                                    const powerupHitToneClass =
+                                      "key-chip border-cyan-300/75 bg-[linear-gradient(145deg,rgba(34,211,238,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(34,211,238,0.22)_inset,0_12px_22px_rgba(34,211,238,0.12)]";
+                                    const powerupMissToneClass =
+                                      "key-chip border-red-300/45 bg-[linear-gradient(145deg,rgba(248,113,113,0.16),rgba(9,12,26,0.92)_58%,rgba(9,12,26,0.9))] shadow-[0_0_0_1px_rgba(248,113,113,0.14)_inset,0_12px_22px_rgba(127,29,29,0.16)]";
+                                    const neutralToneClass =
+                                      "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
+                                    const toneClass = !hasScoredResult
+                                      ? neutralToneClass
+                                      : powerupType === "ALL_IN"
+                                        ? powerupVisualState === "powerup_hit"
+                                          ? powerupHitToneClass
+                                          : powerupMissToneClass
+                                        : powerupVisualState === "powerup_hit"
+                                          ? powerupHitToneClass
+                                          : isExact
+                                            ? "key-chip key-chip-exact border-purple-300/75 bg-[linear-gradient(145deg,rgba(168,85,247,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(216,180,254,0.2)_inset,0_12px_24px_rgba(168,85,247,0.15)]"
+                                            : isOutcomeOnly
+                                              ? "key-chip key-chip-result border-emerald-300/75 bg-[linear-gradient(145deg,rgba(16,185,129,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(110,231,183,0.2)_inset,0_12px_24px_rgba(16,185,129,0.15)]"
+                                              : powerupMissToneClass;
+                                    const accentBarClass =
+                                      powerupVisualState === "powerup_hit"
+                                        ? "from-cyan-200 via-cyan-300 to-cyan-500/20"
+                                        : powerupVisualState === "powerup_miss"
+                                          ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                          : isExact
+                                            ? "from-purple-200 via-purple-300 to-purple-500/20"
+                                            : isOutcomeOnly
+                                              ? "from-emerald-200 via-emerald-300 to-emerald-500/20"
+                                              : hasScoredResult &&
+                                                  predictionTier === "miss"
+                                                ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                                : powerupType === "ALL_IN"
+                                                  ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
+                                                  : powerupType === "SAFETY_NET"
+                                                    ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
+                                                    : isGolden
+                                                      ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
+                                                      : "from-white/24 via-white/10 to-transparent";
+                                    const scoreBadgeClass = !hasScoredResult
+                                      ? "text-foreground"
+                                      : powerupVisualState === "powerup_hit"
+                                        ? "text-cyan-100"
+                                        : powerupVisualState === "powerup_miss"
+                                          ? "text-red-100"
+                                          : isExact
+                                            ? "text-purple-100"
+                                            : isOutcomeOnly
+                                              ? "text-emerald-100"
+                                              : "text-foreground";
+                                    const isGoldenScored =
+                                      isGolden && (isExact || isOutcomeOnly);
+                                    const goldenBorderClass = isGolden
+                                      ? "!border-yellow-300/75"
+                                      : "";
+                                    const goldenGlowClass = isGolden
+                                      ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
+                                      : "";
+                                    const goldenIndicatorClass = isGoldenScored
+                                      ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
+                                      : "";
 
-                                      return (
-                                        <div key={p.uid} className="relative min-w-0 !overflow-visible">
+                                    return (
+                                      <div
+                                        key={p.uid}
+                                        className="relative min-w-0 !overflow-visible"
+                                      >
+                                        <div
+                                          className={[
+                                            "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
+                                            toneClass,
+                                            goldenBorderClass,
+                                            goldenGlowClass,
+                                            goldenIndicatorClass,
+                                            powerupTypeClass,
+                                          ].join(" ")}
+                                        >
                                           <div
                                             className={[
-                                              "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
-                                              toneClass,
-                                              goldenBorderClass,
-                                              goldenGlowClass,
-                                              goldenIndicatorClass,
-                                              powerupTypeClass,
+                                              "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                                              accentBarClass,
                                             ].join(" ")}
-                                          >
-                                            <div
-                                              className={[
-                                                "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
-                                                accentBarClass,
-                                              ].join(" ")}
-                                            />
-                                            <div className="relative pl-3">
-                                              <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                                {p.displayName.length > 6
-                                                  ? p.displayName.slice(0, 6)
-                                                  : p.displayName}
-                                              </div>
-                                              <span
-                                                className={[
-                                                  "font-display text-[0.92rem] font-semibold text-foreground truncate",
-                                                  scoreBadgeClass,
-                                                ].join(" ")}
-                                              >
-                                                {fmtScore(pred)}
-                                              </span>
+                                          />
+                                          <div className="relative pl-3">
+                                            <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                              {p.displayName.length > 6
+                                                ? p.displayName.slice(0, 6)
+                                                : p.displayName}
                                             </div>
+                                            <span
+                                              className={[
+                                                "font-display text-[0.92rem] font-semibold text-foreground truncate",
+                                                scoreBadgeClass,
+                                              ].join(" ")}
+                                            >
+                                              {fmtScore(pred)}
+                                            </span>
                                           </div>
                                         </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                );
-              };
-
-              return fixtureSections.map((section, sectionIdx) => (
-                <div
-                  key={section.key}
-                  className="space-y-3 sm:space-y-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
-                      <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
-                        Matchboard
-                      </div>
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <div className="font-display text-sm font-semibold text-foreground sm:text-base">
-                          {section.label}
-                        </div>
-                        {"suffix" in section && section.suffix ? (
-                          <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-white/40">
-                            {section.suffix}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
-                    <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
-                      {section.items.length}
-                    </span>
-                  </div>
-                  <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {section.items.map((fixture, idx) =>
-                      renderFixtureCard(fixture, sectionIdx * 20 + idx),
-                    )}
-                  </div>
                 </div>
-              ));
-            })()}
-        </div>
+              );
+            };
 
-        {(fixturesGeneratedAt || fixturesRefreshedAt) && (
-          <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] px-4 py-3">
-            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Fixture ledger
-            </div>
-            <div className="mt-2 space-y-1 text-xs text-muted">
-              {fixturesGeneratedAt && (
-                <div>Fixture snapshot time: {formatDateTimeLabel(fixturesGeneratedAt)}</div>
-              )}
-              {fixturesRefreshedAt && (
-                <div>Fixtures page last refreshed: {formatDateTimeLabel(fixturesRefreshedAt)}</div>
-              )}
-            </div>
-          </SectionCard>
-        )}
+            return fixtureSections.map((section, sectionIdx) => (
+              <div key={section.key} className="space-y-3 sm:space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
+                    <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
+                      Matchboard
+                    </div>
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <div className="font-display text-sm font-semibold text-foreground sm:text-base">
+                        {section.label}
+                      </div>
+                      {"suffix" in section && section.suffix ? (
+                        <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-white/40">
+                          {section.suffix}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
+                  <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
+                    {section.items.length}
+                  </span>
+                </div>
+                <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {section.items.map((fixture, idx) =>
+                    renderFixtureCard(fixture, sectionIdx * 20 + idx),
+                  )}
+                </div>
+              </div>
+            ));
+          })()}
+      </div>
+
+      {(fixturesGeneratedAt || fixturesRefreshedAt) && (
+        <SectionCard
+          className={`${standardSectionCardClass} px-4 py-3 sm:py-4`}
+        >
+          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+            Fixture ledger
+          </div>
+          <div className="mt-2 space-y-1 text-xs text-muted">
+            {fixturesGeneratedAt && (
+              <div>
+                Fixture snapshot time:{" "}
+                {formatDateTimeLabel(fixturesGeneratedAt)}
+              </div>
+            )}
+            {fixturesRefreshedAt && (
+              <div>
+                Fixtures page last refreshed:{" "}
+                {formatDateTimeLabel(fixturesRefreshedAt)}
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      )}
 
       <AnimatedModal
         open={matchInfoOpen}
@@ -2339,49 +2575,49 @@ export default function FixturesPage() {
       >
         <div className="h-full p-3 sm:p-4 flex flex-col gap-3">
           <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.006))] px-4 py-4 shadow-[0_18px_42px_rgba(3,8,20,0.24)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/46">
-                Matchdesk
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/46">
+                  Matchdesk
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Match Info
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  {selectedMatchFixture
+                    ? `${teamAbbr({
+                        name: selectedMatchFixture.home.name,
+                        tla: selectedMatchFixture.home.tla,
+                        shortName: selectedMatchFixture.home.shortName,
+                      })} vs ${teamAbbr({
+                        name: selectedMatchFixture.away.name,
+                        tla: selectedMatchFixture.away.tla,
+                        shortName: selectedMatchFixture.away.shortName,
+                      })} • ${formatShortKickoff(selectedMatchFixture.kickoff)}`
+                    : "Fixture details"}
+                </div>
               </div>
-              <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                Match Info
-              </div>
-              <div className="mt-1 text-xs text-muted">
-                {selectedMatchFixture
-                  ? `${teamAbbr({
-                      name: selectedMatchFixture.home.name,
-                      tla: selectedMatchFixture.home.tla,
-                      shortName: selectedMatchFixture.home.shortName,
-                    })} vs ${teamAbbr({
-                      name: selectedMatchFixture.away.name,
-                      tla: selectedMatchFixture.away.tla,
-                      shortName: selectedMatchFixture.away.shortName,
-                    })} • ${formatShortKickoff(selectedMatchFixture.kickoff)}`
-                  : "Fixture details"}
-              </div>
+              <ModalExitButton
+                onClick={() => setMatchInfoOpen(false)}
+                ariaLabel="Exit match info"
+                className={`border-white/10 ${BTN_3D}`}
+              />
             </div>
-            <ModalExitButton
-              onClick={() => setMatchInfoOpen(false)}
-              ariaLabel="Exit match info"
-              className={`border-white/10 ${BTN_3D}`}
-            />
-          </div>
           </div>
 
           <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.014),rgba(255,255,255,0.004))] p-2 shadow-[0_14px_30px_rgba(3,8,20,0.18)]">
-          <SliderSwitch
-            options={[
-              { value: "lineups", label: "Lineups" },
-              { value: "stats", label: "Stats" },
-              { value: "h2h", label: "H2H" },
-              { value: "form", label: "Form" },
-            ]}
-            value={matchInfoTab}
-            onChange={(v) => setMatchInfoTab(v as MatchInfoTab)}
-            className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-          />
+            <SliderSwitch
+              options={[
+                { value: "lineups", label: "Lineups" },
+                { value: "stats", label: "Stats" },
+                { value: "h2h", label: "H2H" },
+                { value: "form", label: "Form" },
+              ]}
+              value={matchInfoTab}
+              onChange={(v) => setMatchInfoTab(v as MatchInfoTab)}
+              className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+            />
           </div>
 
           <SpecialBreak />
@@ -2398,695 +2634,841 @@ export default function FixturesPage() {
                 {matchInfoError}
               </div>
             )}
-            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "lineups" && (
-              <div className="space-y-3">
-                {(() => {
-                  const lineupPhase =
-                    currentMatchInfo.lineups.phase === "predicted" ? "predicted" : "confirmed";
-                  const showLiveRatings =
-                    lineupPhase === "confirmed" &&
-                    isFixtureStartedForLineups(selectedMatchFixture?.status);
-                  const lineupHeading =
-                    lineupPhase === "predicted" ? "Predicted Lineup" : "Confirmed Lineup";
-                  const startingXiHeading =
-                    lineupPhase === "predicted" ? "Predicted XI" : "Starting XI";
-                  const emptyLineupLabel =
-                    lineupPhase === "predicted"
-                      ? "No predicted lineup available yet."
-                      : "Lineup not confirmed yet.";
-                  const lineupBlocks = [
+            {!matchInfoLoading &&
+              !matchInfoError &&
+              currentMatchInfo &&
+              matchInfoTab === "lineups" && (
+                <div className="space-y-3">
+                  {(() => {
+                    const lineupPhase =
+                      currentMatchInfo.lineups.phase === "predicted"
+                        ? "predicted"
+                        : "confirmed";
+                    const showLiveRatings =
+                      lineupPhase === "confirmed" &&
+                      isFixtureStartedForLineups(selectedMatchFixture?.status);
+                    const lineupHeading =
+                      lineupPhase === "predicted"
+                        ? "Predicted Lineup"
+                        : "Confirmed Lineup";
+                    const startingXiHeading =
+                      lineupPhase === "predicted"
+                        ? "Predicted XI"
+                        : "Starting XI";
+                    const emptyLineupLabel =
+                      lineupPhase === "predicted"
+                        ? "No predicted lineup available yet."
+                        : "Lineup not confirmed yet.";
+                    const lineupBlocks = [
+                      {
+                        side: "home" as const,
+                        lineup: currentMatchInfo.lineups.home,
+                        badge: selectedMatchFixture?.home?.badge || null,
+                        tla: selectedMatchFixture?.home?.tla || null,
+                      },
+                      {
+                        side: "away" as const,
+                        lineup: currentMatchInfo.lineups.away,
+                        badge: selectedMatchFixture?.away?.badge || null,
+                        tla: selectedMatchFixture?.away?.tla || null,
+                      },
+                    ];
+                    const lineupBlocksWithRows = lineupBlocks.map((block) => ({
+                      ...block,
+                      starterRows: buildFormationRows(
+                        block.lineup.starters,
+                        block.lineup.formation,
+                      ),
+                    }));
+                    const motmRating = showLiveRatings
+                      ? lineupBlocks
+                          .flatMap((block) => [
+                            ...block.lineup.starters,
+                            ...block.lineup.subs,
+                          ])
+                          .reduce<number | null>((best, player) => {
+                            const rating = Number(player.rating);
+                            if (!Number.isFinite(rating)) return best;
+                            return best == null || rating > best
+                              ? rating
+                              : best;
+                          }, null)
+                      : null;
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.55)] bg-[color:rgba(var(--room-accent-rgb),0.08)] px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                            {lineupHeading}
+                          </div>
+                          <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                            {startingXiHeading}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {lineupBlocksWithRows.map((block) => (
+                            <div
+                              key={`lineup-head-${block.side}`}
+                              className="rounded-[22px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                                    {teamAbbr({
+                                      name: block.lineup.name,
+                                      tla: block.tla,
+                                      shortName: block.lineup.name,
+                                    })}{" "}
+                                    - {block.side === "home" ? "Home" : "Away"}
+                                  </div>
+                                  <div className="font-display text-sm font-semibold text-foreground">
+                                    {block.lineup.formation || "TBD"}
+                                  </div>
+                                  <div className="text-[11px] text-muted truncate">
+                                    {block.lineup.coach || "Manager TBD"}
+                                  </div>
+                                </div>
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-black/16">
+                                  {block.badge ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={block.badge}
+                                      alt={block.lineup.name}
+                                      className="h-9 w-9 object-contain"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span className="font-display text-xs font-bold text-foreground">
+                                      {teamAbbr({
+                                        name: block.lineup.name,
+                                        tla: block.tla,
+                                        shortName: block.lineup.name,
+                                      })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {lineupBlocksWithRows.every(
+                          (block) => block.lineup.starters.length === 0,
+                        ) ? (
+                          <div className="rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 text-xs text-muted">
+                            {emptyLineupLabel}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="sm:hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.024)_0%,rgba(8,12,22,0.96)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
+                              <div className="relative h-[960px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
+                                <div className="absolute inset-x-1.5 top-1.5 h-[calc(50%-8px)] rounded-t-xl border border-white/8 border-b-0" />
+                                <div className="absolute inset-x-1.5 bottom-1.5 h-[calc(50%-8px)] rounded-b-xl border border-white/8 border-t-0" />
+                                <div className="absolute left-1.5 right-1.5 top-1/2 h-px -translate-y-1/2 bg-white/8" />
+                                <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
+                                <div className="absolute left-1/2 top-1.5 h-10 w-[36%] -translate-x-1/2 rounded-b-xl border border-white/8 border-t-0" />
+                                <div className="absolute left-1/2 bottom-1.5 h-10 w-[36%] -translate-x-1/2 rounded-t-xl border border-white/8 border-b-0" />
+                                <div className="absolute inset-x-2.5 top-4 bottom-[calc(50%+28px)] flex flex-col justify-evenly">
+                                  {lineupBlocksWithRows
+                                    .filter((block) => block.side === "home")
+                                    .map((block) => (
+                                      <div
+                                        key={`mobile-home-rows-${block.side}`}
+                                        className={[
+                                          "grid h-full gap-1",
+                                          formationGridClasses(
+                                            block.starterRows.length,
+                                          ),
+                                        ].join(" ")}
+                                      >
+                                        {block.starterRows.map(
+                                          (row, rowIdx) => (
+                                            <div
+                                              key={`mobile-home-row-${rowIdx}`}
+                                              className="flex items-center justify-evenly gap-1"
+                                            >
+                                              {row.map((player) => (
+                                                <div
+                                                  key={`mobile-home-player-${player.id ?? player.name}`}
+                                                  className="transition-transform duration-200 ease-out"
+                                                  style={{
+                                                    transform: `translateY(${formationFanOffsetPx(row, row.indexOf(player), block.side, "y")}px)`,
+                                                  }}
+                                                >
+                                                  <PitchMarker
+                                                    player={player}
+                                                    showLiveRatings={
+                                                      showLiveRatings
+                                                    }
+                                                    isManOfTheMatch={
+                                                      motmRating != null &&
+                                                      Number.isFinite(
+                                                        Number(player.rating),
+                                                      ) &&
+                                                      Number(player.rating) ===
+                                                        motmRating
+                                                    }
+                                                    crowded={row.length >= 5}
+                                                    size="mobile"
+                                                  />
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ),
+                                        )}
+                                      </div>
+                                    ))}
+                                </div>
+                                <div className="absolute inset-x-2.5 top-[calc(50%+28px)] bottom-4 flex flex-col justify-evenly">
+                                  {lineupBlocksWithRows
+                                    .filter((block) => block.side === "away")
+                                    .map((block) => (
+                                      <div
+                                        key={`mobile-away-rows-${block.side}`}
+                                        className={[
+                                          "grid h-full gap-1",
+                                          formationGridClasses(
+                                            block.starterRows.length,
+                                          ),
+                                        ].join(" ")}
+                                      >
+                                        {[...block.starterRows]
+                                          .reverse()
+                                          .map((row, rowIdx) => (
+                                            <div
+                                              key={`mobile-away-row-${rowIdx}`}
+                                              className="flex items-center justify-evenly gap-1"
+                                            >
+                                              {[...row]
+                                                .reverse()
+                                                .map((player, playerIdx) => (
+                                                  <div
+                                                    key={`mobile-away-player-${player.id ?? player.name}`}
+                                                    className="transition-transform duration-200 ease-out"
+                                                    style={{
+                                                      transform: `translateY(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "y")}px)`,
+                                                    }}
+                                                  >
+                                                    <PitchMarker
+                                                      player={player}
+                                                      showLiveRatings={
+                                                        showLiveRatings
+                                                      }
+                                                      isManOfTheMatch={
+                                                        motmRating != null &&
+                                                        Number.isFinite(
+                                                          Number(player.rating),
+                                                        ) &&
+                                                        Number(
+                                                          player.rating,
+                                                        ) === motmRating
+                                                      }
+                                                      crowded={row.length >= 5}
+                                                      size="mobile"
+                                                    />
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          ))}
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="hidden sm:block rounded-[24px] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.022)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(255,255,255,0.022)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
+                              <div className="relative h-[620px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
+                                <div className="absolute inset-y-1.5 left-1.5 w-[calc(50%-8px)] rounded-l-xl border border-white/8 border-r-0" />
+                                <div className="absolute inset-y-1.5 right-1.5 w-[calc(50%-8px)] rounded-r-xl border border-white/8 border-l-0" />
+                                <div className="absolute top-1.5 bottom-1.5 left-1/2 w-px -translate-x-1/2 bg-white/8" />
+                                <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
+                                <div className="absolute left-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-r-xl border border-white/8 border-l-0" />
+                                <div className="absolute right-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-l-xl border border-white/8 border-r-0" />
+                                <div className="absolute inset-y-3 left-3 right-[calc(50%+14px)]">
+                                  {lineupBlocksWithRows
+                                    .filter((block) => block.side === "home")
+                                    .map((block) => (
+                                      <div
+                                        key={`desktop-home-rows-${block.side}`}
+                                        className="grid h-full gap-2"
+                                        style={{
+                                          gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
+                                        }}
+                                      >
+                                        {block.starterRows.map(
+                                          (row, rowIdx) => (
+                                            <div
+                                              key={`desktop-home-row-${rowIdx}`}
+                                              className="flex h-full flex-col items-center justify-evenly gap-2"
+                                            >
+                                              {row.map((player) => (
+                                                <div
+                                                  key={`desktop-home-player-${player.id ?? player.name}`}
+                                                  className="transition-transform duration-200 ease-out"
+                                                  style={{
+                                                    transform: `translateX(${formationFanOffsetPx(row, row.indexOf(player), block.side, "x")}px)`,
+                                                  }}
+                                                >
+                                                  <PitchMarker
+                                                    player={player}
+                                                    showLiveRatings={
+                                                      showLiveRatings
+                                                    }
+                                                    isManOfTheMatch={
+                                                      motmRating != null &&
+                                                      Number.isFinite(
+                                                        Number(player.rating),
+                                                      ) &&
+                                                      Number(player.rating) ===
+                                                        motmRating
+                                                    }
+                                                    size="desktop"
+                                                  />
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ),
+                                        )}
+                                      </div>
+                                    ))}
+                                </div>
+                                <div className="absolute inset-y-3 left-[calc(50%+14px)] right-3">
+                                  {lineupBlocksWithRows
+                                    .filter((block) => block.side === "away")
+                                    .map((block) => (
+                                      <div
+                                        key={`desktop-away-rows-${block.side}`}
+                                        className="grid h-full gap-2"
+                                        style={{
+                                          gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
+                                        }}
+                                      >
+                                        {[...block.starterRows]
+                                          .reverse()
+                                          .map((row, rowIdx) => (
+                                            <div
+                                              key={`desktop-away-row-${rowIdx}`}
+                                              className="flex h-full flex-col items-center justify-evenly gap-2"
+                                            >
+                                              {[...row]
+                                                .reverse()
+                                                .map((player, playerIdx) => (
+                                                  <div
+                                                    key={`desktop-away-player-${player.id ?? player.name}`}
+                                                    className="transition-transform duration-200 ease-out"
+                                                    style={{
+                                                      transform: `translateX(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "x")}px)`,
+                                                    }}
+                                                  >
+                                                    <PitchMarker
+                                                      player={player}
+                                                      showLiveRatings={
+                                                        showLiveRatings
+                                                      }
+                                                      isManOfTheMatch={
+                                                        motmRating != null &&
+                                                        Number.isFinite(
+                                                          Number(player.rating),
+                                                        ) &&
+                                                        Number(
+                                                          player.rating,
+                                                        ) === motmRating
+                                                      }
+                                                      size="desktop"
+                                                    />
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          ))}
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {lineupBlocksWithRows.map((block) => (
+                            <div
+                              key={`bench-${block.side}`}
+                              className="rounded-[22px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
+                            >
+                              <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                                {block.side === "home"
+                                  ? "Home Bench"
+                                  : "Away Bench"}
+                              </div>
+                              <div className="space-y-2">
+                                {block.lineup.subs.length ? (
+                                  block.lineup.subs.map((player) => (
+                                    <div
+                                      key={`${block.side}-sub-${player.id ?? player.name}`}
+                                      className="rounded-[18px] border border-white/8 bg-black/16 px-2.5 py-2"
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        <div className="h-9 w-9 rounded-lg border border-white/8 bg-white/[0.03] flex items-center justify-center overflow-hidden shrink-0">
+                                          {player.photo ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                              src={player.photo}
+                                              alt={player.name}
+                                              className="h-full w-full object-cover"
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <span className="font-display text-[10px] font-semibold text-foreground tabular-nums">
+                                              {player.shirtNumber || "—"}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex-1 space-y-1">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="font-display text-xs text-foreground truncate">
+                                                {player.name}
+                                              </div>
+                                              <div className="font-display text-[10px] text-muted">
+                                                {showLiveRatings
+                                                  ? substitutionSummary(
+                                                      player,
+                                                    ) || "Unused sub"
+                                                  : player.positionLabel ||
+                                                    "Bench"}
+                                              </div>
+                                            </div>
+                                            <span
+                                              className={[
+                                                "inline-flex min-w-[48px] items-center justify-center rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
+                                                motmRating != null &&
+                                                Number.isFinite(
+                                                  Number(player.rating),
+                                                ) &&
+                                                Number(player.rating) ===
+                                                  motmRating &&
+                                                showLiveRatings
+                                                  ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
+                                                  : "border-subtle bg-surface-2 text-foreground",
+                                              ].join(" ")}
+                                            >
+                                              <span className="relative inline-flex items-center justify-center overflow-visible">
+                                                {playerMetaValue(
+                                                  player,
+                                                  showLiveRatings,
+                                                )}
+                                                {motmRating != null &&
+                                                Number.isFinite(
+                                                  Number(player.rating),
+                                                ) &&
+                                                Number(player.rating) ===
+                                                  motmRating &&
+                                                showLiveRatings ? (
+                                                  <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
+                                                    <Crown
+                                                      size={9}
+                                                      strokeWidth={2.2}
+                                                    />
+                                                  </span>
+                                                ) : null}
+                                              </span>
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            {Number(player.assistCount || 0) >
+                                            0 ? (
+                                              <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-sky-300">
+                                                <Footprints
+                                                  size={9}
+                                                  strokeWidth={2.1}
+                                                />
+                                                <span>
+                                                  {player.assistCount}
+                                                </span>
+                                              </span>
+                                            ) : null}
+                                            {Number(player.goalCount || 0) >
+                                              0 ||
+                                            Number(player.ownGoalCount || 0) >
+                                              0 ? (
+                                              <span className="inline-flex items-center gap-1 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px]">
+                                                {Number(player.goalCount || 0) >
+                                                0 ? (
+                                                  <span className="inline-flex items-center gap-0.5 text-emerald-300">
+                                                    <CircleDot
+                                                      size={9}
+                                                      strokeWidth={2.1}
+                                                    />
+                                                    <span>
+                                                      {player.goalCount}
+                                                    </span>
+                                                  </span>
+                                                ) : null}
+                                                {Number(
+                                                  player.ownGoalCount || 0,
+                                                ) > 0 ? (
+                                                  <span className="inline-flex items-center gap-0.5 text-red-300">
+                                                    <CircleDot
+                                                      size={9}
+                                                      strokeWidth={2.1}
+                                                    />
+                                                    <span>
+                                                      {player.ownGoalCount}
+                                                    </span>
+                                                  </span>
+                                                ) : null}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted">
+                                    No bench data.
+                                  </span>
+                                )}
+                              </div>
+                              {block.lineup.unavailable.length ? (
+                                <div className="space-y-2">
+                                  <div className="font-display text-[11px] uppercase tracking-wide text-muted">
+                                    Unavailable
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {block.lineup.unavailable.map((player) => (
+                                      <span
+                                        key={`${block.side}-out-${player.id ?? player.name}`}
+                                        className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-black/16 px-2 py-1"
+                                      >
+                                        <span className="font-display text-[10px] text-foreground">
+                                          {player.name}
+                                        </span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            {!matchInfoLoading &&
+              !matchInfoError &&
+              currentMatchInfo &&
+              matchInfoTab === "stats" && (
+                <div className="space-y-2">
+                  {currentMatchInfo.stats.length ? (
+                    currentMatchInfo.stats.map((row) => (
+                      <div
+                        key={`stat-${row.label}`}
+                        className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]"
+                      >
+                        <span
+                          className={[
+                            "font-display text-sm text-left tabular-nums",
+                            row.highlighted === "home"
+                              ? "text-foreground"
+                              : "text-muted",
+                          ].join(" ")}
+                        >
+                          {row.home}
+                        </span>
+                        <span className="text-[11px] text-muted text-center leading-tight">
+                          {row.label}
+                        </span>
+                        <span
+                          className={[
+                            "font-display text-sm text-right tabular-nums",
+                            row.highlighted === "away"
+                              ? "text-foreground"
+                              : "text-muted",
+                          ].join(" ")}
+                        >
+                          {row.away}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
+                      No live match stats found.
+                    </div>
+                  )}
+                </div>
+              )}
+            {!matchInfoLoading &&
+              !matchInfoError &&
+              currentMatchInfo &&
+              matchInfoTab === "h2h" && (
+                <div className="space-y-2">
+                  {currentMatchInfo.headToHead.length ? (
+                    currentMatchInfo.headToHead.map((m) => (
+                      <div
+                        key={`h2h-${m.id ?? m.utcDate}`}
+                        className="rounded-[20px] border border-white/8 bg-black/24 p-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]"
+                      >
+                        <div className="grid grid-cols-[84px_minmax(0,1fr)_40px] items-center gap-2 text-xs">
+                          <span className="font-display text-muted whitespace-nowrap">
+                            {(() => {
+                              const d = formatDateWithOrdinal(m.utcDate);
+                              return (
+                                <>
+                                  {d.dayNum}
+                                  <sup className="text-[9px] ml-[1px]">
+                                    {d.suffix}
+                                  </sup>{" "}
+                                  {d.monthYear}
+                                </>
+                              );
+                            })()}
+                          </span>
+                          <span className="font-display text-sm text-foreground inline-flex min-w-0 items-center justify-center gap-1.5">
+                            <span className="inline-flex w-[3.4ch] justify-end">
+                              {h2hTeamLabel({
+                                name: m.homeTeam.name,
+                                tla: m.homeTeam.tla,
+                              })}
+                            </span>
+                            <span className="inline-flex min-w-[3.2ch] justify-center tabular-nums text-foreground">
+                              {fmtScore(m.result)}
+                            </span>
+                            <span className="inline-flex w-[3.4ch] justify-start">
+                              {h2hTeamLabel({
+                                name: m.awayTeam.name,
+                                tla: m.awayTeam.tla,
+                              })}
+                            </span>
+                          </span>
+                          <span className="inline-flex h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 items-center justify-center px-1 justify-self-end">
+                            <span className="font-display text-[9px] text-muted leading-none">
+                              {competitionAbbr(
+                                m.competition?.name,
+                                m.competition?.code,
+                              )}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
+                      No head-to-head data found.
+                    </div>
+                  )}
+                  <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
+                    <div className="font-display text-[11px] text-muted text-center mb-2">
+                      Last 5 H2H
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-2 text-center">
+                      <div className="font-display text-xs text-muted">
+                        {teamAbbr({
+                          name: selectedMatchFixture?.home?.name || "Team 1",
+                          tla: selectedMatchFixture?.home?.tla || null,
+                          shortName:
+                            selectedMatchFixture?.home?.shortName || null,
+                        })}
+                      </div>
+                      <div className="font-display text-xs text-muted">
+                        Draws
+                      </div>
+                      <div className="font-display text-xs text-muted">
+                        {teamAbbr({
+                          name: selectedMatchFixture?.away?.name || "Team 2",
+                          tla: selectedMatchFixture?.away?.tla || null,
+                          shortName:
+                            selectedMatchFixture?.away?.shortName || null,
+                        })}
+                      </div>
+                      <div className="font-display text-lg font-semibold text-foreground tabular-nums">
+                        {h2hSummary.homeWins}
+                      </div>
+                      <div className="font-display text-lg font-semibold text-foreground tabular-nums">
+                        {h2hSummary.draws}
+                      </div>
+                      <div className="font-display text-lg font-semibold text-foreground tabular-nums">
+                        {h2hSummary.awayWins}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {!matchInfoLoading &&
+              !matchInfoError &&
+              currentMatchInfo &&
+              matchInfoTab === "form" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[
                     {
                       side: "home" as const,
-                      lineup: currentMatchInfo.lineups.home,
+                      label: selectedMatchFixture?.home?.name || "Home",
+                      list: currentMatchInfo.form.home,
                       badge: selectedMatchFixture?.home?.badge || null,
                       tla: selectedMatchFixture?.home?.tla || null,
                     },
                     {
                       side: "away" as const,
-                      lineup: currentMatchInfo.lineups.away,
+                      label: selectedMatchFixture?.away?.name || "Away",
+                      list: currentMatchInfo.form.away,
                       badge: selectedMatchFixture?.away?.badge || null,
                       tla: selectedMatchFixture?.away?.tla || null,
                     },
-                  ];
-                  const lineupBlocksWithRows = lineupBlocks.map((block) => ({
-                    ...block,
-                    starterRows: buildFormationRows(block.lineup.starters, block.lineup.formation),
-                  }));
-                  const motmRating = showLiveRatings
-                    ? lineupBlocks
-                        .flatMap((block) => [...block.lineup.starters, ...block.lineup.subs])
-                        .reduce<number | null>((best, player) => {
-                          const rating = Number(player.rating);
-                          if (!Number.isFinite(rating)) return best;
-                          return best == null || rating > best ? rating : best;
-                        }, null)
-                    : null;
-                  return (
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.55)] bg-[color:rgba(var(--room-accent-rgb),0.08)] px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                          {lineupHeading}
+                  ].map((block) => (
+                    <div
+                      key={block.side}
+                      className="rounded-[20px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-display text-sm font-semibold text-foreground">
+                          {block.label}
                         </div>
-                        <div className="font-display text-[11px] uppercase tracking-wide text-muted">
-                          {startingXiHeading}
+                        <div className="h-7 w-7 rounded-xl border border-white/8 bg-black/14 flex items-center justify-center overflow-hidden shrink-0">
+                          {block.badge ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={block.badge}
+                              alt={block.label}
+                              className="h-5 w-5 object-contain"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="font-display text-[9px] font-bold text-foreground">
+                              {teamAbbr({
+                                name: block.label,
+                                tla: block.tla,
+                                shortName: block.label,
+                              })}
+                            </span>
+                          )}
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        {lineupBlocksWithRows.map((block) => (
+                      {block.list.length ? (
+                        block.list.map((m) => (
                           <div
-                            key={`lineup-head-${block.side}`}
-                            className="rounded-[22px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
+                            key={`${block.side}-${m.id ?? m.utcDate}`}
+                            className="grid grid-cols-[minmax(0,1fr)_56px] sm:grid-cols-[84px_minmax(0,1fr)_56px] items-center gap-x-2 gap-y-1.5 text-xs"
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-                                  {teamAbbr({
-                                    name: block.lineup.name,
-                                    tla: block.tla,
-                                    shortName: block.lineup.name,
-                                  })}{" "}
-                                  - {block.side === "home" ? "Home" : "Away"}
-                                </div>
-                                <div className="font-display text-sm font-semibold text-foreground">
-                                  {block.lineup.formation || "TBD"}
-                                </div>
-                                <div className="text-[11px] text-muted truncate">
-                                  {block.lineup.coach || "Manager TBD"}
-                                </div>
-                              </div>
-                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-black/16">
-                                {block.badge ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={block.badge}
-                                    alt={block.lineup.name}
-                                    className="h-9 w-9 object-contain"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <span className="font-display text-xs font-bold text-foreground">
-                                    {teamAbbr({
-                                      name: block.lineup.name,
-                                      tla: block.tla,
-                                      shortName: block.lineup.name,
+                            <span className="col-span-full sm:col-span-1 font-display text-muted whitespace-nowrap text-left">
+                              {(() => {
+                                const d = formatDateWithOrdinal(m.utcDate);
+                                return (
+                                  <>
+                                    {d.dayNum}
+                                    <sup className="text-[9px] ml-[1px]">
+                                      {d.suffix}
+                                    </sup>{" "}
+                                    {d.monthYear}
+                                  </>
+                                );
+                              })()}
+                            </span>
+                            <span className="min-w-0 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-foreground">
+                              <span className="min-w-0 flex items-center justify-end gap-1.5 text-right">
+                                <div className="min-w-0">
+                                  <div className="font-display text-[10px] font-semibold text-foreground truncate">
+                                    {formTeamLabel({
+                                      name: m.homeTeam.name,
+                                      tla: m.homeTeam.tla,
+                                      shortName: m.homeTeam.shortName,
                                     })}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {lineupBlocksWithRows.every((block) => block.lineup.starters.length === 0) ? (
-                        <div className="rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 text-xs text-muted">
-                          {emptyLineupLabel}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="sm:hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.024)_0%,rgba(8,12,22,0.96)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
-                            <div className="relative h-[960px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
-                              <div className="absolute inset-x-1.5 top-1.5 h-[calc(50%-8px)] rounded-t-xl border border-white/8 border-b-0" />
-                              <div className="absolute inset-x-1.5 bottom-1.5 h-[calc(50%-8px)] rounded-b-xl border border-white/8 border-t-0" />
-                              <div className="absolute left-1.5 right-1.5 top-1/2 h-px -translate-y-1/2 bg-white/8" />
-                              <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
-                              <div className="absolute left-1/2 top-1.5 h-10 w-[36%] -translate-x-1/2 rounded-b-xl border border-white/8 border-t-0" />
-                              <div className="absolute left-1/2 bottom-1.5 h-10 w-[36%] -translate-x-1/2 rounded-t-xl border border-white/8 border-b-0" />
-                              <div className="absolute inset-x-2.5 top-4 bottom-[calc(50%+28px)] flex flex-col justify-evenly">
-                                {lineupBlocksWithRows
-                                  .filter((block) => block.side === "home")
-                                  .map((block) => (
-                                    <div
-                                      key={`mobile-home-rows-${block.side}`}
-                                      className={[
-                                        "grid h-full gap-1",
-                                        formationGridClasses(block.starterRows.length),
-                                      ].join(" ")}
-                                    >
-                                      {block.starterRows.map((row, rowIdx) => (
-                                        <div
-                                          key={`mobile-home-row-${rowIdx}`}
-                                          className="flex items-center justify-evenly gap-1"
-                                        >
-                                          {row.map((player) => (
-                                            <div
-                                              key={`mobile-home-player-${player.id ?? player.name}`}
-                                              className="transition-transform duration-200 ease-out"
-                                              style={{
-                                                transform: `translateY(${formationFanOffsetPx(row, row.indexOf(player), block.side, "y")}px)`,
-                                              }}
-                                            >
-                                              <PitchMarker
-                                                player={player}
-                                                showLiveRatings={showLiveRatings}
-                                                isManOfTheMatch={
-                                                  motmRating != null &&
-                                                  Number.isFinite(Number(player.rating)) &&
-                                                  Number(player.rating) === motmRating
-                                                }
-                                                crowded={row.length >= 5}
-                                                size="mobile"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                              </div>
-                              <div className="absolute inset-x-2.5 top-[calc(50%+28px)] bottom-4 flex flex-col justify-evenly">
-                                {lineupBlocksWithRows
-                                  .filter((block) => block.side === "away")
-                                  .map((block) => (
-                                    <div
-                                      key={`mobile-away-rows-${block.side}`}
-                                      className={[
-                                        "grid h-full gap-1",
-                                        formationGridClasses(block.starterRows.length),
-                                      ].join(" ")}
-                                    >
-                                      {[...block.starterRows].reverse().map((row, rowIdx) => (
-                                        <div
-                                          key={`mobile-away-row-${rowIdx}`}
-                                          className="flex items-center justify-evenly gap-1"
-                                        >
-                                          {[...row].reverse().map((player, playerIdx) => (
-                                            <div
-                                              key={`mobile-away-player-${player.id ?? player.name}`}
-                                              className="transition-transform duration-200 ease-out"
-                                              style={{
-                                                transform: `translateY(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "y")}px)`,
-                                              }}
-                                            >
-                                              <PitchMarker
-                                                player={player}
-                                                showLiveRatings={showLiveRatings}
-                                                isManOfTheMatch={
-                                                  motmRating != null &&
-                                                  Number.isFinite(Number(player.rating)) &&
-                                                  Number(player.rating) === motmRating
-                                                }
-                                                crowded={row.length >= 5}
-                                                size="mobile"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="hidden sm:block rounded-[24px] border border-white/8 bg-[linear-gradient(90deg,rgba(255,255,255,0.022)_0%,rgba(12,18,30,0.96)_24%,rgba(12,18,30,0.96)_76%,rgba(255,255,255,0.022)_100%)] p-1 shadow-[0_14px_32px_rgba(3,8,20,0.2)]">
-                            <div className="relative h-[620px] overflow-hidden rounded-xl border border-white/8 bg-[radial-gradient(circle_at_center,rgba(var(--room-accent-rgb),0.08)_0%,rgba(8,12,22,0.96)_62%)]">
-                              <div className="absolute inset-y-1.5 left-1.5 w-[calc(50%-8px)] rounded-l-xl border border-white/8 border-r-0" />
-                              <div className="absolute inset-y-1.5 right-1.5 w-[calc(50%-8px)] rounded-r-xl border border-white/8 border-l-0" />
-                              <div className="absolute top-1.5 bottom-1.5 left-1/2 w-px -translate-x-1/2 bg-white/8" />
-                              <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/8" />
-                              <div className="absolute left-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-r-xl border border-white/8 border-l-0" />
-                              <div className="absolute right-1.5 top-1/2 h-[36%] w-10 -translate-y-1/2 rounded-l-xl border border-white/8 border-r-0" />
-                              <div className="absolute inset-y-3 left-3 right-[calc(50%+14px)]">
-                                {lineupBlocksWithRows
-                                  .filter((block) => block.side === "home")
-                                  .map((block) => (
-                                    <div
-                                      key={`desktop-home-rows-${block.side}`}
-                                      className="grid h-full gap-2"
-                                      style={{
-                                        gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
-                                      }}
-                                    >
-                                      {block.starterRows.map((row, rowIdx) => (
-                                        <div
-                                          key={`desktop-home-row-${rowIdx}`}
-                                          className="flex h-full flex-col items-center justify-evenly gap-2"
-                                        >
-                                          {row.map((player) => (
-                                            <div
-                                              key={`desktop-home-player-${player.id ?? player.name}`}
-                                              className="transition-transform duration-200 ease-out"
-                                              style={{
-                                                transform: `translateX(${formationFanOffsetPx(row, row.indexOf(player), block.side, "x")}px)`,
-                                              }}
-                                            >
-                                              <PitchMarker
-                                                player={player}
-                                                showLiveRatings={showLiveRatings}
-                                                isManOfTheMatch={
-                                                  motmRating != null &&
-                                                  Number.isFinite(Number(player.rating)) &&
-                                                  Number(player.rating) === motmRating
-                                                }
-                                                size="desktop"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                              </div>
-                              <div className="absolute inset-y-3 left-[calc(50%+14px)] right-3">
-                                {lineupBlocksWithRows
-                                  .filter((block) => block.side === "away")
-                                  .map((block) => (
-                                    <div
-                                      key={`desktop-away-rows-${block.side}`}
-                                      className="grid h-full gap-2"
-                                      style={{
-                                        gridTemplateColumns: `repeat(${Math.max(1, block.starterRows.length)}, minmax(0, 1fr))`,
-                                      }}
-                                    >
-                                      {[...block.starterRows].reverse().map((row, rowIdx) => (
-                                        <div
-                                          key={`desktop-away-row-${rowIdx}`}
-                                          className="flex h-full flex-col items-center justify-evenly gap-2"
-                                        >
-                                          {[...row].reverse().map((player, playerIdx) => (
-                                            <div
-                                              key={`desktop-away-player-${player.id ?? player.name}`}
-                                              className="transition-transform duration-200 ease-out"
-                                              style={{
-                                                transform: `translateX(${formationFanOffsetPx(row, row.length - 1 - playerIdx, block.side, "x")}px)`,
-                                              }}
-                                            >
-                                              <PitchMarker
-                                                player={player}
-                                                showLiveRatings={showLiveRatings}
-                                                isManOfTheMatch={
-                                                  motmRating != null &&
-                                                  Number.isFinite(Number(player.rating)) &&
-                                                  Number(player.rating) === motmRating
-                                                }
-                                                size="desktop"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {lineupBlocksWithRows.map((block) => (
-                          <div
-                            key={`bench-${block.side}`}
-                            className="rounded-[22px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_12px_28px_rgba(3,8,20,0.16)]"
-                          >
-                            <div className="font-display text-[11px] uppercase tracking-wide text-muted">
-                              {block.side === "home" ? "Home Bench" : "Away Bench"}
-                            </div>
-                            <div className="space-y-2">
-                              {block.lineup.subs.length ? (
-                                block.lineup.subs.map((player) => (
-                                  <div
-                                    key={`${block.side}-sub-${player.id ?? player.name}`}
-                                    className="rounded-[18px] border border-white/8 bg-black/16 px-2.5 py-2"
-                                  >
-                                    <div className="flex items-start gap-2">
-                                      <div className="h-9 w-9 rounded-lg border border-white/8 bg-white/[0.03] flex items-center justify-center overflow-hidden shrink-0">
-                                        {player.photo ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img
-                                            src={player.photo}
-                                            alt={player.name}
-                                            className="h-full w-full object-cover"
-                                            loading="lazy"
-                                          />
-                                        ) : (
-                                          <span className="font-display text-[10px] font-semibold text-foreground tabular-nums">
-                                            {player.shirtNumber || "—"}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="min-w-0 flex-1 space-y-1">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="min-w-0">
-                                            <div className="font-display text-xs text-foreground truncate">
-                                              {player.name}
-                                            </div>
-                                            <div className="font-display text-[10px] text-muted">
-                                              {showLiveRatings
-                                                ? substitutionSummary(player) || "Unused sub"
-                                                : player.positionLabel || "Bench"}
-                                            </div>
-                                          </div>
-                                          <span
-                                            className={[
-                                              "inline-flex min-w-[48px] items-center justify-center rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
-                                              motmRating != null &&
-                                              Number.isFinite(Number(player.rating)) &&
-                                              Number(player.rating) === motmRating &&
-                                              showLiveRatings
-                                                ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
-                                                : "border-subtle bg-surface-2 text-foreground",
-                                            ].join(" ")}
-                                          >
-                                            <span className="relative inline-flex items-center justify-center overflow-visible">
-                                              {playerMetaValue(player, showLiveRatings)}
-                                              {motmRating != null &&
-                                              Number.isFinite(Number(player.rating)) &&
-                                              Number(player.rating) === motmRating &&
-                                              showLiveRatings ? (
-                                                <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
-                                                  <Crown size={9} strokeWidth={2.2} />
-                                                </span>
-                                              ) : null}
-                                            </span>
-                                          </span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          {Number(player.assistCount || 0) > 0 ? (
-                                            <span className="inline-flex items-center gap-0.5 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px] text-sky-300">
-                                              <Footprints size={9} strokeWidth={2.1} />
-                                              <span>{player.assistCount}</span>
-                                            </span>
-                                          ) : null}
-                                          {Number(player.goalCount || 0) > 0 ||
-                                          Number(player.ownGoalCount || 0) > 0 ? (
-                                            <span className="inline-flex items-center gap-1 rounded-full border border-subtle px-1.5 py-0.5 font-display text-[9px]">
-                                              {Number(player.goalCount || 0) > 0 ? (
-                                                <span className="inline-flex items-center gap-0.5 text-emerald-300">
-                                                  <CircleDot size={9} strokeWidth={2.1} />
-                                                  <span>{player.goalCount}</span>
-                                                </span>
-                                              ) : null}
-                                              {Number(player.ownGoalCount || 0) > 0 ? (
-                                                <span className="inline-flex items-center gap-0.5 text-red-300">
-                                                  <CircleDot size={9} strokeWidth={2.1} />
-                                                  <span>{player.ownGoalCount}</span>
-                                                </span>
-                                              ) : null}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    </div>
                                   </div>
-                                ))
-                              ) : (
-                                <span className="text-xs text-muted">No bench data.</span>
-                              )}
-                            </div>
-                            {block.lineup.unavailable.length ? (
-                              <div className="space-y-2">
-                                <div className="font-display text-[11px] uppercase tracking-wide text-muted">
-                                  Unavailable
+                                  <div className="text-[9px] text-muted truncate">
+                                    {m.homeTeam.name}
+                                  </div>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {block.lineup.unavailable.map((player) => (
-                                    <span
-                                      key={`${block.side}-out-${player.id ?? player.name}`}
-                                      className="inline-flex items-center gap-1 rounded-full border border-white/8 bg-black/16 px-2 py-1"
-                                    >
-                                      <span className="font-display text-[10px] text-foreground">
-                                        {player.name}
-                                      </span>
+                                <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
+                                  {m.homeTeam.badge ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={m.homeTeam.badge}
+                                      alt={m.homeTeam.name}
+                                      className="h-4 w-4 object-contain"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span className="font-display text-[8px] font-bold text-foreground">
+                                      {formTeamLabel({
+                                        name: m.homeTeam.name,
+                                        tla: m.homeTeam.tla,
+                                        shortName: m.homeTeam.shortName,
+                                      })}
                                     </span>
-                                  ))}
+                                  )}
+                                </span>
+                              </span>
+                              <span className="inline-flex min-w-[3.2ch] justify-center font-display tabular-nums text-foreground">
+                                {fmtScore(m.result)}
+                              </span>
+                              <span className="min-w-0 flex items-center justify-start gap-1.5 text-left">
+                                <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
+                                  {m.awayTeam.badge ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={m.awayTeam.badge}
+                                      alt={m.awayTeam.name}
+                                      className="h-4 w-4 object-contain"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <span className="font-display text-[8px] font-bold text-foreground">
+                                      {formTeamLabel({
+                                        name: m.awayTeam.name,
+                                        tla: m.awayTeam.tla,
+                                        shortName: m.awayTeam.shortName,
+                                      })}
+                                    </span>
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="font-display text-[10px] font-semibold text-foreground truncate">
+                                    {formTeamLabel({
+                                      name: m.awayTeam.name,
+                                      tla: m.awayTeam.tla,
+                                      shortName: m.awayTeam.shortName,
+                                    })}
+                                  </div>
+                                  <div className="text-[9px] text-muted truncate">
+                                    {m.awayTeam.name}
+                                  </div>
                                 </div>
-                              </div>
-                            ) : null}
+                              </span>
+                            </span>
+                            <span className="inline-flex items-center justify-end gap-1.5 justify-self-end">
+                              <span className="h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 inline-flex items-center justify-center px-1 shrink-0">
+                                <span className="font-display text-[9px] text-muted leading-none">
+                                  {competitionAbbr(
+                                    m.competition?.name,
+                                    m.competition?.code,
+                                  )}
+                                </span>
+                              </span>
+                              <span
+                                className={[
+                                  "inline-flex h-5 w-5 items-center justify-center rounded-full font-display text-[10px] font-semibold",
+                                  m.form === "W"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/60"
+                                    : m.form === "L"
+                                      ? "bg-rose-500/20 text-rose-300 border border-rose-400/60"
+                                      : "bg-surface border border-subtle text-muted",
+                                ].join(" ")}
+                              >
+                                {m.form || "—"}
+                              </span>
+                            </span>
                           </div>
-                        ))}
-                      </div>
+                        ))
+                      ) : (
+                        <div className="text-xs text-muted">
+                          No recent form data.
+                        </div>
+                      )}
                     </div>
-                  );
-                })()}
-              </div>
-            )}
-            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "stats" && (
-              <div className="space-y-2">
-                {currentMatchInfo.stats.length ? currentMatchInfo.stats.map((row) => (
-                  <div
-                    key={`stat-${row.label}`}
-                    className="grid grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-2 rounded-[18px] border border-white/8 bg-black/24 px-3 py-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]"
-                  >
-                    <span
-                      className={[
-                        "font-display text-sm text-left tabular-nums",
-                        row.highlighted === "home" ? "text-foreground" : "text-muted",
-                      ].join(" ")}
-                    >
-                      {row.home}
-                    </span>
-                    <span className="text-[11px] text-muted text-center leading-tight">
-                      {row.label}
-                    </span>
-                    <span
-                      className={[
-                        "font-display text-sm text-right tabular-nums",
-                        row.highlighted === "away" ? "text-foreground" : "text-muted",
-                      ].join(" ")}
-                    >
-                      {row.away}
-                    </span>
-                  </div>
-                )) : (
-                  <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
-                    No live match stats found.
-                  </div>
-                )}
-              </div>
-            )}
-            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "h2h" && (
-              <div className="space-y-2">
-                {currentMatchInfo.headToHead.length ? currentMatchInfo.headToHead.map((m) => (
-                  <div key={`h2h-${m.id ?? m.utcDate}`} className="rounded-[20px] border border-white/8 bg-black/24 p-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
-                    <div className="grid grid-cols-[84px_minmax(0,1fr)_40px] items-center gap-2 text-xs">
-                      <span className="font-display text-muted whitespace-nowrap">
-                        {(() => {
-                          const d = formatDateWithOrdinal(m.utcDate);
-                          return (
-                            <>
-                              {d.dayNum}
-                              <sup className="text-[9px] ml-[1px]">{d.suffix}</sup> {d.monthYear}
-                            </>
-                          );
-                        })()}
-                      </span>
-                        <span className="font-display text-sm text-foreground inline-flex min-w-0 items-center justify-center gap-1.5">
-                          <span className="inline-flex w-[3.4ch] justify-end">
-                          {h2hTeamLabel({
-                            name: m.homeTeam.name,
-                            tla: m.homeTeam.tla,
-                          })}
-                          </span>
-                          <span className="inline-flex min-w-[3.2ch] justify-center tabular-nums text-foreground">
-                            {fmtScore(m.result)}
-                          </span>
-                          <span className="inline-flex w-[3.4ch] justify-start">
-                          {h2hTeamLabel({
-                            name: m.awayTeam.name,
-                            tla: m.awayTeam.tla,
-                          })}
-                          </span>
-                        </span>
-                      <span className="inline-flex h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 items-center justify-center px-1 justify-self-end">
-                        <span className="font-display text-[9px] text-muted leading-none">
-                          {competitionAbbr(m.competition?.name, m.competition?.code)}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 text-sm text-muted">
-                    No head-to-head data found.
-                  </div>
-                )}
-                <div className="rounded-[20px] border border-white/8 bg-black/24 p-4 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
-                  <div className="font-display text-[11px] text-muted text-center mb-2">
-                    Last 5 H2H
-                  </div>
-                  <div className="grid grid-cols-3 items-center gap-2 text-center">
-                    <div className="font-display text-xs text-muted">
-                      {teamAbbr({
-                        name: selectedMatchFixture?.home?.name || "Team 1",
-                        tla: selectedMatchFixture?.home?.tla || null,
-                        shortName: selectedMatchFixture?.home?.shortName || null,
-                      })}
-                    </div>
-                    <div className="font-display text-xs text-muted">Draws</div>
-                    <div className="font-display text-xs text-muted">
-                      {teamAbbr({
-                        name: selectedMatchFixture?.away?.name || "Team 2",
-                        tla: selectedMatchFixture?.away?.tla || null,
-                        shortName: selectedMatchFixture?.away?.shortName || null,
-                      })}
-                    </div>
-                    <div className="font-display text-lg font-semibold text-foreground tabular-nums">
-                      {h2hSummary.homeWins}
-                    </div>
-                    <div className="font-display text-lg font-semibold text-foreground tabular-nums">
-                      {h2hSummary.draws}
-                    </div>
-                    <div className="font-display text-lg font-semibold text-foreground tabular-nums">
-                      {h2hSummary.awayWins}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            )}
-
-            {!matchInfoLoading && !matchInfoError && currentMatchInfo && matchInfoTab === "form" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {([
-                  {
-                    side: "home" as const,
-                    label: selectedMatchFixture?.home?.name || "Home",
-                    list: currentMatchInfo.form.home,
-                    badge: selectedMatchFixture?.home?.badge || null,
-                    tla: selectedMatchFixture?.home?.tla || null,
-                  },
-                  {
-                    side: "away" as const,
-                    label: selectedMatchFixture?.away?.name || "Away",
-                    list: currentMatchInfo.form.away,
-                    badge: selectedMatchFixture?.away?.badge || null,
-                    tla: selectedMatchFixture?.away?.tla || null,
-                  },
-                ]).map((block) => (
-                  <div key={block.side} className="rounded-[20px] border border-white/8 bg-black/24 p-3 space-y-3 shadow-[0_10px_22px_rgba(3,8,20,0.14)]">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-display text-sm font-semibold text-foreground">{block.label}</div>
-                      <div className="h-7 w-7 rounded-xl border border-white/8 bg-black/14 flex items-center justify-center overflow-hidden shrink-0">
-                        {block.badge ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={block.badge}
-                            alt={block.label}
-                            className="h-5 w-5 object-contain"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <span className="font-display text-[9px] font-bold text-foreground">
-                            {teamAbbr({ name: block.label, tla: block.tla, shortName: block.label })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {block.list.length ? block.list.map((m) => (
-                      <div
-                        key={`${block.side}-${m.id ?? m.utcDate}`}
-                        className="grid grid-cols-[minmax(0,1fr)_56px] sm:grid-cols-[84px_minmax(0,1fr)_56px] items-center gap-x-2 gap-y-1.5 text-xs"
-                      >
-                        <span className="col-span-full sm:col-span-1 font-display text-muted whitespace-nowrap text-left">
-                          {(() => {
-                            const d = formatDateWithOrdinal(m.utcDate);
-                            return (
-                              <>
-                                {d.dayNum}
-                                <sup className="text-[9px] ml-[1px]">{d.suffix}</sup> {d.monthYear}
-                              </>
-                            );
-                          })()}
-                        </span>
-                        <span className="min-w-0 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-foreground">
-                          <span className="min-w-0 flex items-center justify-end gap-1.5 text-right">
-                            <div className="min-w-0">
-                              <div className="font-display text-[10px] font-semibold text-foreground truncate">
-                                {formTeamLabel({
-                                  name: m.homeTeam.name,
-                                  tla: m.homeTeam.tla,
-                                  shortName: m.homeTeam.shortName,
-                                })}
-                              </div>
-                              <div className="text-[9px] text-muted truncate">
-                                {m.homeTeam.name}
-                              </div>
-                            </div>
-                            <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
-                              {m.homeTeam.badge ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={m.homeTeam.badge}
-                                  alt={m.homeTeam.name}
-                                  className="h-4 w-4 object-contain"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <span className="font-display text-[8px] font-bold text-foreground">
-                                  {formTeamLabel({
-                                    name: m.homeTeam.name,
-                                    tla: m.homeTeam.tla,
-                                    shortName: m.homeTeam.shortName,
-                                  })}
-                                </span>
-                              )}
-                            </span>
-                          </span>
-                          <span className="inline-flex min-w-[3.2ch] justify-center font-display tabular-nums text-foreground">
-                            {fmtScore(m.result)}
-                          </span>
-                          <span className="min-w-0 flex items-center justify-start gap-1.5 text-left">
-                            <span className="h-5 w-5 rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-white/8 bg-black/14">
-                              {m.awayTeam.badge ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={m.awayTeam.badge}
-                                  alt={m.awayTeam.name}
-                                  className="h-4 w-4 object-contain"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <span className="font-display text-[8px] font-bold text-foreground">
-                                  {formTeamLabel({
-                                    name: m.awayTeam.name,
-                                    tla: m.awayTeam.tla,
-                                    shortName: m.awayTeam.shortName,
-                                  })}
-                                </span>
-                              )}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="font-display text-[10px] font-semibold text-foreground truncate">
-                                {formTeamLabel({
-                                  name: m.awayTeam.name,
-                                  tla: m.awayTeam.tla,
-                                  shortName: m.awayTeam.shortName,
-                                })}
-                              </div>
-                              <div className="text-[9px] text-muted truncate">
-                                {m.awayTeam.name}
-                              </div>
-                            </div>
-                          </span>
-                        </span>
-                        <span className="inline-flex items-center justify-end gap-1.5 justify-self-end">
-                          <span className="h-5 min-w-[30px] rounded-full border border-white/8 bg-black/16 inline-flex items-center justify-center px-1 shrink-0">
-                            <span className="font-display text-[9px] text-muted leading-none">
-                              {competitionAbbr(m.competition?.name, m.competition?.code)}
-                            </span>
-                          </span>
-                          <span
-                            className={[
-                              "inline-flex h-5 w-5 items-center justify-center rounded-full font-display text-[10px] font-semibold",
-                              m.form === "W"
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/60"
-                                : m.form === "L"
-                                  ? "bg-rose-500/20 text-rose-300 border border-rose-400/60"
-                                  : "bg-surface border border-subtle text-muted",
-                            ].join(" ")}
-                          >
-                            {m.form || "—"}
-                          </span>
-                        </span>
-                      </div>
-                    )) : (
-                      <div className="text-xs text-muted">No recent form data.</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+              )}
           </div>
         </div>
       </AnimatedModal>
@@ -3100,180 +3482,210 @@ export default function FixturesPage() {
         overlayClassName="bg-black/50 backdrop-blur-sm"
         panelClassName="w-full max-w-2xl max-h-[95vh] overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
-            <div className="flex items-center justify-between p-4">
-              <div className="font-display text-lg font-semibold text-foreground">
-                PL Table • {seasonLabel(seasonKey || "----")}
-              </div>
-              <ModalExitButton
-                onClick={() => setTableOpen(false)}
-                ariaLabel="Exit table"
-                className={`border-white/10 ${BTN_3D}`}
-              />
+        <div className="flex items-center justify-between p-4">
+          <div className="font-display text-lg font-semibold text-foreground">
+            PL Table • {seasonLabel(seasonKey || "----")}
+          </div>
+          <ModalExitButton
+            onClick={() => setTableOpen(false)}
+            ariaLabel="Exit table"
+            className={`border-white/10 ${BTN_3D}`}
+          />
+        </div>
+        <div className="max-h-[calc(95vh-176px)] flex flex-col">
+          {tableLoading ? (
+            <div className="p-4 text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading table…</span>
             </div>
-            <div className="max-h-[calc(95vh-176px)] flex flex-col">
-              {tableLoading ? (
-                <div className="p-4 text-sm text-muted inline-flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Loading table…</span>
+          ) : tableError ? (
+            <div className="p-4 text-sm text-danger">{tableError}</div>
+          ) : (tableRowsByMode[tableMode] ?? []).length === 0 ? (
+            <div className="p-4 text-sm text-muted">
+              No table data available.
+            </div>
+          ) : (
+            <>
+              <div className="px-4 pb-1 bg-surface-2 shadow-[0_6px_14px_rgba(0,0,0,0.12)]">
+                <div className="mb-2">
+                  <SliderSwitch
+                    options={TABLE_MODE_OPTIONS.map((opt) => ({
+                      value: opt.key,
+                      label: opt.label,
+                    }))}
+                    value={tableMode}
+                    onChange={selectTableMode}
+                    className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                  />
                 </div>
-              ) : tableError ? (
-                <div className="p-4 text-sm text-danger">{tableError}</div>
-              ) : (tableRowsByMode[tableMode] ?? []).length === 0 ? (
-                <div className="p-4 text-sm text-muted">No table data available.</div>
-              ) : (
-                <>
-                  <div className="px-4 pb-1 bg-surface-2 shadow-[0_6px_14px_rgba(0,0,0,0.12)]">
-                    <div className="mb-2">
-                      <SliderSwitch
-                        options={TABLE_MODE_OPTIONS.map((opt) => ({
-                          value: opt.key,
-                          label: opt.label,
-                        }))}
-                        value={tableMode}
-                        onChange={selectTableMode}
-                        className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-                      />
-                    </div>
-                    <div className="mb-1">
-                      <SliderSwitch
-                        options={[
-                          { value: "SHORT", label: "Short" },
-                          { value: "FULL", label: "Full" },
-                        ]}
-                        value={tableView}
-                        onChange={selectTableView}
-                        className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-                      />
-                    </div>
-                  </div>
-                  <div className="px-4 py-2">
-                    <SpecialBreak />
-                  </div>
-                  <div
-                    className={[
-                      "overflow-auto no-scrollbar min-h-0 px-2 transition-all duration-150 ease-out",
-                      tableAnimatingOut ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0",
-                    ].join(" ")}
-                  >
-                    <table
-                      key={`${tableMode}-${tableView}`}
-                      className="w-full table-fixed text-sm fixture-card-enter"
-                      style={{ animationDuration: "240ms" }}
-                    >
-                      {tableView === "FULL" ? (
-                        <colgroup>
-                          <col style={{ width: "8%" }} />
-                          <col style={{ width: "22%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                          <col style={{ width: "8.75%" }} />
-                        </colgroup>
-                      ) : (
-                        <colgroup>
-                          <col style={{ width: "8%" }} />
-                          <col style={{ width: "52%" }} />
-                          <col style={{ width: "13%" }} />
-                          <col style={{ width: "13%" }} />
-                          <col style={{ width: "14%" }} />
-                        </colgroup>
-                      )}
-                      <thead className="text-muted">
-                        <tr className="border-b border-subtle">
-                          <th className="py-2 px-1 text-left">#</th>
-                          <th className="py-2 px-1 text-left">Club</th>
-                          <th className="py-2 px-0.5 sm:px-1 text-center">P</th>
-                          {tableView === "FULL" && (
-                            <>
-                              <th className="py-2 px-0.5 sm:px-1 text-center">W</th>
-                              <th className="py-2 px-0.5 sm:px-1 text-center">D</th>
-                              <th className="py-2 px-0.5 sm:px-1 text-center">L</th>
-                              <th className="py-2 px-0.5 sm:px-1 text-center">GF</th>
-                              <th className="py-2 px-0.5 sm:px-1 text-center">GA</th>
-                            </>
-                          )}
-                          <th className="py-2 px-1 text-center">GD</th>
-                          <th className="py-2 px-1 text-center">Pts</th>
-                        </tr>
-                      </thead>
-                      <tbody key={`${tableMode}-${tableView}`}>
-                        {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
-                          <tr
-                            key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
-                            className="border-b border-subtle last:border-0 fixture-card-enter"
-                            style={{
-                              animationDelay: `${Math.min(idx, 12) * 35}ms`,
-                              animationDuration: "320ms",
-                            }}
-                          >
-                            <td className="py-2 px-1 text-foreground">{r.position}</td>
-                            <td className="py-2 px-1">
-                              <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-                                  {r.team.badge ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={r.team.badge}
-                                      alt={r.team.name}
-                                      className="h-5 w-5 object-contain"
-                                      loading="lazy"
-                                    />
-                                  ) : (
-                                    <span className="font-display text-[9px] font-bold text-foreground">
-                                      {(r.team.shortName || r.team.name || "FC").slice(0, 3).toUpperCase()}
-                                    </span>
-                                  )}
-                                </div>
-                                <span
-                                  className={[
-                                    "font-display text-foreground font-medium truncate",
-                                    tableView === "FULL" ? "inline text-[10px] sm:text-sm" : "inline",
-                                  ].join(" ")}
-                                >
-                                  {tableView === "FULL"
-                                    ? teamAbbr(r.team)
-                                    : (r.team.shortName || r.team.name)}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.playedGames)}</td>
-                            {tableView === "FULL" && (
-                              <>
-                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.won)}</td>
-                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.draw)}</td>
-                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.lost)}</td>
-                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsScored)}</td>
-                                <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">{toInt(r.goalsAgainst)}</td>
-                              </>
-                            )}
-                            <td className="py-2 px-1 text-center text-foreground">{toInt(r.goalDifference)}</td>
-                            <td className="py-2 px-1 text-center font-semibold text-foreground">{toInt(r.points)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="px-4 py-1 space-y-2">
-              <SpecialBreak />
-              <div className="flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/icons/icon-192.png"
-                alt="PL Predictions"
-                className="h-10 w-10 object-contain opacity-95"
-                loading="lazy"
-              />
+                <div className="mb-1">
+                  <SliderSwitch
+                    options={[
+                      { value: "SHORT", label: "Short" },
+                      { value: "FULL", label: "Full" },
+                    ]}
+                    value={tableView}
+                    onChange={selectTableView}
+                    className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                  />
+                </div>
               </div>
-            </div>
+              <div className="px-4 py-2">
+                <SpecialBreak />
+              </div>
+              <div
+                className={[
+                  "overflow-auto no-scrollbar min-h-0 px-2 transition-all duration-150 ease-out",
+                  tableAnimatingOut
+                    ? "opacity-0 translate-y-1"
+                    : "opacity-100 translate-y-0",
+                ].join(" ")}
+              >
+                <table
+                  key={`${tableMode}-${tableView}`}
+                  className="w-full table-fixed text-sm fixture-card-enter"
+                  style={{ animationDuration: "240ms" }}
+                >
+                  {tableView === "FULL" ? (
+                    <colgroup>
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                      <col style={{ width: "8.75%" }} />
+                    </colgroup>
+                  ) : (
+                    <colgroup>
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "52%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "14%" }} />
+                    </colgroup>
+                  )}
+                  <thead className="text-muted">
+                    <tr className="border-b border-subtle">
+                      <th className="py-2 px-1 text-left">#</th>
+                      <th className="py-2 px-1 text-left">Club</th>
+                      <th className="py-2 px-0.5 sm:px-1 text-center">P</th>
+                      {tableView === "FULL" && (
+                        <>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">W</th>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">D</th>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">L</th>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">
+                            GF
+                          </th>
+                          <th className="py-2 px-0.5 sm:px-1 text-center">
+                            GA
+                          </th>
+                        </>
+                      )}
+                      <th className="py-2 px-1 text-center">GD</th>
+                      <th className="py-2 px-1 text-center">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody key={`${tableMode}-${tableView}`}>
+                    {(tableRowsByMode[tableMode] ?? []).map((r, idx) => (
+                      <tr
+                        key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
+                        className="border-b border-subtle last:border-0 fixture-card-enter"
+                        style={{
+                          animationDelay: `${Math.min(idx, 12) * 35}ms`,
+                          animationDuration: "320ms",
+                        }}
+                      >
+                        <td className="py-2 px-1 text-foreground">
+                          {r.position}
+                        </td>
+                        <td className="py-2 px-1">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-6 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                              {r.team.badge ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={r.team.badge}
+                                  alt={r.team.name}
+                                  className="h-5 w-5 object-contain"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="font-display text-[9px] font-bold text-foreground">
+                                  {(r.team.shortName || r.team.name || "FC")
+                                    .slice(0, 3)
+                                    .toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <span
+                              className={[
+                                "font-display text-foreground font-medium truncate",
+                                tableView === "FULL"
+                                  ? "inline text-[10px] sm:text-sm"
+                                  : "inline",
+                              ].join(" ")}
+                            >
+                              {tableView === "FULL"
+                                ? teamAbbr(r.team)
+                                : r.team.shortName || r.team.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                          {toInt(r.playedGames)}
+                        </td>
+                        {tableView === "FULL" && (
+                          <>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                              {toInt(r.won)}
+                            </td>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                              {toInt(r.draw)}
+                            </td>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                              {toInt(r.lost)}
+                            </td>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                              {toInt(r.goalsScored)}
+                            </td>
+                            <td className="py-2 px-0.5 sm:px-1 text-center text-foreground">
+                              {toInt(r.goalsAgainst)}
+                            </td>
+                          </>
+                        )}
+                        <td className="py-2 px-1 text-center text-foreground">
+                          {toInt(r.goalDifference)}
+                        </td>
+                        <td className="py-2 px-1 text-center font-semibold text-foreground">
+                          {toInt(r.points)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="px-4 py-1 space-y-2">
+          <SpecialBreak />
+          <div className="flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icons/icon-192.png"
+              alt="PL Predictions"
+              className="h-10 w-10 object-contain opacity-95"
+              loading="lazy"
+            />
+          </div>
+        </div>
       </AnimatedModal>
     </PageShell>
   );

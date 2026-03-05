@@ -62,9 +62,7 @@ export async function POST(req: Request) {
     const style: "round_robin" | "sprint" | "captain" =
       room.settings?.gameModeStyle ?? "round_robin";
     const sameResultLock =
-      style === "sprint"
-        ? false
-        : room.settings?.sameResultLock !== false;
+      style === "sprint" ? false : room.settings?.sameResultLock !== false;
     const draftMode: "turn" | "parallel" =
       style === "sprint" || (style === "captain" && !sameResultLock)
         ? "parallel"
@@ -122,7 +120,8 @@ export async function POST(req: Request) {
       firstKickoffAt = loaded.firstKickoffAt;
       lockAt = loaded.lockAt;
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to load fixtures";
+      const message =
+        e instanceof Error ? e.message : "Failed to load fixtures";
       const status =
         message.startsWith("No fixtures") ||
         message.startsWith("No eligible fixtures") ||

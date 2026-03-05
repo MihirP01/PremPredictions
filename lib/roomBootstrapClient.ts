@@ -16,11 +16,16 @@ export type RoomBootstrapData = {
 
 const TTL_MS = 5 * 60 * 1000;
 const STORAGE_PREFIX = "rb:v1:";
-const memCache = new Map<string, { expiresAt: number; data: RoomBootstrapData }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: RoomBootstrapData }
+>();
 const pending = new Map<string, Promise<RoomBootstrapData>>();
 
 function keyFor(roomCode: string) {
-  return String(roomCode || "").trim().toUpperCase();
+  return String(roomCode || "")
+    .trim()
+    .toUpperCase();
 }
 
 function getStorage(key: string): RoomBootstrapData | null {
@@ -28,7 +33,10 @@ function getStorage(key: string): RoomBootstrapData | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: RoomBootstrapData };
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: number;
+      data?: RoomBootstrapData;
+    };
     if (!parsed?.data || !parsed?.expiresAt) return null;
     if (Date.now() > parsed.expiresAt) return null;
     return parsed.data;
@@ -72,7 +80,9 @@ export function patchRoomBootstrapCached(
   return next;
 }
 
-export function peekRoomBootstrapCached(roomCode: string): RoomBootstrapData | null {
+export function peekRoomBootstrapCached(
+  roomCode: string,
+): RoomBootstrapData | null {
   const key = keyFor(roomCode);
   const now = Date.now();
   const mem = memCache.get(key);
@@ -87,7 +97,9 @@ export function peekRoomBootstrapCached(roomCode: string): RoomBootstrapData | n
   return stored;
 }
 
-export async function getRoomBootstrapCached(roomCode: string): Promise<RoomBootstrapData> {
+export async function getRoomBootstrapCached(
+  roomCode: string,
+): Promise<RoomBootstrapData> {
   const key = keyFor(roomCode);
   const cached = peekRoomBootstrapCached(roomCode);
   if (cached) return cached;
@@ -95,9 +107,12 @@ export async function getRoomBootstrapCached(roomCode: string): Promise<RoomBoot
   if (existing) return existing;
 
   const req = (async () => {
-    const res = await fetch(`/api/bootstrap?roomCode=${encodeURIComponent(key)}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `/api/bootstrap?roomCode=${encodeURIComponent(key)}`,
+      {
+        cache: "no-store",
+      },
+    );
     if (!res.ok) throw new Error(`bootstrap ${res.status}`);
     const data = (await res.json()) as RoomBootstrapData;
     setCached(key, data);
@@ -107,11 +122,16 @@ export async function getRoomBootstrapCached(roomCode: string): Promise<RoomBoot
   return req;
 }
 
-export async function refreshRoomBootstrapCached(roomCode: string): Promise<RoomBootstrapData> {
+export async function refreshRoomBootstrapCached(
+  roomCode: string,
+): Promise<RoomBootstrapData> {
   const key = keyFor(roomCode);
-  const res = await fetch(`/api/bootstrap?roomCode=${encodeURIComponent(key)}`, {
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `/api/bootstrap?roomCode=${encodeURIComponent(key)}`,
+    {
+      cache: "no-store",
+    },
+  );
   if (!res.ok) throw new Error(`bootstrap ${res.status}`);
   const data = (await res.json()) as RoomBootstrapData;
   setCached(key, data);

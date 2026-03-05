@@ -41,7 +41,10 @@ function getStorage(key: string): CachedGameData | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: CachedGameData };
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: number;
+      data?: CachedGameData;
+    };
     if (!parsed?.data || !parsed?.expiresAt) return null;
     if (Date.now() > parsed.expiresAt) return null;
     return {
@@ -97,7 +100,14 @@ export async function getGameDataCached(
   if (existing) return existing;
 
   const req = (async () => {
-    const base = ["rooms", normalizedRoom, "seasons", normalizedSeason, "games", `gw-${normalizedGw}`] as const;
+    const base = [
+      "rooms",
+      normalizedRoom,
+      "seasons",
+      normalizedSeason,
+      "games",
+      `gw-${normalizedGw}`,
+    ] as const;
     const [picksSnap, goldenSnap, powerupsSnap] = await Promise.all([
       getDocs(collection(db, ...base, "picks")),
       getDocs(collection(db, ...base, "golden")),
@@ -105,7 +115,11 @@ export async function getGameDataCached(
     ]);
     const picks: CachedPick[] = picksSnap.docs
       .map((d) => {
-        const data = d.data() as { uid?: string; fixtureId?: number; score?: string };
+        const data = d.data() as {
+          uid?: string;
+          fixtureId?: number;
+          score?: string;
+        };
         return {
           uid: String(data.uid || ""),
           fixtureId: Number(data.fixtureId),
@@ -115,7 +129,11 @@ export async function getGameDataCached(
       .filter((p) => !!p.uid && Number.isFinite(p.fixtureId));
     const goldens: CachedGolden[] = goldenSnap.docs
       .map((d) => {
-        const data = d.data() as { fixtureId?: number; score?: string; locked?: boolean };
+        const data = d.data() as {
+          fixtureId?: number;
+          score?: string;
+          locked?: boolean;
+        };
         return {
           uid: d.id,
           fixtureId: Number(data.fixtureId),
@@ -133,9 +151,7 @@ export async function getGameDataCached(
         };
         const rawType = String(data.powerupType || "").toUpperCase();
         const normalizedType =
-          rawType === "ALL_IN" || rawType === "SAFETY_NET"
-            ? rawType
-            : null;
+          rawType === "ALL_IN" || rawType === "SAFETY_NET" ? rawType : null;
         return {
           uid: d.id,
           fixtureId: Number(data.fixtureId),

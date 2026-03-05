@@ -100,9 +100,13 @@ function normalize(payload: unknown): MatchInfoData {
       home: {
         id: Number(p.lineups?.home?.id ?? 0) || null,
         name: String(p.lineups?.home?.name || "Home"),
-        formation: p.lineups?.home?.formation ? String(p.lineups.home.formation) : null,
+        formation: p.lineups?.home?.formation
+          ? String(p.lineups.home.formation)
+          : null,
         coach: p.lineups?.home?.coach ? String(p.lineups.home.coach) : null,
-        starters: Array.isArray(p.lineups?.home?.starters) ? p.lineups!.home.starters : [],
+        starters: Array.isArray(p.lineups?.home?.starters)
+          ? p.lineups!.home.starters
+          : [],
         subs: Array.isArray(p.lineups?.home?.subs) ? p.lineups!.home.subs : [],
         unavailable: Array.isArray(p.lineups?.home?.unavailable)
           ? p.lineups!.home.unavailable
@@ -111,9 +115,13 @@ function normalize(payload: unknown): MatchInfoData {
       away: {
         id: Number(p.lineups?.away?.id ?? 0) || null,
         name: String(p.lineups?.away?.name || "Away"),
-        formation: p.lineups?.away?.formation ? String(p.lineups.away.formation) : null,
+        formation: p.lineups?.away?.formation
+          ? String(p.lineups.away.formation)
+          : null,
         coach: p.lineups?.away?.coach ? String(p.lineups.away.coach) : null,
-        starters: Array.isArray(p.lineups?.away?.starters) ? p.lineups!.away.starters : [],
+        starters: Array.isArray(p.lineups?.away?.starters)
+          ? p.lineups!.away.starters
+          : [],
         subs: Array.isArray(p.lineups?.away?.subs) ? p.lineups!.away.subs : [],
         unavailable: Array.isArray(p.lineups?.away?.unavailable)
           ? p.lineups!.away.unavailable
@@ -163,16 +171,24 @@ function setCached(key: string, data: MatchInfoData) {
   setStorage(key, data);
 }
 
-export async function getMatchInfoCached(
-  args: {
-    fixtureId: number;
-    seasonKey: string;
-    kickoff: string;
-    homeTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
-    awayTeam: { id?: number | null; name: string; tla?: string | null; shortName?: string | null };
-    force?: boolean;
-  },
-): Promise<MatchInfoData> {
+export async function getMatchInfoCached(args: {
+  fixtureId: number;
+  seasonKey: string;
+  kickoff: string;
+  homeTeam: {
+    id?: number | null;
+    name: string;
+    tla?: string | null;
+    shortName?: string | null;
+  };
+  awayTeam: {
+    id?: number | null;
+    name: string;
+    tla?: string | null;
+    shortName?: string | null;
+  };
+  force?: boolean;
+}): Promise<MatchInfoData> {
   const id = Number(args.fixtureId);
   const sk = String(args.seasonKey || "");
   if (!Number.isFinite(id) || !sk) {
@@ -199,15 +215,18 @@ export async function getMatchInfoCached(
       awayName: String(args.awayTeam?.name || ""),
     });
     if (args.homeTeam?.tla) params.set("homeTla", String(args.homeTeam.tla));
-    if (args.homeTeam?.shortName) params.set("homeShortName", String(args.homeTeam.shortName));
+    if (args.homeTeam?.shortName)
+      params.set("homeShortName", String(args.homeTeam.shortName));
     if (args.awayTeam?.tla) params.set("awayTla", String(args.awayTeam.tla));
-    if (args.awayTeam?.shortName) params.set("awayShortName", String(args.awayTeam.shortName));
+    if (args.awayTeam?.shortName)
+      params.set("awayShortName", String(args.awayTeam.shortName));
     if (args.force) params.set("_t", String(Date.now()));
-    const res = await fetch(
-      `/api/match-info?${params.toString()}`,
-      { cache: "no-store" },
-    );
-    const body = (await res.json().catch(() => ({}))) as MatchInfoData & { error?: string };
+    const res = await fetch(`/api/match-info?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const body = (await res.json().catch(() => ({}))) as MatchInfoData & {
+      error?: string;
+    };
     if (!res.ok) throw new Error(body?.error || `match-info ${res.status}`);
     const normalized = normalize(body);
     if (!args.force) {

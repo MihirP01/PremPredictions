@@ -11,7 +11,11 @@ const APP_SHELL = [
   "/icons/apple-touch-icon.png",
 ];
 const STATIC_EXT_RE = /\.(?:png|jpg|jpeg|svg|webp|gif|ico|json|txt)$/i;
-const API_CACHEABLE_PATHS = ["/api/current-gameweek", "/api/fixtures", "/api/table"];
+const API_CACHEABLE_PATHS = [
+  "/api/current-gameweek",
+  "/api/fixtures",
+  "/api/table",
+];
 
 function isBypassRequest(request, url) {
   if (request.method !== "GET") return true;
@@ -100,7 +104,8 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Cache only safe static files; everything else uses network-first.
-  const isStatic = APP_SHELL.includes(url.pathname) || STATIC_EXT_RE.test(url.pathname);
+  const isStatic =
+    APP_SHELL.includes(url.pathname) || STATIC_EXT_RE.test(url.pathname);
   if (!isStatic) {
     event.respondWith(fetch(event.request).catch(() => Response.error()));
     return;

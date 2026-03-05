@@ -3,13 +3,12 @@ export type TeamIdentity = {
   tla?: string | null;
   shortName?: string | null;
 };
-import {
-  deriveFallbackClubPla,
-  resolveSeededClubPla,
-} from "@/lib/clubPla";
+import { deriveFallbackClubPla, resolveSeededClubPla } from "@/lib/clubPla";
 
 function normalizeCode(value?: string | null) {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 export function teamAbbrFromParts(

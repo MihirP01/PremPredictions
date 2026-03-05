@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Loader2, Lock } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
@@ -37,8 +37,12 @@ type Fixture = { kickoff?: string; status?: string };
 const ESTIMATED_FULL_TIME_MS = 150 * 60 * 1000;
 
 function isFinalFixtureStatus(status?: string) {
-  const normalized = String(status || "").trim().toUpperCase();
-  return normalized === "FINISHED" || normalized === "FT" || normalized === "AWARDED";
+  const normalized = String(status || "")
+    .trim()
+    .toUpperCase();
+  return (
+    normalized === "FINISHED" || normalized === "FT" || normalized === "AWARDED"
+  );
 }
 
 function formatUnlockDateParts(ms: number) {
@@ -78,7 +82,9 @@ function LobbyStatTile({
       <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/48">
         {label}
       </div>
-      <div className="mt-2 font-display text-2xl font-semibold text-foreground">{value}</div>
+      <div className="mt-2 font-display text-2xl font-semibold text-foreground">
+        {value}
+      </div>
       {note ? <div className="mt-2 text-xs text-muted">{note}</div> : null}
     </div>
   );
@@ -96,7 +102,11 @@ function CountdownRing({
   return (
     <div className="flex flex-col items-center gap-2 rounded-[20px] border border-white/8 bg-white/[0.02] p-3">
       <div className="relative h-16 w-16 sm:h-[72px] sm:w-[72px]">
-        <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+        <svg
+          className="absolute inset-0 h-full w-full -rotate-90"
+          viewBox="0 0 80 80"
+          aria-hidden="true"
+        >
           <circle
             cx="40"
             cy="40"
@@ -114,11 +124,15 @@ function CountdownRing({
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={213.63}
-            strokeDashoffset={213.63 - (Math.max(Math.min(progress, 100), 0) / 100) * 213.63}
+            strokeDashoffset={
+              213.63 - (Math.max(Math.min(progress, 100), 0) / 100) * 213.63
+            }
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-display text-lg font-semibold text-foreground sm:text-xl">{value}</span>
+          <span className="font-display text-lg font-semibold text-foreground sm:text-xl">
+            {value}
+          </span>
         </div>
       </div>
       <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-white/56">
@@ -146,7 +160,9 @@ function GuideDisclosure({
         onClick={onToggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <div className="font-display text-sm font-semibold text-foreground">{title}</div>
+        <div className="font-display text-sm font-semibold text-foreground">
+          {title}
+        </div>
         <ChevronDown
           size={14}
           className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
@@ -166,6 +182,7 @@ function GuideDisclosure({
 
 export default function MiniGameLobbyPage() {
   const params = useParams<{ roomCode: string }>();
+  const searchParams = useSearchParams();
   const roomCode = useMemo(
     () => String(params.roomCode).toUpperCase(),
     [params.roomCode],
@@ -173,6 +190,16 @@ export default function MiniGameLobbyPage() {
 
   const { user, loading } = useAuth();
   const router = useRouter();
+  const devPreview =
+    process.env.NODE_ENV !== "production" &&
+    searchParams.get("devPreview") === "1";
+  const withDevPreview = useMemo(
+    () => (path: string) =>
+      devPreview
+        ? `${path}${path.includes("?") ? "&" : "?"}devPreview=1`
+        : path,
+    [devPreview],
+  );
 
   const [leaderUid, setLeaderUid] = useState<string | null>(null);
   const [gameweek, setGameweek] = useState<number | null>(null);
@@ -185,20 +212,20 @@ export default function MiniGameLobbyPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [starting, setStarting] = useState(false);
-  const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
-    "round_robin",
-  );
+  const [gameModeStyle, setGameModeStyle] = useState<
+    "round_robin" | "sprint" | "captain"
+  >("round_robin");
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState<boolean>(true);
   const [powerupsEnabled, setPowerupsEnabled] = useState<boolean>(false);
   const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
   const [modeGuideOpen, setModeGuideOpen] = useState(false);
   const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
-  const [guideOpenMode, setGuideOpenMode] = useState<"round_robin" | "captain" | "sprint" | null>(
-    "round_robin",
-  );
-  const [guideOpenPowerup, setGuideOpenPowerup] = useState<"all_in" | "safety_net" | null>(
-    "all_in",
-  );
+  const [guideOpenMode, setGuideOpenMode] = useState<
+    "round_robin" | "captain" | "sprint" | null
+  >("round_robin");
+  const [guideOpenPowerup, setGuideOpenPowerup] = useState<
+    "all_in" | "safety_net" | null
+  >("all_in");
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
   const [unlockAtMs, setUnlockAtMs] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
@@ -246,18 +273,31 @@ export default function MiniGameLobbyPage() {
         setLeaderUid(data.leaderUid ?? null);
         const style = data.gameModeStyle ?? "sprint";
         setGameModeStyle(style);
-        setAllowIdenticalPicks(style === "sprint" ? true : Boolean(data.allowIdenticalPicks));
+        setAllowIdenticalPicks(
+          style === "sprint" ? true : Boolean(data.allowIdenticalPicks),
+        );
         setPowerupsEnabled(Boolean(data.powerupsEnabled));
-        const st = String(data.gameState || "").trim().toUpperCase();
+        const st = String(data.gameState || "")
+          .trim()
+          .toUpperCase();
         if (
           !routedRef.current &&
-          (st === "DRAFT" || st === "GOLDEN" || st === "POWERUPS" || st === "REVEAL")
+          (st === "DRAFT" ||
+            st === "GOLDEN" ||
+            st === "POWERUPS" ||
+            st === "REVEAL")
         ) {
           routedRef.current = true;
-          if (st === "DRAFT") router.replace(`/room/${roomCode}/minigame/play`);
-          else if (st === "GOLDEN") router.replace(`/room/${roomCode}/minigame/golden`);
-          else if (st === "POWERUPS") router.replace(`/room/${roomCode}/minigame/powerups`);
-          else router.replace(`/room/${roomCode}/minigame/reveal`);
+          if (st === "DRAFT")
+            router.replace(withDevPreview(`/room/${roomCode}/minigame/play`));
+          else if (st === "GOLDEN")
+            router.replace(withDevPreview(`/room/${roomCode}/minigame/golden`));
+          else if (st === "POWERUPS") {
+            router.replace(
+              withDevPreview(`/room/${roomCode}/minigame/powerups`),
+            );
+          } else
+            router.replace(withDevPreview(`/room/${roomCode}/minigame/reveal`));
         }
       } catch {
         if (cancelled) return;
@@ -273,7 +313,7 @@ export default function MiniGameLobbyPage() {
         bootstrapRetryRef.current = null;
       }
     };
-  }, [roomCode, router]);
+  }, [roomCode, router, withDevPreview]);
 
   // 2b) Live room meta updates (leader + mode + lock setting)
   useEffect(() => {
@@ -284,7 +324,9 @@ export default function MiniGameLobbyPage() {
         setLeaderUid(roomMeta.leaderUid);
         const style = roomMeta.settings.gameModeStyle;
         setGameModeStyle(style);
-        setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+        setAllowIdenticalPicks(
+          style === "sprint" ? true : !roomMeta.settings.sameResultLock,
+        );
         setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
       },
       () => {},
@@ -320,7 +362,9 @@ export default function MiniGameLobbyPage() {
       const data = force
         ? await refreshFixturesCached(gameweek, seasonKey)
         : await getFixturesCached(gameweek, seasonKey);
-      const fixtures: Fixture[] = Array.isArray(data?.fixtures) ? data.fixtures : [];
+      const fixtures: Fixture[] = Array.isArray(data?.fixtures)
+        ? data.fixtures
+        : [];
       const kickoffTimes = fixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
@@ -338,7 +382,9 @@ export default function MiniGameLobbyPage() {
 
       if (cancelled) return;
 
-      setLockAtMs(Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null);
+      setLockAtMs(
+        Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null,
+      );
 
       if (allFinished) {
         setUnlockAtMs(Date.now());
@@ -353,7 +399,8 @@ export default function MiniGameLobbyPage() {
       }
 
       const shouldPoll =
-        Number.isFinite(firstKickoff) && Date.now() >= (firstKickoff as number) - LOCK_WINDOW_MS;
+        Number.isFinite(firstKickoff) &&
+        Date.now() >= (firstKickoff as number) - LOCK_WINDOW_MS;
       if (shouldPoll) {
         refreshTimer = setTimeout(() => {
           void syncFixturesWindow(true).catch(() => {});
@@ -434,7 +481,16 @@ export default function MiniGameLobbyPage() {
 
     const gwId = `gw-${gameweek}`;
     const q = query(
-      collection(db, "rooms", roomCode, "seasons", seasonKey, "games", gwId, "lobby"),
+      collection(
+        db,
+        "rooms",
+        roomCode,
+        "seasons",
+        seasonKey,
+        "games",
+        gwId,
+        "lobby",
+      ),
     );
 
     const unsub = onSnapshot(
@@ -450,7 +506,9 @@ export default function MiniGameLobbyPage() {
 
         // Sort stable so UI doesn’t jump
         list.sort((a, b) =>
-          a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          a.displayName.localeCompare(b.displayName, undefined, {
+            sensitivity: "base",
+          }),
         );
         setPlayers(list);
       },
@@ -471,10 +529,13 @@ export default function MiniGameLobbyPage() {
         const seeded: LobbyPlayer[] = cached
           .map((p) => ({
             uid: p.uid,
-            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+            displayName:
+              String(p.nickName || "").trim() || p.displayName || "Player",
           }))
           .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+            a.displayName.localeCompare(b.displayName, undefined, {
+              sensitivity: "base",
+            }),
           );
         setRoomPlayers(seeded);
         setRoomPlayersCount(seeded.length);
@@ -493,7 +554,9 @@ export default function MiniGameLobbyPage() {
           };
         });
         list.sort((a, b) =>
-          a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          a.displayName.localeCompare(b.displayName, undefined, {
+            sensitivity: "base",
+          }),
         );
         setRoomPlayers(list);
         setRoomPlayersCount(list.length);
@@ -541,25 +604,25 @@ export default function MiniGameLobbyPage() {
 
         if (st === "DRAFT") {
           routedRef.current = true;
-          router.replace(`/room/${roomCode}/minigame/play`);
+          router.replace(withDevPreview(`/room/${roomCode}/minigame/play`));
           return;
         }
 
         if (st === "GOLDEN") {
           routedRef.current = true;
-          router.replace(`/room/${roomCode}/minigame/golden`);
+          router.replace(withDevPreview(`/room/${roomCode}/minigame/golden`));
           return;
         }
 
         if (st === "POWERUPS") {
           routedRef.current = true;
-          router.replace(`/room/${roomCode}/minigame/powerups`);
+          router.replace(withDevPreview(`/room/${roomCode}/minigame/powerups`));
           return;
         }
 
         if (st === "REVEAL") {
           routedRef.current = true;
-          router.replace(`/room/${roomCode}/minigame/reveal`);
+          router.replace(withDevPreview(`/room/${roomCode}/minigame/reveal`));
           return;
         }
       },
@@ -569,7 +632,7 @@ export default function MiniGameLobbyPage() {
     );
 
     return () => unsub();
-  }, [user, roomCode, gameweek, router, seasonKey]);
+  }, [user, roomCode, gameweek, router, seasonKey, withDevPreview]);
 
   async function safeLeaveLobby() {
     const ref = lobbyRefRef.current;
@@ -590,7 +653,7 @@ export default function MiniGameLobbyPage() {
       setError("Season/gameweek not loaded yet.");
       return;
     }
-    if (lockAtMs != null && nowMs >= lockAtMs) {
+    if (!devPreview && lockAtMs != null && nowMs >= lockAtMs) {
       setError("Deadline missed for this gameweek. Mini-game is locked.");
       return;
     }
@@ -625,7 +688,7 @@ export default function MiniGameLobbyPage() {
       if (!res.ok) throw new Error(data?.error || "Failed to start mini-game.");
 
       // Leader goes immediately; others will follow via the gameRef listener
-      router.push(`/room/${roomCode}/minigame/play`);
+      router.push(withDevPreview(`/room/${roomCode}/minigame/play`));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to start mini-game.");
     } finally {
@@ -633,7 +696,9 @@ export default function MiniGameLobbyPage() {
     }
   }
 
-  async function updateGameModeStyle(nextStyle: "round_robin" | "sprint" | "captain") {
+  async function updateGameModeStyle(
+    nextStyle: "round_robin" | "sprint" | "captain",
+  ) {
     if (!user || !isLeader || modeSettingsBusy) return;
     setModeSettingsBusy(true);
     setError(null);
@@ -650,7 +715,9 @@ export default function MiniGameLobbyPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to update mode.");
       setGameModeStyle(nextStyle);
-      setAllowIdenticalPicks(nextStyle === "sprint" ? true : !(data?.sameResultLock !== false));
+      setAllowIdenticalPicks(
+        nextStyle === "sprint" ? true : !(data?.sameResultLock !== false),
+      );
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update mode.");
     } finally {
@@ -702,7 +769,8 @@ export default function MiniGameLobbyPage() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to update power-ups.");
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to update power-ups.");
       setPowerupsEnabled(data?.powerupsEnabled === true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update power-ups.");
@@ -719,7 +787,7 @@ export default function MiniGameLobbyPage() {
     roomPlayersCount > 0 &&
     roomPlayers.every((p) => lobbyUidSet.has(p.uid)) &&
     players.length === roomPlayersCount;
-  const isLocked = lockAtMs != null && nowMs >= lockAtMs;
+  const isLocked = !devPreview && lockAtMs != null && nowMs >= lockAtMs;
   const unlockMsLeft = unlockAtMs != null ? Math.max(unlockAtMs - nowMs, 0) : 0;
   const unlockCountdown = getCountdownParts(unlockMsLeft);
   const countdownParts = getCountdownParts(
@@ -755,20 +823,29 @@ export default function MiniGameLobbyPage() {
   ];
   const readyCount = players.length;
   const missingCount = Math.max(roomPlayersCount - readyCount, 0);
+  const standardSectionCardClass =
+    "rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5";
 
   return (
     <>
-      <PageShell width="standard">
-        <TopActionRow
-          title="Predictions Lobby"
-          subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
-          actions={<PageBackButton onClick={onBack} />}
-        />
+      <PageShell
+        width="wide"
+        shellChrome={false}
+        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+        contentClassName="relative z-[1] space-y-4"
+      >
+        <div className="relative z-30 space-y-3">
+          <TopActionRow
+            title="Predictions Lobby"
+            subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
+            actions={<PageBackButton onClick={onBack} />}
+          />
+        </div>
 
         {error ? (
-          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </div>
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-rose-200">{error}</div>
+          </SectionCard>
         ) : null}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -794,7 +871,11 @@ export default function MiniGameLobbyPage() {
                       Gameweek status
                     </div>
                     <div className="font-display text-lg font-semibold text-foreground">
-                      {isLocked ? "Missed" : allPlayersReady ? "Open" : `${missingCount} missing`}
+                      {isLocked
+                        ? "Missed"
+                        : allPlayersReady
+                          ? "Open"
+                          : `${missingCount} missing`}
                     </div>
                   </div>
                 </div>
@@ -820,29 +901,43 @@ export default function MiniGameLobbyPage() {
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
-                  <LobbyStatTile label="Style" value={modeLabel} note="Current room format" />
+                  <LobbyStatTile
+                    label="Style"
+                    value={modeLabel}
+                    note="Current room format"
+                  />
                   <LobbyStatTile
                     label="Identical Picks"
                     value={allowIdenticalPicks ? "ON" : "OFF"}
-                    note={allowIdenticalPicks ? "Parallel-friendly picks." : "Unique picks enforced."}
+                    note={
+                      allowIdenticalPicks
+                        ? "Parallel-friendly picks."
+                        : "Unique picks enforced."
+                    }
                   />
                   <LobbyStatTile
                     label="Power-Ups"
                     value={powerupsEnabled ? "ON" : "OFF"}
-                    note={powerupsEnabled ? "Extra chip round enabled." : "Standard scoring only."}
+                    note={
+                      powerupsEnabled
+                        ? "Extra chip round enabled."
+                        : "Standard scoring only."
+                    }
                   />
                 </div>
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
                   <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                     Lobby readout
                   </div>
-                  <div className="mt-2 text-sm text-muted">{currentModeSummary}</div>
+                  <div className="mt-2 text-sm text-muted">
+                    {currentModeSummary}
+                  </div>
                 </div>
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+          <SectionCard className={standardSectionCardClass}>
             <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
               Lock window
             </div>
@@ -855,22 +950,31 @@ export default function MiniGameLobbyPage() {
                     {
                       label: "Days",
                       value: unlockCountdown.days,
-                      progress: Math.min((Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100, 100),
+                      progress: Math.min(
+                        (Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100,
+                        100,
+                      ),
                     },
                     {
                       label: "Hours",
                       value: unlockCountdown.hours,
-                      progress: (Math.floor((unlockMsLeft / 1000) % 86400 / 3600) / 24) * 100,
+                      progress:
+                        (Math.floor(((unlockMsLeft / 1000) % 86400) / 3600) /
+                          24) *
+                        100,
                     },
                     {
                       label: "Minutes",
                       value: unlockCountdown.minutes,
-                      progress: (Math.floor((unlockMsLeft / 1000) % 3600 / 60) / 60) * 100,
+                      progress:
+                        (Math.floor(((unlockMsLeft / 1000) % 3600) / 60) / 60) *
+                        100,
                     },
                     {
                       label: "Seconds",
                       value: unlockCountdown.seconds,
-                      progress: ((Math.floor(unlockMsLeft / 1000) % 60) / 60) * 100,
+                      progress:
+                        ((Math.floor(unlockMsLeft / 1000) % 60) / 60) * 100,
                     },
                   ]
                 : countdownRings
@@ -888,7 +992,9 @@ export default function MiniGameLobbyPage() {
                 <div className="space-y-2 text-center">
                   <div>
                     Next gameweek:{" "}
-                    <span className="font-display font-semibold text-foreground">GW {gameweek != null ? gameweek + 1 : "—"}</span>
+                    <span className="font-display font-semibold text-foreground">
+                      GW {gameweek != null ? gameweek + 1 : "—"}
+                    </span>
                   </div>
                   {unlockAtMs != null ? (
                     <div className="font-display text-foreground">
@@ -909,7 +1015,8 @@ export default function MiniGameLobbyPage() {
                 </div>
               ) : (
                 <div>
-                  Lock closes automatically when the gameweek cutoff hits. Everyone must be ready before the leader can launch the round.
+                  Lock closes automatically when the gameweek cutoff hits.
+                  Everyone must be ready before the leader can launch the round.
                 </div>
               )}
             </div>
@@ -917,63 +1024,89 @@ export default function MiniGameLobbyPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+          <SectionCard className={standardSectionCardClass}>
             <div>
               <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                 Ready board
               </div>
-              <div className="mt-1 font-display text-xl font-semibold text-foreground">Room player status</div>
-              <div className="mt-4 space-y-2">
-            {roomPlayersCount === 0 ? (
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
-                No players found in this room yet.
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                Room player status
               </div>
-            ) : (
-              roomPlayers.map((p) => {
-                const inLobby = lobbyUidSet.has(p.uid);
-                return (
-                  <div
-                    key={p.uid}
+              <div className="mt-4 space-y-2">
+                {roomPlayersCount === 0 ? (
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+                    No players found in this room yet.
+                  </div>
+                ) : (
+                  roomPlayers.map((p) => {
+                    const inLobby = lobbyUidSet.has(p.uid);
+                    return (
+                      <div
+                        key={p.uid}
                         className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
-                  >
+                      >
                         <div className="min-w-0">
-                          <div className="font-display font-medium text-foreground">{p.displayName}</div>
+                          <div className="font-display font-medium text-foreground">
+                            {p.displayName}
+                          </div>
                           <div className="mt-1 text-xs text-muted">
-                            {p.uid === user?.uid ? "You" : p.uid === leaderUid ? "Room leader" : "Room player"}
+                            {p.uid === user?.uid
+                              ? "You"
+                              : p.uid === leaderUid
+                                ? "Room leader"
+                                : "Room player"}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                      {p.uid === leaderUid && (
-                        <StatusPill label="Leader" tone="neutral" />
-                      )}
-                      <StatusPill
-                        label={isLocked ? "Missed" : inLobby ? "Ready" : "Waiting"}
-                        tone={isLocked ? "waiting" : inLobby ? "ready" : "waiting"}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                          {p.uid === leaderUid && (
+                            <StatusPill label="Leader" tone="neutral" />
+                          )}
+                          <StatusPill
+                            label={
+                              isLocked
+                                ? "Missed"
+                                : inLobby
+                                  ? "Ready"
+                                  : "Waiting"
+                            }
+                            tone={
+                              isLocked
+                                ? "waiting"
+                                : inLobby
+                                  ? "ready"
+                                  : "waiting"
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard className="rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+          <SectionCard className={standardSectionCardClass}>
             <div className="space-y-4">
               <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
                 <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                   Launch gate
                 </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">Start conditions</div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Start conditions
+                </div>
                 <div className="mt-3 space-y-3 text-sm text-muted">
                   <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
                     <span>Lobby readiness</span>
-                    <span className="font-display font-semibold text-foreground">{allPlayersReady ? "Ready" : "Pending"}</span>
+                    <span className="font-display font-semibold text-foreground">
+                      {allPlayersReady ? "Ready" : "Pending"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
                     <span>Deadline</span>
-                    <span className="font-display font-semibold text-foreground">{isLocked ? "Missed" : "Open"}</span>
+                    <span className="font-display font-semibold text-foreground">
+                      {isLocked ? "Missed" : "Open"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1005,7 +1138,9 @@ export default function MiniGameLobbyPage() {
               ) : (
                 <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
                   <Loader2 size={14} className="animate-spin" />
-                  <span>Waiting for the leader to start once everyone is ready…</span>
+                  <span>
+                    Waiting for the leader to start once everyone is ready…
+                  </span>
                 </div>
               )}
             </div>
@@ -1018,16 +1153,25 @@ export default function MiniGameLobbyPage() {
         maxWidthClassName="max-w-2xl"
         panelClassName="p-4 sm:p-5"
       >
-        <ModalHeader title="Game Guide" onClose={() => setModeGuideOpen(false)} />
+        <ModalHeader
+          title="Game Guide"
+          onClose={() => setModeGuideOpen(false)}
+        />
         <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(145deg,rgba(245,158,11,0.06),rgba(255,255,255,0.025)_38%,rgba(56,189,248,0.045)_100%)] p-4">
           <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
             Current setup
           </div>
           <div className="mt-2 font-display text-xl font-semibold text-foreground">
-            {modeLabel} • Allow Identical Picks {allowIdenticalPicks ? "ON" : "OFF"}
+            {modeLabel} • Allow Identical Picks{" "}
+            {allowIdenticalPicks ? "ON" : "OFF"}
           </div>
-          <div className="mt-2 text-xs text-muted">Power-Ups: {powerupsEnabled ? "ON" : "OFF"}</div>
-          <div className="mt-3 text-sm text-muted">{currentModeSummary}</div>
+          <div className="mt-2 text-xs text-muted">
+            Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
+          </div>
+          <div className="mt-3 text-sm text-muted">
+            {currentModeSummary}
+            {devPreview ? " Dev preview bypass is active." : ""}
+          </div>
         </SectionCard>
         <SpecialBreak />
         <div className="space-y-4">
@@ -1039,20 +1183,17 @@ export default function MiniGameLobbyPage() {
               {
                 key: "round_robin" as const,
                 title: "Round-Robin",
-                body:
-                  "Traditional turn-by-turn mode. Players rotate through fixtures in order. Allow Identical Picks ON allows duplicate picks hidden until reveal; OFF enforces unique picks.",
+                body: "Traditional turn-by-turn mode. Players rotate through fixtures in order. Allow Identical Picks ON allows duplicate picks hidden until reveal; OFF enforces unique picks.",
               },
               {
                 key: "captain" as const,
                 title: "Captain",
-                body:
-                  "Captain rotates each fixture and chooses which fixture is played next. Allow Identical Picks ON runs parallel submissions hidden until reveal; OFF runs turn-based picks.",
+                body: "Captain rotates each fixture and chooses which fixture is played next. Allow Identical Picks ON runs parallel submissions hidden until reveal; OFF runs turn-based picks.",
               },
               {
                 key: "sprint" as const,
                 title: "Sprint",
-                body:
-                  "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
+                body: "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
               },
             ].map((item) => (
               <GuideDisclosure
@@ -1060,7 +1201,11 @@ export default function MiniGameLobbyPage() {
                 title={item.title}
                 body={item.body}
                 open={guideOpenMode === item.key}
-                onToggle={() => setGuideOpenMode((prev) => (prev === item.key ? null : item.key))}
+                onToggle={() =>
+                  setGuideOpenMode((prev) =>
+                    prev === item.key ? null : item.key,
+                  )
+                }
               />
             ))}
           </div>
@@ -1086,7 +1231,9 @@ export default function MiniGameLobbyPage() {
                 body={item.body}
                 open={guideOpenPowerup === item.key}
                 onToggle={() =>
-                  setGuideOpenPowerup((prev) => (prev === item.key ? null : item.key))
+                  setGuideOpenPowerup((prev) =>
+                    prev === item.key ? null : item.key,
+                  )
                 }
               />
             ))}
@@ -1099,18 +1246,25 @@ export default function MiniGameLobbyPage() {
         maxWidthClassName="max-w-xl"
         panelClassName="p-4 sm:p-5"
       >
-        <ModalHeader title="Game Mode" onClose={() => setModeSettingsOpen(false)} />
+        <ModalHeader
+          title="Game Mode"
+          onClose={() => setModeSettingsOpen(false)}
+        />
         <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
           <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
             Format selection
           </div>
-          <div className="mt-1 text-sm text-muted">Pick the mode that defines turn order and pace for this room.</div>
+          <div className="mt-1 text-sm text-muted">
+            Pick the mode that defines turn order and pace for this room.
+          </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {([
-              ["round_robin", "Round-Robin"],
-              ["captain", "Captain"],
-              ["sprint", "Sprint"],
-            ] as const).map(([value, label]) => (
+            {(
+              [
+                ["round_robin", "Round-Robin"],
+                ["captain", "Captain"],
+                ["sprint", "Sprint"],
+              ] as const
+            ).map(([value, label]) => (
               <button
                 key={value}
                 onClick={() => updateGameModeStyle(value)}
@@ -1132,7 +1286,9 @@ export default function MiniGameLobbyPage() {
             <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
               Scoring rules
             </div>
-            <div className="mt-1 text-sm text-muted">Identical picks can be locked per round except in Sprint.</div>
+            <div className="mt-1 text-sm text-muted">
+              Identical picks can be locked per round except in Sprint.
+            </div>
             <button
               onClick={toggleSameResultLock}
               disabled={modeSettingsBusy || gameModeStyle === "sprint"}
@@ -1156,7 +1312,9 @@ export default function MiniGameLobbyPage() {
             <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
               Power-Up deck
             </div>
-            <div className="mt-1 text-sm text-muted">Enable or disable the extra chip round for this lobby.</div>
+            <div className="mt-1 text-sm text-muted">
+              Enable or disable the extra chip round for this lobby.
+            </div>
             <button
               onClick={togglePowerupsEnabled}
               disabled={modeSettingsBusy}

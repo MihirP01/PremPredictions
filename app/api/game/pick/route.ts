@@ -40,7 +40,8 @@ function scoreOk(s: string) {
 
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, uid, score, fixtureId, seasonKey } = (await req.json()) as PickBody;
+    const { roomCode, gw, uid, score, fixtureId, seasonKey } =
+      (await req.json()) as PickBody;
 
     const rc = String(roomCode || "").toUpperCase();
     const gwn = Number(gw);
@@ -74,7 +75,8 @@ export async function POST(req: Request) {
       } else {
         const roomSnap = await tx.get(roomRef);
         sameResultLock =
-          (roomSnap.data() as RoomDoc | undefined)?.settings?.sameResultLock !== false;
+          (roomSnap.data() as RoomDoc | undefined)?.settings?.sameResultLock !==
+          false;
       }
 
       const order: string[] = Array.isArray(game.order) ? game.order : [];
@@ -82,7 +84,9 @@ export async function POST(req: Request) {
         ? game.fixtureIds
         : [];
       const currentTurn: number = Number(game.currentTurn ?? 0);
-      const draftMode: "turn" | "parallel" = sameResultLock ? "turn" : "parallel";
+      const draftMode: "turn" | "parallel" = sameResultLock
+        ? "turn"
+        : "parallel";
       const modeFromGame: "turn" | "parallel" | null =
         game.draftMode === "turn" || game.draftMode === "parallel"
           ? game.draftMode
@@ -113,7 +117,8 @@ export async function POST(req: Request) {
         const captainUid = order[captainRoundIndex % P];
         const storedFixtureId = Number(game.currentFixtureId);
         const hasStoredFixture =
-          Number.isFinite(storedFixtureId) && fixtureIds.includes(storedFixtureId);
+          Number.isFinite(storedFixtureId) &&
+          fixtureIds.includes(storedFixtureId);
 
         if (!hasStoredFixture) {
           if (userUid !== captainUid) {
@@ -137,7 +142,10 @@ export async function POST(req: Request) {
           shouldWritePick = false;
         } else {
           fixtureIdToPick = storedFixtureId;
-          if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
+          if (
+            Number.isFinite(reqFixtureId) &&
+            reqFixtureId !== fixtureIdToPick
+          ) {
             throw new Error("This fixture is locked for this round");
           }
           if (!scoreOk(sc)) throw new Error("Bad score");
@@ -149,11 +157,14 @@ export async function POST(req: Request) {
         }
         fixtureIdToPick = fixtureIds[currentFixtureIndex];
         if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
-          throw new Error("This fixture is locked. Wait for current round to complete.");
+          throw new Error(
+            "This fixture is locked. Wait for current round to complete.",
+          );
         }
         if (!scoreOk(sc)) throw new Error("Bad score");
       } else {
-        if (currentTurn >= totalTurns) throw new Error("Draft already complete");
+        if (currentTurn >= totalTurns)
+          throw new Error("Draft already complete");
 
         const fixtureIndex = Math.floor(currentTurn / P);
         if (fixtureIndex >= fixtureIds.length)
@@ -167,7 +178,8 @@ export async function POST(req: Request) {
         if (isCaptainMode) {
           const storedFixtureId = Number(game.currentFixtureId);
           const hasStoredFixture =
-            Number.isFinite(storedFixtureId) && fixtureIds.includes(storedFixtureId);
+            Number.isFinite(storedFixtureId) &&
+            fixtureIds.includes(storedFixtureId);
 
           if (turnInFixture === 0) {
             if (!Number.isFinite(reqFixtureId))
@@ -193,7 +205,10 @@ export async function POST(req: Request) {
             if (!hasStoredFixture)
               throw new Error("Waiting for captain to choose fixture");
             fixtureIdToPick = storedFixtureId;
-            if (Number.isFinite(reqFixtureId) && reqFixtureId !== fixtureIdToPick) {
+            if (
+              Number.isFinite(reqFixtureId) &&
+              reqFixtureId !== fixtureIdToPick
+            ) {
               throw new Error("This fixture is locked for this round");
             }
           }
@@ -207,18 +222,23 @@ export async function POST(req: Request) {
       // (Transaction-safe, OK for your scale)
       if (sameResultLock && shouldWritePick) {
         const existingSnap = await tx.get(
-          picksCol.where("fixtureId", "==", fixtureIdToPick).where("score", "==", sc),
+          picksCol
+            .where("fixtureId", "==", fixtureIdToPick)
+            .where("score", "==", sc),
         );
         if (!existingSnap.empty)
           throw new Error("Score already taken for this fixture");
       }
 
       const pickId = `${userUid}_${fixtureIdToPick}`;
-      const pickRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}/picks/${pickId}`);
+      const pickRef = adminDb.doc(
+        `${seasonBase}/games/gw-${gwn}/picks/${pickId}`,
+      );
       if (shouldWritePick) {
         // Optional safety: prevent same user picking same fixture twice
         const alreadyPickedSnap = await tx.get(pickRef);
-        if (alreadyPickedSnap.exists) throw new Error("You already picked this fixture");
+        if (alreadyPickedSnap.exists)
+          throw new Error("You already picked this fixture");
       }
 
       // -------- WRITES AFTER --------
@@ -248,7 +268,9 @@ export async function POST(req: Request) {
           });
         } else {
           readyByUid[userUid] = true;
-          const everyoneReady = order.every((uidInGame) => readyByUid[uidInGame] === true);
+          const everyoneReady = order.every(
+            (uidInGame) => readyByUid[uidInGame] === true,
+          );
           if (everyoneReady) {
             const nextFixtureIndex = roundIndex + 1;
             if (nextFixtureIndex >= fixtureIds.length) {
@@ -273,7 +295,9 @@ export async function POST(req: Request) {
         }
       } else if (activeDraftMode === "parallel") {
         readyByUid[userUid] = true;
-        const everyoneReady = order.every((uidInGame) => readyByUid[uidInGame] === true);
+        const everyoneReady = order.every(
+          (uidInGame) => readyByUid[uidInGame] === true,
+        );
         if (everyoneReady) {
           const nextFixtureIndex = Number(game.currentTurn ?? 0) + 1;
           if (nextFixtureIndex >= fixtureIds.length) {

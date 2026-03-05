@@ -39,7 +39,10 @@ async function deleteSeasonData(roomCode: string, seasonKey: string) {
     await gwDoc.ref.delete();
   }
 
-  await adminDb.doc(`${seasonBase}`).delete().catch(() => {});
+  await adminDb
+    .doc(`${seasonBase}`)
+    .delete()
+    .catch(() => {});
 }
 
 export async function POST(req: Request) {
@@ -67,11 +70,15 @@ export async function POST(req: Request) {
     }
 
     // Track player ids so we can clear currentRoomCode where needed.
-    const playersSnap = await adminDb.collection(`rooms/${roomCode}/players`).get();
+    const playersSnap = await adminDb
+      .collection(`rooms/${roomCode}/players`)
+      .get();
     const playerUids = playersSnap.docs.map((d) => d.id);
 
     // Delete seasonized game/score data.
-    const seasonsSnap = await adminDb.collection(`rooms/${roomCode}/seasons`).get();
+    const seasonsSnap = await adminDb
+      .collection(`rooms/${roomCode}/seasons`)
+      .get();
     for (const seasonDoc of seasonsSnap.docs) {
       await deleteSeasonData(roomCode, seasonDoc.id);
       await seasonDoc.ref.delete();
@@ -87,7 +94,9 @@ export async function POST(req: Request) {
       await deleteCollectionDocs(`${base}/powerups`);
       await gwDoc.ref.delete();
     }
-    const scoresSnap = await adminDb.collection(`rooms/${roomCode}/scores`).get();
+    const scoresSnap = await adminDb
+      .collection(`rooms/${roomCode}/scores`)
+      .get();
     for (const gwDoc of scoresSnap.docs) {
       await deleteCollectionDocs(`rooms/${roomCode}/scores/${gwDoc.id}/users`);
       await gwDoc.ref.delete();
@@ -98,7 +107,9 @@ export async function POST(req: Request) {
       .collection(`rooms/${roomCode}/predictions`)
       .get();
     for (const gwDoc of predictionsSnap.docs) {
-      await deleteCollectionDocs(`rooms/${roomCode}/predictions/${gwDoc.id}/items`);
+      await deleteCollectionDocs(
+        `rooms/${roomCode}/predictions/${gwDoc.id}/items`,
+      );
       await gwDoc.ref.delete();
     }
 

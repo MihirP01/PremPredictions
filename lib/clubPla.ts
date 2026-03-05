@@ -8,7 +8,10 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "AVL", aliases: ["aston villa"] },
   { pla: "BOU", aliases: ["bournemouth", "afc bournemouth"] },
   { pla: "BRE", aliases: ["brentford"] },
-  { pla: "BHA", aliases: ["brighton", "brighton hove albion", "brighton and hove albion"] },
+  {
+    pla: "BHA",
+    aliases: ["brighton", "brighton hove albion", "brighton and hove albion"],
+  },
   { pla: "BUR", aliases: ["burnley"] },
   { pla: "CHE", aliases: ["chelsea"] },
   { pla: "CRY", aliases: ["crystal palace", "palace"] },
@@ -48,7 +51,10 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "WBA", aliases: ["west brom", "west bromwich albion"] },
   { pla: "RMA", aliases: ["real madrid"] },
   { pla: "BAR", aliases: ["barcelona", "fc barcelona"] },
-  { pla: "ATM", aliases: ["atletico madrid", "atlético madrid", "atletico de madrid"] },
+  {
+    pla: "ATM",
+    aliases: ["atletico madrid", "atlético madrid", "atletico de madrid"],
+  },
   { pla: "ATH", aliases: ["athletic club", "athletic bilbao"] },
   { pla: "BET", aliases: ["real betis", "betis"] },
   { pla: "SEV", aliases: ["sevilla"] },
@@ -56,7 +62,10 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "SOC", aliases: ["real sociedad", "sociedad"] },
   { pla: "VAL", aliases: ["valencia"] },
   { pla: "GIR", aliases: ["girona"] },
-  { pla: "BAY", aliases: ["bayern", "bayern munich", "bayern munchen", "fc bayern"] },
+  {
+    pla: "BAY",
+    aliases: ["bayern", "bayern munich", "bayern munchen", "fc bayern"],
+  },
   { pla: "BVB", aliases: ["borussia dortmund", "dortmund"] },
   { pla: "RBL", aliases: ["rb leipzig", "red bull leipzig", "leipzig"] },
   { pla: "LEV", aliases: ["bayer leverkusen", "leverkusen"] },
@@ -74,7 +83,10 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "FIO", aliases: ["fiorentina"] },
   { pla: "BOL", aliases: ["bologna"] },
   { pla: "PAR", aliases: ["parma"] },
-  { pla: "PSG", aliases: ["paris saint germain", "paris saint-germain", "psg"] },
+  {
+    pla: "PSG",
+    aliases: ["paris saint germain", "paris saint-germain", "psg"],
+  },
   { pla: "OM", aliases: ["marseille", "olympique marseille"] },
   { pla: "OL", aliases: ["lyon", "olympique lyon"] },
   { pla: "ASM", aliases: ["monaco", "as monaco"] },
@@ -93,7 +105,10 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "CLB", aliases: ["club brugge", "club brugge kv"] },
   { pla: "AND", aliases: ["anderlecht", "rsc anderlecht"] },
   { pla: "GEN", aliases: ["gent", "kaa gent"] },
-  { pla: "USG", aliases: ["union sg", "union saint gilloise", "union saint-gilloise"] },
+  {
+    pla: "USG",
+    aliases: ["union sg", "union saint gilloise", "union saint-gilloise"],
+  },
   { pla: "CEL", aliases: ["celtic"] },
   { pla: "RAN", aliases: ["rangers"] },
   { pla: "SAL", aliases: ["salzburg", "rb salzburg", "red bull salzburg"] },
@@ -115,9 +130,20 @@ const SEEDED_CLUBS: SeedClub[] = [
   { pla: "FER", aliases: ["ferencvaros", "ferencváros"] },
   { pla: "RSB", aliases: ["red star", "red star belgrade", "crvena zvezda"] },
   { pla: "PLZ", aliases: ["viktoria plzen", "viktoria plzeň"] },
-  { pla: "BOD", aliases: ["bodo glimt", "bodo/glimt", "bodø glimt", "bodø/glimt"] },
+  {
+    pla: "BOD",
+    aliases: ["bodo glimt", "bodo/glimt", "bodø glimt", "bodø/glimt"],
+  },
   { pla: "MOL", aliases: ["molde"] },
-  { pla: "ZRI", aliases: ["zrinjski", "zrinjski mostar", "hsk zrinjski", "hšk zrinjski mostar"] },
+  {
+    pla: "ZRI",
+    aliases: [
+      "zrinjski",
+      "zrinjski mostar",
+      "hsk zrinjski",
+      "hšk zrinjski mostar",
+    ],
+  },
   { pla: "LUD", aliases: ["ludogorets", "ludogorets razgrad"] },
   { pla: "HAC", aliases: ["le havre", "le havre ac"] },
 ];
@@ -177,7 +203,9 @@ export function deriveFallbackClubPla(
     .split(/\s+/)
     .map((token) => token.trim())
     .filter(Boolean);
-  const filtered = tokens.filter((token) => !FILLER_TOKENS.has(token.toLowerCase()));
+  const filtered = tokens.filter(
+    (token) => !FILLER_TOKENS.has(token.toLowerCase()),
+  );
   const base = filtered[0] || tokens[0] || "FC";
   const alnum = base.replace(/[^A-Za-z0-9]/g, "");
   return (alnum || "FC").slice(0, 3).toUpperCase();

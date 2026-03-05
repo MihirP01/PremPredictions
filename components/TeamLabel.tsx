@@ -27,8 +27,16 @@ export default function TeamLabel({
 }: TeamLabelProps) {
   return (
     <div className={wrapperClassName}>
-      <span className={abbrClassName}>{teamAbbrFromParts(name, tla, shortName)}</span>
-      {showFullName ? <PendulumName text={name} windowPx={fullNameWindowPx} className={fullNameClassName} /> : null}
+      <span className={abbrClassName}>
+        {teamAbbrFromParts(name, tla, shortName)}
+      </span>
+      {showFullName ? (
+        <PendulumName
+          text={name}
+          windowPx={fullNameWindowPx}
+          className={fullNameClassName}
+        />
+      ) : null}
     </div>
   );
 }

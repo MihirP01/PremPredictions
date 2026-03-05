@@ -2,16 +2,19 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import PageBackButton from "../../../../../components/PageBackButton";
 import PageShell from "../../../../../components/PageShell";
-import SpecialBreak from "../../../../../components/SpecialBreak";
+import SectionCard from "../../../../../components/SectionCard";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
 import TopActionRow from "../../../../../components/TopActionRow";
-import { getRoomBootstrapCached, patchRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  patchRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -24,8 +27,6 @@ import {
   subscribeRoomPlayers,
 } from "@/lib/liveGameBus";
 import {
-  fixtureDayKey,
-  fixtureDayLabel,
   formatKickoffParts,
   formatUnlockDateParts,
 } from "@/lib/dateDisplay";
@@ -43,8 +44,18 @@ type Fixture = {
   fixtureId: number;
   kickoff: string;
   status: string;
-  home: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
-  away: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  home: {
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
+  away: {
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
   result?: string | null;
 };
 
@@ -111,7 +122,11 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function colorForTeam(tla?: string | null, shortName?: string | null, name?: string | null) {
+function colorForTeam(
+  tla?: string | null,
+  shortName?: string | null,
+  name?: string | null,
+) {
   const key = String(tla || shortName || name || "")
     .trim()
     .toUpperCase()
@@ -141,7 +156,13 @@ function displayResult(status: string, actual: string | null) {
 function statusHeading(status: string) {
   const raw = String(status || "").trim();
   const s = raw.toUpperCase();
-  if (!raw || s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD") {
+  if (
+    !raw ||
+    s === "TIMED" ||
+    s === "SCHEDULED" ||
+    s === "NOT_STARTED" ||
+    s === "TBD"
+  ) {
     return "Scheduled";
   }
   if (s === "FINISHED" || s === "FT" || s === "AWARDED") return "FT";
@@ -162,12 +183,16 @@ function byDisplayName(
 
 export default function RevealPage() {
   const params = useParams<{ roomCode: string }>();
+  const searchParams = useSearchParams();
   const roomCode = useMemo(
     () => String(params.roomCode).toUpperCase(),
     [params.roomCode],
   );
   const router = useRouter();
   const { user, loading } = useAuth();
+  const devPreview =
+    process.env.NODE_ENV !== "production" &&
+    searchParams.get("devPreview") === "1";
 
   const [gw, setGw] = useState<number | null>(null);
   const [seasonKey, setSeasonKey] = useState<string | null>(null);
@@ -178,7 +203,9 @@ export default function RevealPage() {
   const [goldensByUid, setGoldensByUid] = useState<Record<string, GoldenDoc>>(
     {},
   );
-  const [powerupsByUid, setPowerupsByUid] = useState<Record<string, PowerupDoc>>({});
+  const [powerupsByUid, setPowerupsByUid] = useState<
+    Record<string, PowerupDoc>
+  >({});
   const [displayNamesByUid, setDisplayNamesByUid] = useState<
     Record<string, string>
   >({});
@@ -187,6 +214,10 @@ export default function RevealPage() {
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(0);
   const [clockReady, setClockReady] = useState(false);
+  const previewPlayerIds = useMemo(() => {
+    const base = user?.uid ? [user.uid] : ["preview-self"];
+    return [...base, "preview-rival-a", "preview-rival-b"];
+  }, [user?.uid]);
 
   // auth guard
   useEffect(() => {
@@ -248,6 +279,7 @@ export default function RevealPage() {
           .trim()
           .toUpperCase();
         if (st) patchRoomBootstrapCached(roomCode, { gameState: st });
+        if (devPreview) return;
 
         if (routedRef.current) return;
 
@@ -399,7 +431,8 @@ export default function RevealPage() {
           const next = { ...prev };
           for (const player of cached) {
             const nick = String(player.nickName || "").trim();
-            next[player.uid] = nick || player.displayName || next[player.uid] || "Player";
+            next[player.uid] =
+              nick || player.displayName || next[player.uid] || "Player";
           }
           return next;
         });
@@ -415,7 +448,8 @@ export default function RevealPage() {
           const map: Record<string, string> = { ...prev };
           for (const player of players) {
             const nick = String(player.nickName || "").trim();
-            map[player.uid] = nick || player.displayName || map[player.uid] || "Player";
+            map[player.uid] =
+              nick || player.displayName || map[player.uid] || "Player";
           }
           return map;
         });
@@ -441,58 +475,148 @@ export default function RevealPage() {
     };
   }, []);
 
+  const previewFixtureIds = useMemo(() => {
+    if (!fixtures?.length) return [];
+    return fixtures
+      .slice(0, Math.min(6, fixtures.length))
+      .map((f) => f.fixtureId);
+  }, [fixtures]);
+
+  const previewGame = useMemo<GameDoc | null>(() => {
+    if (!devPreview || !previewFixtureIds.length) return null;
+    return {
+      state: "REVEAL",
+      players: previewPlayerIds,
+      order: previewPlayerIds,
+      fixtureIds: previewFixtureIds,
+      forcedReveal: true,
+    };
+  }, [devPreview, previewFixtureIds, previewPlayerIds]);
+
+  const previewPicks = useMemo<PickDoc[]>(() => {
+    if (!previewGame) return [];
+    const sampleScores = ["2-1", "1-1", "3-2", "0-0", "2-2", "1-0"];
+    return previewGame.players.flatMap((uid, playerIdx) =>
+      previewGame.fixtureIds.map((fixtureId, fixtureIdx) => ({
+        uid,
+        fixtureId,
+        score:
+          sampleScores[(playerIdx + fixtureIdx) % sampleScores.length] || "1-1",
+      })),
+    );
+  }, [previewGame]);
+
+  const previewGoldensByUid = useMemo<Record<string, GoldenDoc>>(() => {
+    if (!previewGame?.fixtureIds?.length) return {};
+    const targetFixtureId =
+      previewGame.fixtureIds[1] ?? previewGame.fixtureIds[0];
+    return previewGame.players.reduce<Record<string, GoldenDoc>>(
+      (acc, uid, idx) => {
+        if (idx === 0 && targetFixtureId != null) {
+          acc[uid] = {
+            uid,
+            fixtureId: targetFixtureId,
+            score: "2-1",
+            locked: true,
+          };
+        }
+        return acc;
+      },
+      {},
+    );
+  }, [previewGame]);
+
+  const previewPowerupsByUid = useMemo<Record<string, PowerupDoc>>(() => {
+    if (!previewGame?.fixtureIds?.length) return {};
+    const fixtureId = previewGame.fixtureIds[2] ?? previewGame.fixtureIds[0];
+    return previewGame.players.reduce<Record<string, PowerupDoc>>(
+      (acc, uid, idx) => {
+        if (fixtureId == null) return acc;
+        if (idx === 1) {
+          acc[uid] = { uid, fixtureId, powerupType: "ALL_IN", locked: true };
+        } else if (idx === 2) {
+          acc[uid] = {
+            uid,
+            fixtureId,
+            powerupType: "SAFETY_NET",
+            locked: true,
+          };
+        }
+        return acc;
+      },
+      {},
+    );
+  }, [previewGame]);
+
+  const previewDisplayNamesByUid = useMemo<Record<string, string>>(() => {
+    const selfName =
+      String(user?.displayName || "").trim() ||
+      String(user?.email || "").split("@")[0] ||
+      "You";
+    return {
+      [previewPlayerIds[0] || "preview-self"]: selfName,
+      "preview-rival-a": "Alex",
+      "preview-rival-b": "Jordan",
+    };
+  }, [previewPlayerIds, user?.displayName, user?.email]);
+
+  const previewGameActive =
+    devPreview &&
+    !!previewGame &&
+    (!game || String(game.state ?? "").toUpperCase() !== "REVEAL");
+  const activeGame = previewGameActive ? previewGame : game;
+  const activePicks = previewGameActive ? previewPicks : picks;
+  const activeGoldensByUid = previewGameActive
+    ? previewGoldensByUid
+    : goldensByUid;
+  const activePowerupsByUid = previewGameActive
+    ? previewPowerupsByUid
+    : powerupsByUid;
+  const activeDisplayNamesByUid = useMemo(
+    () => ({
+      ...displayNamesByUid,
+      ...(previewGameActive ? previewDisplayNamesByUid : {}),
+    }),
+    [displayNamesByUid, previewDisplayNamesByUid, previewGameActive],
+  );
+
   const players = useMemo(() => {
     // Prefer order if present (nice stable ordering)
-    const arr = (game?.order?.length ? game.order : game?.players) ?? [];
+    const arr =
+      (activeGame?.order?.length ? activeGame.order : activeGame?.players) ??
+      [];
     return Array.isArray(arr) ? arr : [];
-  }, [game]);
+  }, [activeGame]);
   const playersSorted = useMemo(
-    () => [...players].sort((a, b) => byDisplayName(a, b, displayNamesByUid)),
-    [displayNamesByUid, players],
+    () =>
+      [...players].sort((a, b) => byDisplayName(a, b, activeDisplayNamesByUid)),
+    [activeDisplayNamesByUid, players],
   );
 
   const fixtureIds = useMemo(() => {
-    if (game?.fixtureIds?.length) return game.fixtureIds;
+    if (activeGame?.fixtureIds?.length) return activeGame.fixtureIds;
     return (fixtures ?? []).map((f) => f.fixtureId);
-  }, [game, fixtures]);
+  }, [activeGame, fixtures]);
 
   const fixtureMap = useMemo(() => {
     const m = new Map<number, Fixture>();
     (fixtures ?? []).forEach((f) => m.set(f.fixtureId, f));
     return m;
   }, [fixtures]);
-  const dayBoundaryByIdx = useMemo(() => {
-    const firstIdxByDay = new Map<string, number>();
-    const lastIdxByDay = new Map<string, number>();
-    fixtureIds.forEach((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      if (!firstIdxByDay.has(dayKey)) firstIdxByDay.set(dayKey, idx);
-      lastIdxByDay.set(dayKey, idx);
-    });
-    return fixtureIds.map((fid, idx) => {
-      const fixture = fixtureMap.get(fid);
-      const dayKey = fixtureDayKey(fixture?.kickoff || "");
-      return {
-        showDayHeader: firstIdxByDay.get(dayKey) === idx,
-        showDayFooter: lastIdxByDay.get(dayKey) === idx,
-        dayLabel: fixtureDayLabel(fixture?.kickoff || ""),
-      };
-    });
-  }, [fixtureIds, fixtureMap]);
-
   const picksByUserFixture = useMemo(() => {
     const m = new Map<string, string>(); // key = uid|fixtureId
-    for (const p of picks)
+    for (const p of activePicks)
       m.set(`${p.uid}|${p.fixtureId}`, String(p.score ?? "").trim());
     return m;
-  }, [picks]);
+  }, [activePicks]);
 
   const lockedCount = useMemo(() => {
-    return Object.values(goldensByUid).filter((g) => g?.locked).length;
-  }, [goldensByUid]);
+    return Object.values(activeGoldensByUid).filter((g) => g?.locked).length;
+  }, [activeGoldensByUid]);
 
-  const allLocked = !!game?.forcedReveal || (players.length > 0 && lockedCount >= players.length);
+  const allLocked =
+    !!activeGame?.forcedReveal ||
+    (players.length > 0 && lockedCount >= players.length);
   const nextGw = gw != null ? gw + 1 : null;
   const unlockAtMs = useMemo(() => {
     if (!fixtures?.length) return null;
@@ -506,7 +630,8 @@ export default function RevealPage() {
     unlock.setUTCHours(0, 1, 0, 0);
     return unlock.getTime();
   }, [fixtures]);
-  const unlockMsLeft = unlockAtMs != null && clockReady ? Math.max(unlockAtMs - nowMs, 0) : 0;
+  const unlockMsLeft =
+    unlockAtMs != null && clockReady ? Math.max(unlockAtMs - nowMs, 0) : 0;
   const unlockCountdown = getCountdownParts(unlockMsLeft);
   const unlockTotalSec = Math.floor(unlockMsLeft / 1000);
   const unlockDayValue = Math.floor(unlockTotalSec / 86400);
@@ -517,7 +642,11 @@ export default function RevealPage() {
     {
       label: "Days",
       value: !clockReady ? "--" : unlockCountdown.days,
-      progress: !clockReady ? 0 : unlockDayValue > 0 ? Math.min((unlockDayValue / 7) * 100, 100) : 0,
+      progress: !clockReady
+        ? 0
+        : unlockDayValue > 0
+          ? Math.min((unlockDayValue / 7) * 100, 100)
+          : 0,
     },
     {
       label: "Hours",
@@ -535,50 +664,78 @@ export default function RevealPage() {
       progress: !clockReady ? 0 : (unlockSecondValue / 60) * 100,
     },
   ];
+  const standardSectionCardClass =
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
 
   if (loading || !user) return null;
 
-  if (gw == null || fixtures == null || !game) {
+  if (gw == null || fixtures == null || !activeGame) {
     return (
-      <PageShell width="wide">
-        <div className="space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="font-display text-2xl font-semibold text-foreground">Final Overview</h1>
-              <div className="font-display text-sm text-muted">
-                {roomCode} • GW {gw ?? "—"}
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl p-4 bg-surface-2 border border-teal-500">
-            <div className="text-sm text-muted inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading reveal…</span>
-            </div>
-          </div>
+      <PageShell
+        width="wide"
+        shellChrome={false}
+        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+        contentClassName="relative z-[1] space-y-4"
+      >
+        <div className="relative z-30 space-y-3">
+          <TopActionRow
+            title={`GW ${gw ?? "—"} Reveal`}
+            subtitle={`${roomCode} • GW ${gw ?? "—"}`}
+            actions={
+              <PageBackButton
+                label="Exit"
+                className={BTN_3D}
+                onClick={() => router.push(`/room/${roomCode}`)}
+              />
+            }
+          />
         </div>
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.08),transparent_40%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+              Reveal desk
+            </div>
+            <div className="mt-2 text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading GW reveal data…</span>
+            </div>
+          </div>
+        </SectionCard>
       </PageShell>
     );
   }
 
-  const state = String(game.state ?? "").toUpperCase();
+  const state = String(activeGame.state ?? "").toUpperCase();
   if (state !== "REVEAL") {
     return (
-      <PageShell width="standard">
-        <div className="rounded-[22px] border border-white/8 bg-black/10 p-4 sm:p-5 space-y-3">
+      <PageShell
+        width="wide"
+        shellChrome={false}
+        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+        contentClassName="relative z-[1] space-y-4"
+      >
+        <SectionCard className={standardSectionCardClass}>
           <div className="text-xl font-semibold text-foreground">
             Reveal not ready
           </div>
-          <div className="text-sm text-muted">Current state: {game.state}</div>
-        </div>
+          <div className="text-sm text-muted">
+            Current state: {activeGame.state}
+          </div>
+        </SectionCard>
       </PageShell>
     );
   }
 
   return (
-    <PageShell width="wide">
+    <PageShell
+      width="wide"
+      shellChrome={false}
+      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+      contentClassName="relative z-[1] space-y-4"
+    >
+      <div className="relative z-30 space-y-3">
         <TopActionRow
-          title="Final Overview"
+          title={`GW ${gw} Reveal`}
           subtitle={`${roomCode} • GW ${gw}`}
           actions={
             <PageBackButton
@@ -588,94 +745,90 @@ export default function RevealPage() {
             />
           }
         />
+      </div>
 
-        {error && (
-          <div className="rounded-[22px] border border-white/8 bg-black/20 px-4 py-3 text-sm text-danger shadow-[0_18px_40px_rgba(3,8,20,0.2)]">
-            {error}
-          </div>
-        )}
+      {error && (
+        <SectionCard className={standardSectionCardClass}>
+          <div className="text-sm text-danger">{error}</div>
+        </SectionCard>
+      )}
 
-        <div className="relative overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-1 shadow-[0_24px_56px_rgba(3,8,20,0.24)]">
-          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                    Reveal desk
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                      Scored week
-                    </span>
-                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
-                      GW {gw}
-                    </span>
-                  </div>
+      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-1.5">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                  Reveal desk
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                    Next up
-                  </div>
-                  <div className="font-display text-lg font-semibold text-foreground">
-                    GW {nextGw ?? "—"}
-                  </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                    Next gameweek
+                  </span>
+                  <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                    GW {gw + 1}
+                  </span>
                 </div>
               </div>
-              {unlockAtMs != null && (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                      Unlocks
-                    </span>
-                    <span className="font-display text-sm font-semibold text-foreground">
-                      {(() => {
-                        const p = formatUnlockDateParts(unlockAtMs);
-                        return (
-                          <>
-                            {p.day}
-                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                              {p.suffix}
-                            </span>{" "}
-                            {p.monthYear} {p.time}
-                          </>
-                        );
-                      })()}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {unlockCountdownRings.map((unit) => (
-                      <div
-                        key={unit.label}
-                        className="relative overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
-                      >
-                        <span
-                          className="absolute inset-x-0 top-0 h-px"
-                          style={{
-                            backgroundImage:
-                              "linear-gradient(90deg, transparent, rgba(var(--room-accent-rgb), 0.52), transparent)",
-                          }}
-                          aria-hidden
-                        />
-                        <div className="font-display text-[1.45rem] font-semibold leading-none text-foreground sm:text-[1.75rem]">
-                          {unit.value}
-                        </div>
-                        <div className="mt-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/42">
-                          {unit.label}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
+            {unlockAtMs != null && (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                    Unlocks
+                  </span>
+                  <span className="font-display text-sm font-semibold text-foreground">
+                    {(() => {
+                      const p = formatUnlockDateParts(unlockAtMs);
+                      return (
+                        <>
+                          {p.day}
+                          <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                            {p.suffix}
+                          </span>{" "}
+                          {p.monthYear} {p.time}
+                        </>
+                      );
+                    })()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {unlockCountdownRings.map((unit) => (
+                    <div
+                      key={unit.label}
+                      className="relative overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                    >
+                      <span
+                        className="absolute inset-x-0 top-0 h-px"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(90deg, transparent, rgba(var(--room-accent-rgb), 0.52), transparent)",
+                        }}
+                        aria-hidden
+                      />
+                      <div className="font-display text-[1.45rem] font-semibold leading-none text-foreground sm:text-[1.75rem]">
+                        {unit.value}
+                      </div>
+                      <div className="mt-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+                        {unit.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
+      </SectionCard>
 
-        {!allLocked && (
+      {!allLocked && (
+        <SectionCard className={standardSectionCardClass}>
           <div className="border border-yellow-300/65 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.04)_100%)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-semibold text-foreground">Reveal is syncing</div>
+                <div className="font-semibold text-foreground">
+                  Reveal is syncing
+                </div>
                 <div className="text-sm text-muted mt-1 inline-flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin" />
                   <span>Waiting for all locked picks to finish.</span>
@@ -686,81 +839,124 @@ export default function RevealPage() {
               </span>
             </div>
           </div>
-        )}
+        </SectionCard>
+      )}
+      <SectionCard className={standardSectionCardClass}>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
+            <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
+              Reveal board
+            </div>
+            <div className="font-display text-sm font-semibold text-foreground sm:text-base">
+              Final picks overview
+            </div>
+          </div>
+          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
+          <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
+            {fixtureIds.length}
+          </span>
+        </div>
+        <div className="mt-3 grid items-start gap-3 sm:mt-4 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {fixtureIds.map((fid, idx) => {
+          const f = fixtureMap.get(fid);
+          const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
+          const homeColor = colorForTeam(
+            f?.home.tla,
+            f?.home.shortName,
+            f?.home.name,
+          );
+          const awayColor = colorForTeam(
+            f?.away.tla,
+            f?.away.shortName,
+            f?.away.name,
+          );
+          const clashBgStyle: React.CSSProperties = {
+            backgroundImage: `
+              radial-gradient(circle at 16% 14%, ${hexToRgba(homeColor, 0.16)} 0%, rgba(9,12,22,0) 46%),
+              radial-gradient(circle at 84% 14%, ${hexToRgba(awayColor, 0.16)} 0%, rgba(9,12,22,0) 46%),
+              linear-gradient(180deg, rgba(9,12,22,0.95) 0%, rgba(8,12,22,0.97) 55%, rgba(5,10,22,0.995) 100%)
+            `,
+          };
 
-        <SpecialBreak />
-        <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {fixtureIds.map((fid, idx) => {
-            const f = fixtureMap.get(fid);
-            const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
-            const homeColor = colorForTeam(f?.home.tla, f?.home.shortName, f?.home.name);
-            const awayColor = colorForTeam(f?.away.tla, f?.away.shortName, f?.away.name);
-            const clashBgStyle: React.CSSProperties = {
-              backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(9,12,22,0.94) 42%, rgba(9,12,22,0.94) 58%, ${hexToRgba(awayColor, 0.14)} 100%)`,
-            };
-            const dayBoundary = dayBoundaryByIdx[idx];
-            const showDayHeader = !!dayBoundary?.showDayHeader;
-            const showDayFooter = !!dayBoundary?.showDayFooter;
-            const dayLabel = dayBoundary?.dayLabel || "";
-
-            return (
-              <div
-                key={fid}
-                className="fixture-card-enter space-y-2 w-full"
-                style={{
-                  animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                  animationDuration: "520ms",
-                }}
-              >
-                <div className="h-5 sm:h-6 flex items-center justify-center">
-                  {showDayHeader ? (
-                    <div className="w-full flex items-center gap-2">
-                      <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
-                      <span className="font-display inline-flex items-center rounded-md border border-[color:rgba(var(--room-accent-rgb),0.65)] bg-[linear-gradient(180deg,rgba(var(--room-accent-rgb),0.2)_0%,rgba(var(--room-accent-rgb),0.08)_100%)] px-2.5 py-[2px] text-[10px] sm:text-xs font-semibold leading-none text-muted uppercase tracking-wide shadow-[0_4px_12px_rgba(var(--room-accent-rgb),0.15)]">
-                        {dayLabel}
-                      </span>
-                      <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.08)_0%,rgba(var(--room-accent-rgb),0.45)_55%,rgba(var(--room-accent-rgb),0.08)_100%)]" />
+          return (
+            <div
+              key={fid}
+              className="fixture-card-enter space-y-2 w-full"
+              style={{
+                animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                animationDuration: "520ms",
+              }}
+            >
+              <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                <div
+                  className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                  style={clashBgStyle}
+                >
+                  <div className="space-y-3">
+                    <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
+                      {kickoffParts ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-display font-semibold">
+                            {kickoffParts.dayNum}
+                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                              {kickoffParts.suffix}
+                            </span>{" "}
+                            {kickoffParts.monthYear}
+                          </span>
+                          <span className="font-display font-semibold tabular-nums">
+                            {kickoffParts.time}
+                          </span>
+                        </div>
+                      ) : (
+                        <span>Fixture {fid}</span>
+                      )}
                     </div>
-                  ) : showDayFooter ? (
-                    <div className="w-full flex items-center justify-center gap-1.5">
-                      <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.05)_0%,rgba(var(--room-accent-rgb),0.42)_100%)]" />
-                      <span
-                        className="h-1.5 w-1.5 rounded-full border border-[color:rgba(var(--room-accent-rgb),0.75)] bg-[color:rgba(var(--room-accent-rgb),0.55)]"
-                        aria-hidden
-                      />
-                      <span className="h-px w-7 bg-[linear-gradient(90deg,rgba(var(--room-accent-rgb),0.42)_0%,rgba(var(--room-accent-rgb),0.05)_100%)]" />
-                    </div>
-                  ) : (
-                    <span aria-hidden className="invisible w-full">_</span>
-                  )}
-                </div>
-                <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
-                  <div
-                    className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
-                    style={clashBgStyle}
-                  >
-                    <div className="space-y-3">
-                  <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
-                    {kickoffParts ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-display font-semibold">
-                          {kickoffParts.dayNum}
-                          <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                            {kickoffParts.suffix}
-                          </span>{" "}
-                          {kickoffParts.monthYear}
-                        </span>
-                        <span className="font-display font-semibold tabular-nums">{kickoffParts.time}</span>
-                      </div>
-                    ) : (
-                      <span>Fixture {fid}</span>
-                    )}
-                  </div>
 
-                  {f && (
-                    <>
-                      <div className="sm:hidden">
-                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    {f && (
+                      <>
+                        <div className="sm:hidden">
+                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                            <div className="flex flex-col items-center text-center min-w-0">
+                              <TeamBadge
+                                name={f.home.name}
+                                shortName={f.home.shortName}
+                                badge={f.home.badge}
+                                tla={f.home.tla}
+                              />
+                              <TeamLabel
+                                name={f.home.name}
+                                tla={f.home.tla}
+                                shortName={f.home.shortName}
+                                wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                fullNameWindowPx={68}
+                              />
+                            </div>
+                            <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                              vs
+                            </span>
+                            <div className="flex flex-col items-center text-center min-w-0">
+                              <TeamBadge
+                                name={f.away.name}
+                                shortName={f.away.shortName}
+                                badge={f.away.badge}
+                                tla={f.away.tla}
+                              />
+                              <TeamLabel
+                                name={f.away.name}
+                                tla={f.away.tla}
+                                shortName={f.away.shortName}
+                                wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                fullNameWindowPx={68}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                           <div className="flex flex-col items-center text-center min-w-0">
                             <TeamBadge
                               name={f.home.name}
@@ -772,13 +968,13 @@ export default function RevealPage() {
                               name={f.home.name}
                               tla={f.home.tla}
                               shortName={f.home.shortName}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                              fullNameWindowPx={68}
+                              wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                              fullNameWindowPx={88}
                             />
                           </div>
-                          <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                          <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
                             vs
                           </span>
                           <div className="flex flex-col items-center text-center min-w-0">
@@ -792,132 +988,88 @@ export default function RevealPage() {
                               name={f.away.name}
                               tla={f.away.tla}
                               shortName={f.away.shortName}
-                              wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                              fullNameWindowPx={68}
+                              wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                              fullNameWindowPx={88}
                             />
                           </div>
                         </div>
-                      </div>
+                      </>
+                    )}
 
-                      <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.home.name}
-                            shortName={f.home.shortName}
-                            badge={f.home.badge}
-                            tla={f.home.tla}
-                          />
-                          <TeamLabel
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
-                            fullNameWindowPx={88}
-                          />
-                        </div>
-                        <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
-                          vs
+                    <div className="overflow-hidden rounded-[22px] border border-white/7 bg-[rgb(5,10,22)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_24px_rgba(2,6,20,0.2)]">
+                      <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                          Prediction board
                         </span>
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.away.name}
-                            shortName={f.away.shortName}
-                            badge={f.away.badge}
-                            tla={f.away.tla}
-                          />
-                          <TeamLabel
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
-                            fullNameWindowPx={88}
-                          />
-                        </div>
+                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                          {playersSorted.length}{" "}
+                          {playersSorted.length === 1 ? "player" : "players"}
+                        </span>
                       </div>
-                    </>
-                  )}
-
-                      <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                          <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                            Prediction board
-                          </span>
-                          <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                            {playersSorted.length} {playersSorted.length === 1 ? "player" : "players"}
-                          </span>
-                        </div>
-                        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
-                          {playersSorted.map((uid) => {
-                            const sc = picksByUserFixture.get(`${uid}|${fid}`) || "";
-                            const g = goldensByUid[uid];
-                            const isGolden = g?.locked && g?.fixtureId === fid;
-                            const p = powerupsByUid[uid];
-                            const powerupType =
-                              p?.locked && p?.fixtureId === fid ? p.powerupType : null;
-                            const toneClass =
-                              "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
-                            const powerupTypeClass =
-                              powerupType === "ALL_IN"
-                                ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
-                                : powerupType === "SAFETY_NET"
-                                  ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
-                                  : "";
-                            const goldenBorderClass = isGolden ? "!border-yellow-300/75" : "";
-                            const goldenGlowClass = isGolden
-                              ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
-                              : "";
-                            const accentBarClass =
-                              powerupType === "ALL_IN"
-                                ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
-                                : powerupType === "SAFETY_NET"
-                                  ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
-                                  : isGolden
-                                    ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
-                                    : "from-white/24 via-white/10 to-transparent";
-                            return (
-                              <div key={`${fid}-${uid}`} className="relative min-w-0 !overflow-visible">
-                                <div
-                                  className={[
-                                    "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
-                                    toneClass,
-                                    goldenBorderClass,
-                                    goldenGlowClass,
-                                    powerupTypeClass,
-                                  ].join(" ")}
-                                >
-                                  <div
-                                    className={[
-                                      "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
-                                      accentBarClass,
-                                    ].join(" ")}
-                                  />
-                                  <div className="relative pl-3">
-                                    <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                      {displayNamesByUid[uid] ?? uid.slice(0, 6)}
-                                    </div>
-                                    <span className="font-display text-[0.92rem] font-semibold text-foreground truncate">
-                                      {fmtScore(sc)}
-                                    </span>
+                      <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                        {playersSorted.map((uid) => {
+                          const sc =
+                            picksByUserFixture.get(`${uid}|${fid}`) || "";
+                          const g = activeGoldensByUid[uid];
+                          const isGolden = g?.locked && g?.fixtureId === fid;
+                          const p = activePowerupsByUid[uid];
+                          const powerupType =
+                            p?.locked && p?.fixtureId === fid
+                              ? p.powerupType
+                              : null;
+                          const toneClass =
+                            "border-white/10 bg-[rgb(7,12,24)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_20px_rgba(2,6,20,0.16)]";
+                          const powerupTypeClass =
+                            powerupType === "ALL_IN"
+                              ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
+                              : powerupType === "SAFETY_NET"
+                                ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
+                                : "";
+                          const goldenBorderClass = isGolden
+                            ? "!border-yellow-300/75"
+                            : "";
+                          const goldenGlowClass = isGolden
+                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
+                            : "";
+                          return (
+                            <div
+                              key={`${fid}-${uid}`}
+                              className="relative min-w-0 overflow-hidden"
+                            >
+                              <div
+                                className={[
+                                  "relative overflow-hidden rounded-[20px] border px-3 py-2.5 text-left",
+                                  toneClass,
+                                  goldenBorderClass,
+                                  goldenGlowClass,
+                                  powerupTypeClass,
+                                ].join(" ")}
+                              >
+                                <div className="relative">
+                                  <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                    {activeDisplayNamesByUid[uid] ??
+                                      uid.slice(0, 6)}
                                   </div>
+                                  <span className="font-display text-[0.92rem] font-semibold text-foreground truncate">
+                                    {fmtScore(sc)}
+                                  </span>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
+      </SectionCard>
     </PageShell>
   );
 }

@@ -41,8 +41,12 @@ export default function LogoutButton() {
         panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
       >
         <div className="space-y-3 rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
-          <div className="font-display text-lg font-semibold text-foreground">Log Out</div>
-          <div className="text-sm text-muted">Are you sure you want to log out?</div>
+          <div className="font-display text-lg font-semibold text-foreground">
+            Log Out
+          </div>
+          <div className="text-sm text-muted">
+            Are you sure you want to log out?
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <button

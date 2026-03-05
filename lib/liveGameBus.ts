@@ -9,7 +9,12 @@ import { db } from "../firebase";
 
 type GameDocLike = Record<string, unknown> | null;
 type PickLike = { uid: string; fixtureId: number; score: string };
-type GoldenLike = { uid: string; fixtureId: number; score: string; locked: boolean };
+type GoldenLike = {
+  uid: string;
+  fixtureId: number;
+  score: string;
+  locked: boolean;
+};
 type PowerupLike = {
   uid: string;
   fixtureId: number;
@@ -67,11 +72,17 @@ function emitData<T>(ch: Channel<T>, data: T) {
 }
 
 function emitErr<T>(ch: Channel<T>, error: unknown) {
-  const err = error instanceof Error ? error : new Error("Firestore listener failed");
+  const err =
+    error instanceof Error ? error : new Error("Firestore listener failed");
   ch.errorListeners.forEach((cb) => cb(err));
 }
 
-function attachGameListener(roomCode: string, seasonKey: string, gw: number, ch: Channel<GameDocLike>) {
+function attachGameListener(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  ch: Channel<GameDocLike>,
+) {
   const ref = doc(
     db,
     "rooms",
@@ -83,12 +94,23 @@ function attachGameListener(roomCode: string, seasonKey: string, gw: number, ch:
   );
   ch.firestoreUnsub = onSnapshot(
     ref,
-    (snap) => emitData(ch, snap.exists() ? ((snap.data() as Record<string, unknown>) ?? null) : null),
+    (snap) =>
+      emitData(
+        ch,
+        snap.exists()
+          ? ((snap.data() as Record<string, unknown>) ?? null)
+          : null,
+      ),
     (e) => emitErr(ch, e),
   );
 }
 
-function attachPicksListener(roomCode: string, seasonKey: string, gw: number, ch: Channel<PickLike[]>) {
+function attachPicksListener(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  ch: Channel<PickLike[]>,
+) {
   const q = query(
     collection(
       db,
@@ -106,7 +128,11 @@ function attachPicksListener(roomCode: string, seasonKey: string, gw: number, ch
     (snap) => {
       const picks = snap.docs
         .map((d) => {
-          const data = d.data() as { uid?: string; fixtureId?: number; score?: string };
+          const data = d.data() as {
+            uid?: string;
+            fixtureId?: number;
+            score?: string;
+          };
           return {
             uid: String(data.uid || d.id),
             fixtureId: Number(data.fixtureId),
@@ -120,7 +146,12 @@ function attachPicksListener(roomCode: string, seasonKey: string, gw: number, ch
   );
 }
 
-function attachGoldenListener(roomCode: string, seasonKey: string, gw: number, ch: Channel<GoldenLike[]>) {
+function attachGoldenListener(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  ch: Channel<GoldenLike[]>,
+) {
   const q = query(
     collection(
       db,
@@ -138,7 +169,11 @@ function attachGoldenListener(roomCode: string, seasonKey: string, gw: number, c
     (snap) => {
       const goldens = snap.docs
         .map((d) => {
-          const data = d.data() as { fixtureId?: number; score?: string; locked?: boolean };
+          const data = d.data() as {
+            fixtureId?: number;
+            score?: string;
+            locked?: boolean;
+          };
           return {
             uid: d.id,
             fixtureId: Number(data.fixtureId),
@@ -240,12 +275,8 @@ export function subscribeRoomGameDoc(
   onError?: ErrorListener,
 ) {
   const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(
-    gameChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachGameListener(roomCode, seasonKey, gw, ch),
+  return subscribeChannel(gameChannels, key, onData, onError, (ch) =>
+    attachGameListener(roomCode, seasonKey, gw, ch),
   );
 }
 
@@ -257,12 +288,8 @@ export function subscribeRoomPicks(
   onError?: ErrorListener,
 ) {
   const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(
-    picksChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachPicksListener(roomCode, seasonKey, gw, ch),
+  return subscribeChannel(picksChannels, key, onData, onError, (ch) =>
+    attachPicksListener(roomCode, seasonKey, gw, ch),
   );
 }
 
@@ -274,12 +301,8 @@ export function subscribeRoomGoldens(
   onError?: ErrorListener,
 ) {
   const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(
-    goldenChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachGoldenListener(roomCode, seasonKey, gw, ch),
+  return subscribeChannel(goldenChannels, key, onData, onError, (ch) =>
+    attachGoldenListener(roomCode, seasonKey, gw, ch),
   );
 }
 
@@ -291,16 +314,15 @@ export function subscribeRoomPowerups(
   onError?: ErrorListener,
 ) {
   const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(
-    powerupsChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachPowerupsListener(roomCode, seasonKey, gw, ch),
+  return subscribeChannel(powerupsChannels, key, onData, onError, (ch) =>
+    attachPowerupsListener(roomCode, seasonKey, gw, ch),
   );
 }
 
-function attachRoomPlayersListener(roomCode: string, ch: Channel<RoomPlayerLike[]>) {
+function attachRoomPlayersListener(
+  roomCode: string,
+  ch: Channel<RoomPlayerLike[]>,
+) {
   const q = query(collection(db, "rooms", roomCode.toUpperCase(), "players"));
   ch.firestoreUnsub = onSnapshot(
     q,
@@ -320,7 +342,9 @@ function attachRoomPlayersListener(roomCode: string, ch: Channel<RoomPlayerLike[
           } satisfies RoomPlayerLike;
         })
         .sort((a, b) =>
-          a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+          a.displayName.localeCompare(b.displayName, undefined, {
+            sensitivity: "base",
+          }),
         );
       emitData(ch, players);
     },
@@ -334,16 +358,15 @@ export function subscribeRoomPlayers(
   onError?: ErrorListener,
 ) {
   const key = String(roomCode || "").toUpperCase();
-  return subscribeChannel(
-    roomPlayersChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachRoomPlayersListener(roomCode, ch),
+  return subscribeChannel(roomPlayersChannels, key, onData, onError, (ch) =>
+    attachRoomPlayersListener(roomCode, ch),
   );
 }
 
-function attachRoomMetaListener(roomCode: string, ch: Channel<RoomMetaLike | null>) {
+function attachRoomMetaListener(
+  roomCode: string,
+  ch: Channel<RoomMetaLike | null>,
+) {
   const ref = doc(db, "rooms", roomCode.toUpperCase());
   ch.firestoreUnsub = onSnapshot(
     ref,
@@ -386,11 +409,7 @@ export function subscribeRoomMeta(
   onError?: ErrorListener,
 ) {
   const key = String(roomCode || "").toUpperCase();
-  return subscribeChannel(
-    roomMetaChannels,
-    key,
-    onData,
-    onError,
-    (ch) => attachRoomMetaListener(roomCode, ch),
+  return subscribeChannel(roomMetaChannels, key, onData, onError, (ch) =>
+    attachRoomMetaListener(roomCode, ch),
   );
 }

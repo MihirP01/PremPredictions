@@ -46,7 +46,8 @@ type FotmobMatch = {
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
-  const startYear = now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
+  const startYear =
+    now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
   const yyStart = String(startYear % 100).padStart(2, "0");
   const yyEnd = String((startYear + 1) % 100).padStart(2, "0");
   return `${yyStart}${yyEnd}`;
@@ -103,9 +104,12 @@ function formatCountdown(msRemaining: number) {
 function halftimeLabel(status: FotmobStatus | undefined) {
   const kickoffMs = Date.parse(String(status?.utcTime || ""));
   if (!Number.isFinite(kickoffMs)) return "HT - 00:00";
-  const firstHalfMinutes = Number(status?.liveTime?.basePeriod ?? status?.periodLength ?? 45);
+  const firstHalfMinutes = Number(
+    status?.liveTime?.basePeriod ?? status?.periodLength ?? 45,
+  );
   const addedMinutes = Number(status?.liveTime?.addedTime ?? 0);
-  const restartMs = kickoffMs + (firstHalfMinutes + addedMinutes + 15) * 60 * 1000;
+  const restartMs =
+    kickoffMs + (firstHalfMinutes + addedMinutes + 15) * 60 * 1000;
   return `HT - ${formatCountdown(restartMs - Date.now())}`;
 }
 
@@ -113,7 +117,10 @@ function isFotmobFinished(status: FotmobStatus | undefined) {
   return Boolean(status?.finished || status?.awarded);
 }
 
-function overlayStatus(providerStatus: string, fotmobStatus: FotmobStatus | undefined) {
+function overlayStatus(
+  providerStatus: string,
+  fotmobStatus: FotmobStatus | undefined,
+) {
   if (!fotmobStatus) return String(providerStatus || "TIMED");
   if (isFotmobFinished(fotmobStatus)) return "FINISHED";
   if (fotmobStatus.cancelled) return "CANCELLED";
@@ -217,14 +224,19 @@ export async function GET(req: NextRequest) {
   const requestedSeason = req.nextUrl.searchParams.get("seasonKey");
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
   const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
-  const gameweek = Number.isFinite(Number(gameweekParam)) ? Number(gameweekParam) : null;
+  const gameweek = Number.isFinite(Number(gameweekParam))
+    ? Number(gameweekParam)
+    : null;
 
   try {
     const matches = await fetchFotmobMatches(season);
 
-    const filtered = gameweek == null
-      ? matches
-      : matches.filter((match) => Number(match?.roundName ?? match?.round) === gameweek);
+    const filtered =
+      gameweek == null
+        ? matches
+        : matches.filter(
+            (match) => Number(match?.roundName ?? match?.round) === gameweek,
+          );
 
     return NextResponse.json(
       {
@@ -242,7 +254,10 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to load live preview",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load live preview",
       },
       { status: 502 },
     );

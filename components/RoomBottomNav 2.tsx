@@ -85,7 +85,9 @@ export default function RoomBottomNav() {
         unsub = onSnapshot(
           gameRef,
           (snap) => {
-            const state = String((snap.data() as { state?: string } | undefined)?.state || "")
+            const state = String(
+              (snap.data() as { state?: string } | undefined)?.state || "",
+            )
               .trim()
               .toUpperCase();
 
@@ -94,7 +96,11 @@ export default function RoomBottomNav() {
               setPredictionsDisabled(false);
               return;
             }
-            if (state === "DRAFT" || state === "GOLDEN" || state === "POWERUPS") {
+            if (
+              state === "DRAFT" ||
+              state === "GOLDEN" ||
+              state === "POWERUPS"
+            ) {
               setPredictionsHref(`/room/${roomCode}/minigame`);
               setPredictionsDisabled(true);
               return;
@@ -226,9 +232,13 @@ export default function RoomBottomNav() {
                   className={[
                     item.active ? "text-foreground" : "text-muted",
                     item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
-                    item.key === "predictions" ? "nav-icon-predictions-fix" : "",
+                    item.key === "predictions"
+                      ? "nav-icon-predictions-fix"
+                      : "",
                     item.key === "home" ? "nav-icon-home-fix" : "",
-                    item.key === "home" && item.active ? "hub-icon-active-theme" : "",
+                    item.key === "home" && item.active
+                      ? "hub-icon-active-theme"
+                      : "",
                     item.key === "stats" ? "nav-icon-stats-fix" : "",
                     (item.key === "fixtures" ||
                       item.key === "predictions" ||
@@ -238,11 +248,21 @@ export default function RoomBottomNav() {
                     heavyFx
                       ? "nav-icon-pulse"
                       : "",
-                    item.key === "fixtures" && item.active && heavyFx ? "fixtures-icon--active" : "",
-                    item.key === "predictions" && item.active && heavyFx ? "predictions-icon--active" : "",
-                    item.key === "home" && item.active ? "home-icon--active" : "",
-                    item.key === "stats" && item.active ? "stats-icon--active" : "",
-                    item.key === "leaderboard" && item.active && heavyFx ? "leaderboard-icon--active" : "",
+                    item.key === "fixtures" && item.active && heavyFx
+                      ? "fixtures-icon--active"
+                      : "",
+                    item.key === "predictions" && item.active && heavyFx
+                      ? "predictions-icon--active"
+                      : "",
+                    item.key === "home" && item.active
+                      ? "home-icon--active"
+                      : "",
+                    item.key === "stats" && item.active
+                      ? "stats-icon--active"
+                      : "",
+                    item.key === "leaderboard" && item.active && heavyFx
+                      ? "leaderboard-icon--active"
+                      : "",
                   ].join(" ")}
                 />
                 {item.key === "predictions" && item.active && heavyFx ? (
@@ -255,23 +275,25 @@ export default function RoomBottomNav() {
                   <>
                     {heavyFx &&
                       leaderboardSparks.map((spark, idx) => (
-                      <span
-                        key={`spark-${idx}`}
-                        className="leaderboard-firework"
-                        style={{
-                          ["--sx" as string]: spark.sx,
-                          ["--sy" as string]: spark.sy,
-                          animationDelay: `${spark.delayMs}ms`,
-                          animationDuration: `${spark.durationMs}ms`,
-                          width: `${spark.sizePx}px`,
-                          height: `${spark.sizePx}px`,
-                        }}
-                      />
+                        <span
+                          key={`spark-${idx}`}
+                          className="leaderboard-firework"
+                          style={{
+                            ["--sx" as string]: spark.sx,
+                            ["--sy" as string]: spark.sy,
+                            animationDelay: `${spark.delayMs}ms`,
+                            animationDuration: `${spark.durationMs}ms`,
+                            width: `${spark.sizePx}px`,
+                            height: `${spark.sizePx}px`,
+                          }}
+                        />
                       ))}
                   </>
                 ) : null}
               </span>
-              <span className="font-display text-[7.5px] leading-none truncate">{item.label}</span>
+              <span className="font-display text-[7.5px] leading-none truncate">
+                {item.label}
+              </span>
             </button>
           );
         })}

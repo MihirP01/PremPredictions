@@ -1,4 +1,5 @@
 import React from "react";
+import { TurnCounterCard } from "./ScoreDesk";
 
 type CaptainTurnProps = {
   captainIsChoosingFixture: boolean;
@@ -17,7 +18,6 @@ type ChooseFixtureProps = {
   isLocked: boolean;
   hasFixture: boolean;
   onSubmit: () => void;
-  btnClassName: string;
 };
 
 export function CaptainTurnIndicator({
@@ -28,22 +28,23 @@ export function CaptainTurnIndicator({
   playerTurnTotal,
 }: CaptainTurnProps) {
   return (
-    <>
-      <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
-        Turn {captainIsChoosingFixture ? fixtureTurnNumber : playerTurnNumber}
-      </div>
-      <div className="font-display text-sm tracking-wide text-muted">
-        Out of {captainIsChoosingFixture ? fixtureTurnTotal : playerTurnTotal}
-      </div>
-    </>
+    <TurnCounterCard
+      label={captainIsChoosingFixture ? "Fixture turn" : "Player turn"}
+      current={captainIsChoosingFixture ? fixtureTurnNumber : playerTurnNumber}
+      total={captainIsChoosingFixture ? fixtureTurnTotal : playerTurnTotal}
+    />
   );
 }
 
 export function CaptainBanner({ captainName }: BannerProps) {
   return (
-    <div className="border border-teal-500 rounded-xl p-3 bg-surface-2 text-center">
-      <span className="text-xs text-muted uppercase tracking-wide">Captain</span>{" "}
-      <span className="font-display font-semibold text-foreground">{captainName}</span>
+    <div className="rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,32,0.94),rgba(7,12,22,0.96))] px-4 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+      <span className="font-display text-[0.62rem] uppercase tracking-[0.2em] text-muted/80">
+        Captain
+      </span>{" "}
+      <span className="font-display font-semibold text-foreground">
+        {captainName}
+      </span>
     </div>
   );
 }
@@ -53,15 +54,17 @@ export function CaptainChooseFixturePanel({
   isLocked,
   hasFixture,
   onSubmit,
-  btnClassName,
 }: ChooseFixtureProps) {
   return (
-    <div className="border border-teal-500 rounded-xl p-4 bg-surface-2 text-foreground space-y-3 text-center">
+    <div className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.98),rgba(7,12,22,0.97))] p-4 text-foreground shadow-[0_18px_38px_rgba(4,8,16,0.28)] sm:p-5">
+      <div className="font-display text-[0.65rem] uppercase tracking-[0.22em] text-muted/85">
+        Selection control
+      </div>
       <div className="space-y-1">
-        <div className="font-semibold text-foreground">
+        <div className="mt-2 font-display text-[1.35rem] font-semibold leading-tight text-foreground">
           {hasFixture ? "Fixture Selected" : "Choose Fixture"}
         </div>
-        <div className="text-xs text-muted">
+        <div className="text-sm text-muted">
           {hasFixture
             ? "Lock the highlighted fixture to start this round."
             : "Tap one fixture above, then lock it in to continue."}
@@ -70,7 +73,7 @@ export function CaptainChooseFixturePanel({
       <button
         disabled={submitting || isLocked || !hasFixture}
         onClick={onSubmit}
-        className={`w-full rounded-lg px-4 py-3 bg-accent text-accent-foreground disabled:opacity-60 ${btnClassName}`}
+        className="mt-4 w-full rounded-[18px] border border-amber-200/12 bg-[linear-gradient(90deg,rgba(78,56,33,0.88),rgba(52,42,34,0.82),rgba(78,56,33,0.88))] px-4 py-3 font-display text-base font-semibold tracking-[0.12em] text-foreground shadow-[0_16px_28px_rgba(40,24,10,0.22)] transition hover:border-amber-200/18 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? "Locking fixture…" : "Lock selected fixture"}
       </button>

@@ -51,8 +51,10 @@ function parseArgs() {
   };
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
-    if (a === "--room" && args[i + 1]) opts.roomCode = String(args[++i]).toUpperCase();
-    else if (a === "--season" && args[i + 1]) opts.seasonKey = String(args[++i]);
+    if (a === "--room" && args[i + 1])
+      opts.roomCode = String(args[++i]).toUpperCase();
+    else if (a === "--season" && args[i + 1])
+      opts.seasonKey = String(args[++i]);
     else if (a === "--gw" && args[i + 1]) opts.gw = Number(args[++i]);
     else if (a === "--apply") opts.apply = true;
   }
@@ -133,14 +135,18 @@ async function run() {
   if (!gameSnap.exists) throw new Error(`Game doc missing: ${gameBase}`);
   const game = gameSnap.data() || {};
   const players = Array.isArray(game.players) ? game.players : [];
-  const fixtureIds = Array.isArray(game.fixtureIds) ? game.fixtureIds.map(Number).filter(Number.isFinite) : [];
+  const fixtureIds = Array.isArray(game.fixtureIds)
+    ? game.fixtureIds.map(Number).filter(Number.isFinite)
+    : [];
 
   if (!players.length) throw new Error("No players in game doc");
   if (!fixtureIds.length) throw new Error("No fixtureIds in game doc");
 
   const actualByFixture = await fetchResults(gw, seasonKey);
   if (!actualByFixture.size) {
-    console.log("No finished fixture results yet for this GW; nothing to score.");
+    console.log(
+      "No finished fixture results yet for this GW; nothing to score.",
+    );
     return;
   }
 
@@ -159,7 +165,10 @@ async function run() {
   const goldenByUid = new Map();
   for (const d of goldenSnap.docs) {
     const g = d.data() || {};
-    goldenByUid.set(d.id, { fixtureId: Number(g.fixtureId), locked: Boolean(g.locked) });
+    goldenByUid.set(d.id, {
+      fixtureId: Number(g.fixtureId),
+      locked: Boolean(g.locked),
+    });
   }
 
   const writes = [];
@@ -193,8 +202,13 @@ async function run() {
   }
 
   console.log(`room=${roomCode} season=${seasonKey} gw=${gw}`);
-  console.log(`players=${players.length} fixturesWithResults=${actualByFixture.size}`);
-  console.log("preview:", writes.map((w) => ({ uid: w.uid, points: w.total })));
+  console.log(
+    `players=${players.length} fixturesWithResults=${actualByFixture.size}`,
+  );
+  console.log(
+    "preview:",
+    writes.map((w) => ({ uid: w.uid, points: w.total })),
+  );
 
   if (!apply) {
     console.log("Dry run complete. Re-run with --apply to write score docs.");

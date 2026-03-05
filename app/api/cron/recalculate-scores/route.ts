@@ -55,7 +55,9 @@ type FixtureItem = {
 };
 
 function isFinalStatus(status: string | null | undefined) {
-  const s = String(status || "").trim().toUpperCase();
+  const s = String(status || "")
+    .trim()
+    .toUpperCase();
   return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
 
@@ -63,12 +65,15 @@ function buildBaseUrl(req: Request) {
   const host = req.headers.get("host");
   const forwardedProto = req.headers.get("x-forwarded-proto");
   const proto =
-    forwardedProto ||
-    (host?.includes("localhost") ? "http" : "https");
+    forwardedProto || (host?.includes("localhost") ? "http" : "https");
   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
-async function fetchActualResultsForGw(baseUrl: string, gw: number, seasonKey: string) {
+async function fetchActualResultsForGw(
+  baseUrl: string,
+  gw: number,
+  seasonKey: string,
+) {
   const res = await fetch(
     `${baseUrl}/api/fixtures?gameweek=${gw}&seasonKey=${seasonKey}&refresh=1&t=${Date.now()}`,
     {
@@ -115,7 +120,14 @@ async function runCurrentGwRecalcForRoom(
           scoredGameweeks: 0,
           targetGws: [gw],
           seasonKey,
-          results: [{ gw, status: "skipped", scoredUsers: 0, message: "Game not found" }],
+          results: [
+            {
+              gw,
+              status: "skipped",
+              scoredUsers: 0,
+              message: "Game not found",
+            },
+          ],
         },
       };
     }
@@ -135,12 +147,23 @@ async function runCurrentGwRecalcForRoom(
           scoredGameweeks: 0,
           targetGws: [gw],
           seasonKey,
-          results: [{ gw, status: "skipped", scoredUsers: 0, message: "Missing players/fixtures" }],
+          results: [
+            {
+              gw,
+              status: "skipped",
+              scoredUsers: 0,
+              message: "Missing players/fixtures",
+            },
+          ],
         },
       };
     }
 
-    const actualByFixture = await fetchActualResultsForGw(baseUrl, gw, seasonKey);
+    const actualByFixture = await fetchActualResultsForGw(
+      baseUrl,
+      gw,
+      seasonKey,
+    );
     if (actualByFixture.size === 0) {
       return {
         roomCode,
@@ -152,7 +175,14 @@ async function runCurrentGwRecalcForRoom(
           scoredGameweeks: 0,
           targetGws: [gw],
           seasonKey,
-          results: [{ gw, status: "skipped", scoredUsers: 0, message: "No finished results yet" }],
+          results: [
+            {
+              gw,
+              status: "skipped",
+              scoredUsers: 0,
+              message: "No finished results yet",
+            },
+          ],
         },
       };
     }
@@ -169,7 +199,10 @@ async function runCurrentGwRecalcForRoom(
     }
 
     const goldenSnap = await adminDb.collection(`${gameBase}/golden`).get();
-    const goldenByUid = new Map<string, { fixtureId: number; locked: boolean }>();
+    const goldenByUid = new Map<
+      string,
+      { fixtureId: number; locked: boolean }
+    >();
     for (const d of goldenSnap.docs) {
       const data = d.data() as GoldenDoc;
       goldenByUid.set(d.id, {
@@ -180,13 +213,16 @@ async function runCurrentGwRecalcForRoom(
     const powerupsSnap = await adminDb.collection(`${gameBase}/powerups`).get();
     const powerupByUid = new Map<
       string,
-      { fixtureId: number; locked: boolean; powerupType: "ALL_IN" | "SAFETY_NET" }
+      {
+        fixtureId: number;
+        locked: boolean;
+        powerupType: "ALL_IN" | "SAFETY_NET";
+      }
     >();
     for (const d of powerupsSnap.docs) {
       const data = d.data() as PowerupDoc;
       const powerupType = String(data.powerupType || "").toUpperCase();
-      if (powerupType !== "ALL_IN" && powerupType !== "SAFETY_NET")
-        continue;
+      if (powerupType !== "ALL_IN" && powerupType !== "SAFETY_NET") continue;
       powerupByUid.set(d.id, {
         fixtureId: Number(data.fixtureId),
         locked: !!data.locked,
@@ -347,7 +383,10 @@ async function getCurrentGw(seasonKey: string) {
       nextOpen = md;
       break;
     }
-    if (row.total >= EXPECTED_MATCHES_PER_GW && row.finished >= EXPECTED_MATCHES_PER_GW) {
+    if (
+      row.total >= EXPECTED_MATCHES_PER_GW &&
+      row.finished >= EXPECTED_MATCHES_PER_GW
+    ) {
       continue;
     }
     nextOpen = md;
@@ -387,7 +426,9 @@ export async function GET(req: Request) {
     stage = "recalculate";
     const results: RecalcResult[] = [];
     for (const roomCode of roomCodes) {
-      results.push(await runCurrentGwRecalcForRoom(baseUrl, roomCode, gw, seasonKey));
+      results.push(
+        await runCurrentGwRecalcForRoom(baseUrl, roomCode, gw, seasonKey),
+      );
     }
 
     const okCount = results.filter((r) => r.ok).length;

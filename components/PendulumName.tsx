@@ -22,7 +22,10 @@ export default function PendulumName({
       const wrap = wrapRef.current;
       const inner = innerRef.current;
       if (!wrap || !inner) return;
-      const overflow = Math.max(0, Math.ceil(inner.scrollWidth - wrap.clientWidth));
+      const overflow = Math.max(
+        0,
+        Math.ceil(inner.scrollWidth - wrap.clientWidth),
+      );
       setPanPx(overflow);
     };
 

@@ -17,7 +17,8 @@ const TONE_CLASS: Record<StatusTone, string> = {
   you: "bg-[rgba(var(--room-accent-rgb),0.12)] border-[rgba(var(--room-accent-rgb),0.28)] text-foreground",
   ready: "bg-emerald-400/12 border-emerald-300/20 text-emerald-200",
   waiting: "bg-amber-400/12 border-amber-300/20 text-amber-100",
-  danger: "bg-rose-500/10 border-rose-300/20 text-rose-200 hover:bg-rose-500/16",
+  danger:
+    "bg-rose-500/10 border-rose-300/20 text-rose-200 hover:bg-rose-500/16",
 };
 
 export default function StatusPill({
@@ -27,7 +28,8 @@ export default function StatusPill({
   onClick,
   invisible = false,
 }: StatusPillProps) {
-  const base = `inline-flex items-center justify-center rounded-full border px-2.5 py-1 font-display text-[0.7rem] font-semibold ${TONE_CLASS[tone]} ${className}`.trim();
+  const base =
+    `inline-flex items-center justify-center rounded-full border px-2.5 py-1 font-display text-[0.7rem] font-semibold ${TONE_CLASS[tone]} ${className}`.trim();
   if (onClick) {
     return (
       <button onClick={onClick} className={base}>
@@ -36,7 +38,10 @@ export default function StatusPill({
     );
   }
   return (
-    <span aria-hidden={invisible ? "true" : undefined} className={`${invisible ? "invisible " : ""}${base}`}>
+    <span
+      aria-hidden={invisible ? "true" : undefined}
+      className={`${invisible ? "invisible " : ""}${base}`}
+    >
       {label}
     </span>
   );

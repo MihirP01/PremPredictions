@@ -49,7 +49,9 @@ export async function POST(req: Request) {
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
 
-    const gameRef = adminDb.doc(`rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}`);
+    const gameRef = adminDb.doc(
+      `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}`,
+    );
     const gameSnap = await gameRef.get();
     if (!gameSnap.exists) {
       return NextResponse.json({ error: "Game not started" }, { status: 404 });
@@ -66,7 +68,10 @@ export async function POST(req: Request) {
       state !== "POWERUPS" &&
       state !== "REVEAL"
     ) {
-      return NextResponse.json({ error: `Cannot stop from state ${state || "UNKNOWN"}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Cannot stop from state ${state || "UNKNOWN"}` },
+        { status: 400 },
+      );
     }
     const picksCol = adminDb.collection(
       `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}/picks`,

@@ -89,8 +89,12 @@ async function run() {
 
   for (const roomDoc of roomsSnap.docs) {
     const roomCode = roomDoc.id;
-    const legacyGamesSnap = await db.collection(`rooms/${roomCode}/games`).get();
-    const legacyScoresSnap = await db.collection(`rooms/${roomCode}/scores`).get();
+    const legacyGamesSnap = await db
+      .collection(`rooms/${roomCode}/games`)
+      .get();
+    const legacyScoresSnap = await db
+      .collection(`rooms/${roomCode}/scores`)
+      .get();
 
     if (legacyGamesSnap.empty && legacyScoresSnap.empty) continue;
     roomsTouched += 1;

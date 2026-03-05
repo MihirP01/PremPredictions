@@ -10,11 +10,16 @@ export type CachedRoomPlayer = {
 
 const TTL_MS = 60 * 1000;
 const STORAGE_PREFIX = "rplayers:v1:";
-const memCache = new Map<string, { expiresAt: number; data: CachedRoomPlayer[] }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: CachedRoomPlayer[] }
+>();
 const pending = new Map<string, Promise<CachedRoomPlayer[]>>();
 
 function keyFor(roomCode: string) {
-  return String(roomCode || "").trim().toUpperCase();
+  return String(roomCode || "")
+    .trim()
+    .toUpperCase();
 }
 
 function getStorage(key: string): CachedRoomPlayer[] | null {
@@ -22,7 +27,10 @@ function getStorage(key: string): CachedRoomPlayer[] | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: CachedRoomPlayer[] };
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: number;
+      data?: CachedRoomPlayer[];
+    };
     if (!parsed?.data || !parsed?.expiresAt) return null;
     if (Date.now() > parsed.expiresAt) return null;
     return parsed.data;
@@ -48,7 +56,9 @@ function setCached(key: string, data: CachedRoomPlayer[]) {
   setStorage(key, data);
 }
 
-export async function getRoomPlayersCached(roomCode: string): Promise<CachedRoomPlayer[]> {
+export async function getRoomPlayersCached(
+  roomCode: string,
+): Promise<CachedRoomPlayer[]> {
   const key = keyFor(roomCode);
   if (!key) return [];
   const now = Date.now();
@@ -79,7 +89,9 @@ export async function getRoomPlayersCached(roomCode: string): Promise<CachedRoom
         } satisfies CachedRoomPlayer;
       })
       .sort((a, b) =>
-        a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+        a.displayName.localeCompare(b.displayName, undefined, {
+          sensitivity: "base",
+        }),
       );
     setCached(key, list);
     return list;
@@ -88,4 +100,3 @@ export async function getRoomPlayersCached(roomCode: string): Promise<CachedRoom
   pending.set(key, req);
   return req;
 }
-

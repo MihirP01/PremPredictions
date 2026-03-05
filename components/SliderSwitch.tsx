@@ -24,7 +24,10 @@ export default function SliderSwitch<T extends string>({
   activeButtonClassName = "text-foreground",
 }: SliderSwitchProps<T>) {
   const count = Math.max(options.length, 1);
-  const activeIndex = Math.max(0, options.findIndex((opt) => opt.value === value));
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((opt) => opt.value === value),
+  );
   const baseButtonClass =
     "relative z-10 flex w-full min-w-0 items-center justify-center overflow-hidden text-center";
   const baseLabelClass =

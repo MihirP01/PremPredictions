@@ -42,7 +42,9 @@ export async function POST(req: Request) {
     const sameResultLock = body.sameResultLock;
     const powerupsEnabled = body.powerupsEnabled;
     const themeAccent =
-      typeof body.themeAccent === "string" ? body.themeAccent.trim().toLowerCase() : undefined;
+      typeof body.themeAccent === "string"
+        ? body.themeAccent.trim().toLowerCase()
+        : undefined;
     const gameModeStyle =
       typeof body.gameModeStyle === "string"
         ? body.gameModeStyle.trim().toLowerCase()
@@ -69,7 +71,10 @@ export async function POST(req: Request) {
       );
     }
     if (themeAccent && !ALLOWED_THEME_ACCENTS.has(themeAccent)) {
-      return NextResponse.json({ error: "Invalid themeAccent" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid themeAccent" },
+        { status: 400 },
+      );
     }
     if (
       gameModeStyle &&
@@ -77,7 +82,10 @@ export async function POST(req: Request) {
       gameModeStyle !== "sprint" &&
       gameModeStyle !== "captain"
     ) {
-      return NextResponse.json({ error: "Invalid gameModeStyle" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid gameModeStyle" },
+        { status: 400 },
+      );
     }
 
     const roomRef = adminDb.doc(`rooms/${roomCode}`);

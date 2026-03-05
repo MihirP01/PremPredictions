@@ -3,8 +3,18 @@ export type FixtureItem = {
   gameweek: number;
   kickoff: string;
   status: string;
-  home: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
-  away: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  home: {
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
+  away: {
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
   result?: string | null;
 };
 
@@ -15,7 +25,10 @@ export type FixturesCachedData = {
 
 const TTL_MS = 60 * 1000;
 const STORAGE_PREFIX = "fx:v1:";
-const memCache = new Map<string, { expiresAt: number; data: FixturesCachedData }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: FixturesCachedData }
+>();
 const pending = new Map<string, Promise<FixturesCachedData>>();
 
 function keyFor(gameweek: number, seasonKey: string) {
@@ -23,7 +36,10 @@ function keyFor(gameweek: number, seasonKey: string) {
 }
 
 function normalize(data: unknown): FixturesCachedData {
-  const payload = (data || {}) as { fixtures?: FixtureItem[]; generatedAt?: string };
+  const payload = (data || {}) as {
+    fixtures?: FixtureItem[];
+    generatedAt?: string;
+  };
   return {
     fixtures: Array.isArray(payload.fixtures) ? payload.fixtures : [],
     generatedAt: payload.generatedAt ? String(payload.generatedAt) : null,
@@ -35,7 +51,10 @@ function getStorage(key: string): FixturesCachedData | null {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: FixturesCachedData };
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: number;
+      data?: FixturesCachedData;
+    };
     if (!parsed?.data || !parsed?.expiresAt) return null;
     if (Date.now() > parsed.expiresAt) return null;
     return parsed.data;
@@ -73,7 +92,9 @@ function mergeFixtureResults(
   next: FixturesCachedData,
 ): FixturesCachedData {
   if (!previous?.fixtures?.length || !next.fixtures.length) return next;
-  const prevById = new Map(previous.fixtures.map((fixture) => [fixture.fixtureId, fixture]));
+  const prevById = new Map(
+    previous.fixtures.map((fixture) => [fixture.fixtureId, fixture]),
+  );
   return {
     ...next,
     fixtures: next.fixtures.map((fixture) => {

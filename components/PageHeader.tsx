@@ -7,6 +7,7 @@ type PageHeaderProps = {
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
+  frameActions?: boolean;
 };
 
 type MobileVisibilityAwareType = {
@@ -19,7 +20,9 @@ function hasRenderableNode(node: React.ReactNode): boolean {
   if (React.isValidElement(node)) {
     const props = node.props as { children?: React.ReactNode };
     if (typeof node.type === "string") return hasRenderableNode(props.children);
-    return props.children === undefined ? true : hasRenderableNode(props.children);
+    return props.children === undefined
+      ? true
+      : hasRenderableNode(props.children);
   }
   return true;
 }
@@ -29,11 +32,17 @@ function hasMobileRenderableNode(node: React.ReactNode): boolean {
   if (Array.isArray(node)) return node.some(hasMobileRenderableNode);
   if (React.isValidElement(node)) {
     const props = node.props as { children?: React.ReactNode };
-    if (typeof node.type !== "string" && (node.type as MobileVisibilityAwareType).hidesOnMobile) {
+    if (
+      typeof node.type !== "string" &&
+      (node.type as MobileVisibilityAwareType).hidesOnMobile
+    ) {
       return false;
     }
-    if (typeof node.type === "string") return hasMobileRenderableNode(props.children);
-    return props.children === undefined ? true : hasMobileRenderableNode(props.children);
+    if (typeof node.type === "string")
+      return hasMobileRenderableNode(props.children);
+    return props.children === undefined
+      ? true
+      : hasMobileRenderableNode(props.children);
   }
   return true;
 }
@@ -43,13 +52,17 @@ export default function PageHeader({
   subtitle,
   actions,
   className = "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between",
+  frameActions = true,
 }: PageHeaderProps) {
   const showActions = hasRenderableNode(actions);
   const showActionsOnMobile = hasMobileRenderableNode(actions);
 
   return (
     <div
-      className={["relative z-[40] rounded-[22px] border px-4 py-4 sm:px-5", className].join(" ")}
+      className={[
+        "relative z-[40] rounded-[22px] border px-4 py-4 sm:px-5",
+        className,
+      ].join(" ")}
       style={{
         borderColor: "var(--editorial-header-border)",
         background: "var(--editorial-header-bg)",
@@ -57,7 +70,7 @@ export default function PageHeader({
         WebkitBackdropFilter: "blur(16px)",
       }}
     >
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         {subtitle ? (
           <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/50">
             {subtitle}
@@ -68,20 +81,31 @@ export default function PageHeader({
         </h1>
       </div>
       {showActions ? (
-        <div
-          className={[
-            "page-actions-enter relative z-[60] flex-wrap items-center gap-2 overflow-visible rounded-[18px] border px-2 py-2 sm:ml-auto sm:flex",
-            showActionsOnMobile ? "flex" : "hidden",
-          ].join(" ")}
-          style={{
-            borderColor: "var(--editorial-action-border)",
-            background: "var(--editorial-action-bg)",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-          }}
-        >
-          {actions}
-        </div>
+        frameActions ? (
+          <div
+            className={[
+              "page-actions-enter relative z-[60] flex-wrap items-center gap-2 overflow-visible rounded-[18px] border px-2 py-2 sm:ml-auto sm:flex",
+              showActionsOnMobile ? "flex" : "hidden",
+            ].join(" ")}
+            style={{
+              borderColor: "var(--editorial-action-border)",
+              background: "var(--editorial-action-bg)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+            }}
+          >
+            {actions}
+          </div>
+        ) : (
+          <div
+            className={[
+              "relative z-[60] shrink-0 self-start justify-self-end flex-wrap items-center gap-2 overflow-visible sm:ml-auto sm:flex",
+              showActionsOnMobile ? "flex" : "hidden",
+            ].join(" ")}
+          >
+            {actions}
+          </div>
+        )
       ) : null}
     </div>
   );

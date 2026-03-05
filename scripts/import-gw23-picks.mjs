@@ -51,33 +51,43 @@ function normalize(s) {
 
 const TEAM_ALIASES = {
   "west ham": ["west ham", "west ham united"],
-  "sunderland": ["sunderland", "sunderland afc"],
-  "burnley": ["burnley"],
-  "spurs": ["spurs", "tottenham", "tottenham hotspur"],
-  "fulham": ["fulham"],
-  "brighton": ["brighton", "brighton hove albion", "brighton and hove albion"],
-  "city": ["city", "man city", "manchester city"],
-  "wolves": ["wolves", "wolverhampton", "wolverhampton wanderers"],
-  "bournemouth": ["bournemouth", "afc bournemouth"],
-  "liverpool": ["liverpool"],
-  "brentford": ["brentford"],
-  "forrest": ["forrest", "forest", "nottingham forest"],
-  "palace": ["palace", "crystal palace"],
-  "chelsea": ["chelsea"],
-  "newcastle": ["newcastle", "newcastle united"],
-  "villa": ["villa", "aston villa"],
-  "arsenal": ["arsenal"],
-  "united": ["united", "man united", "manchester united"],
-  "everton": ["everton"],
-  "leeds": ["leeds", "leeds united"],
+  sunderland: ["sunderland", "sunderland afc"],
+  burnley: ["burnley"],
+  spurs: ["spurs", "tottenham", "tottenham hotspur"],
+  fulham: ["fulham"],
+  brighton: ["brighton", "brighton hove albion", "brighton and hove albion"],
+  city: ["city", "man city", "manchester city"],
+  wolves: ["wolves", "wolverhampton", "wolverhampton wanderers"],
+  bournemouth: ["bournemouth", "afc bournemouth"],
+  liverpool: ["liverpool"],
+  brentford: ["brentford"],
+  forrest: ["forrest", "forest", "nottingham forest"],
+  palace: ["palace", "crystal palace"],
+  chelsea: ["chelsea"],
+  newcastle: ["newcastle", "newcastle united"],
+  villa: ["villa", "aston villa"],
+  arsenal: ["arsenal"],
+  united: ["united", "man united", "manchester united"],
+  everton: ["everton"],
+  leeds: ["leeds", "leeds united"],
 };
 
 const ROWS = [
-  { fixture: "West Ham vs Sunderland", Sam: "1-2", Mihir: "2-2", Khushal: "1-1" },
+  {
+    fixture: "West Ham vs Sunderland",
+    Sam: "1-2",
+    Mihir: "2-2",
+    Khushal: "1-1",
+  },
   { fixture: "Burnley vs Spurs", Sam: "0-1", Mihir: "1-2", Khushal: "1-3" },
   { fixture: "Fulham vs Brighton", Sam: "1-1", Mihir: "2-0", Khushal: "2-1" },
   { fixture: "City vs Wolves", Sam: "3-1*", Mihir: "4-0", Khushal: "4-1" },
-  { fixture: "Bournemouth vs Liverpool", Sam: "1-3", Mihir: "3-3", Khushal: "2-2" },
+  {
+    fixture: "Bournemouth vs Liverpool",
+    Sam: "1-3",
+    Mihir: "3-3",
+    Khushal: "2-2",
+  },
   { fixture: "Brentford vs Forrest", Sam: "3-2", Mihir: "1-2", Khushal: "2-1" },
   { fixture: "Palace vs Chelsea", Sam: "1-2", Mihir: "1-3", Khushal: "1-3" },
   { fixture: "Newcastle vs Villa", Sam: "2-1", Mihir: "1-3", Khushal: "2-2" },
@@ -97,8 +107,10 @@ function parseArgs() {
   };
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
-    if (a === "--room" && args[i + 1]) opts.roomCode = String(args[++i]).toUpperCase();
-    else if (a === "--season" && args[i + 1]) opts.seasonKey = String(args[++i]);
+    if (a === "--room" && args[i + 1])
+      opts.roomCode = String(args[++i]).toUpperCase();
+    else if (a === "--season" && args[i + 1])
+      opts.seasonKey = String(args[++i]);
     else if (a === "--gw" && args[i + 1]) opts.gw = Number(args[++i]);
     else if (a === "--apply") opts.apply = true;
   }
@@ -127,15 +139,25 @@ function teamCandidateList(label) {
 function teamMatches(teamName, desiredLabel) {
   const team = normalize(teamName);
   const candidates = teamCandidateList(desiredLabel);
-  return candidates.some((candidate) => team === candidate || team.includes(candidate) || candidate.includes(team));
+  return candidates.some(
+    (candidate) =>
+      team === candidate ||
+      team.includes(candidate) ||
+      candidate.includes(team),
+  );
 }
 
 function pickFixture(fixtures, fixtureLabel) {
-  const [homeRaw, awayRaw] = String(fixtureLabel).split(/\s+vs\s+/i).map((s) => s.trim());
-  if (!homeRaw || !awayRaw) throw new Error(`Bad fixture label '${fixtureLabel}'`);
+  const [homeRaw, awayRaw] = String(fixtureLabel)
+    .split(/\s+vs\s+/i)
+    .map((s) => s.trim());
+  if (!homeRaw || !awayRaw)
+    throw new Error(`Bad fixture label '${fixtureLabel}'`);
 
-  const match = fixtures.find((f) =>
-    teamMatches(f.homeTeam?.name || "", homeRaw) && teamMatches(f.awayTeam?.name || "", awayRaw),
+  const match = fixtures.find(
+    (f) =>
+      teamMatches(f.homeTeam?.name || "", homeRaw) &&
+      teamMatches(f.awayTeam?.name || "", awayRaw),
   );
 
   if (!match) {
@@ -189,7 +211,8 @@ async function resolvePlayers(roomCode) {
   const resolved = {};
   for (const p of PLAYER_ORDER) {
     const uid = byLabel.get(normalize(p));
-    if (!uid) throw new Error(`Could not resolve player '${p}' in room ${roomCode}`);
+    if (!uid)
+      throw new Error(`Could not resolve player '${p}' in room ${roomCode}`);
     resolved[p] = uid;
   }
   return resolved;
@@ -197,7 +220,9 @@ async function resolvePlayers(roomCode) {
 
 async function run() {
   const { roomCode, seasonKey, gw, apply } = opts;
-  console.log(`Importing historical picks: room=${roomCode} season=${seasonKey} gw=${gw} apply=${apply}`);
+  console.log(
+    `Importing historical picks: room=${roomCode} season=${seasonKey} gw=${gw} apply=${apply}`,
+  );
 
   const [fixtures, playersByName] = await Promise.all([
     fetchFixtures(gw, seasonKey),
@@ -229,11 +254,15 @@ async function run() {
   }
 
   if (goldenByUid.size !== PLAYER_ORDER.length) {
-    console.warn(`Warning: expected ${PLAYER_ORDER.length} golden picks, found ${goldenByUid.size}`);
+    console.warn(
+      `Warning: expected ${PLAYER_ORDER.length} golden picks, found ${goldenByUid.size}`,
+    );
   }
 
   console.log("Resolved players:", playersByName);
-  console.log(`Matched fixtures: ${new Set(picks.map((p) => p.fixtureId)).size}`);
+  console.log(
+    `Matched fixtures: ${new Set(picks.map((p) => p.fixtureId)).size}`,
+  );
   console.log(`Picks to write: ${picks.length}`);
   console.log(`Golden docs to write: ${goldenByUid.size}`);
 

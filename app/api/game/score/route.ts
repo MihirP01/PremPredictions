@@ -46,7 +46,9 @@ type GwRunResult = {
 };
 
 function isFinalStatus(status: string | null | undefined) {
-  const s = String(status || "").trim().toUpperCase();
+  const s = String(status || "")
+    .trim()
+    .toUpperCase();
   return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
 
@@ -54,8 +56,7 @@ function buildBaseUrl(req: Request) {
   const host = req.headers.get("host");
   const forwardedProto = req.headers.get("x-forwarded-proto");
   const proto =
-    forwardedProto ||
-    (host?.includes("localhost") ? "http" : "https");
+    forwardedProto || (host?.includes("localhost") ? "http" : "https");
   return host ? `${proto}://${host}` : "http://localhost:3000";
 }
 
@@ -83,7 +84,8 @@ async function fetchActualResultsForGw(
   for (const f of fixtures) {
     const id = Number(f.fixtureId);
     if (!Number.isFinite(id)) continue;
-    if (f.result && isFinalStatus(f.status)) actualByFixture.set(id, String(f.result));
+    if (f.result && isFinalStatus(f.status))
+      actualByFixture.set(id, String(f.result));
   }
 
   return actualByFixture;
@@ -128,9 +130,7 @@ async function scoreSingleGw(
     };
   }
 
-  const picksSnap = await adminDb
-    .collection(`${gameBase}/picks`)
-    .get();
+  const picksSnap = await adminDb.collection(`${gameBase}/picks`).get();
   const picks = picksSnap.docs.map((d) => d.data() as PickDoc);
 
   const pickMap = new Map<string, string>();
@@ -142,9 +142,7 @@ async function scoreSingleGw(
     pickMap.set(`${uid}|${fid}`, sc);
   }
 
-  const goldenSnap = await adminDb
-    .collection(`${gameBase}/golden`)
-    .get();
+  const goldenSnap = await adminDb.collection(`${gameBase}/golden`).get();
   const goldenByUid = new Map<string, { fixtureId: number; locked: boolean }>();
   for (const d of goldenSnap.docs) {
     const data = d.data() as GoldenDoc;
@@ -163,8 +161,7 @@ async function scoreSingleGw(
   for (const d of powerupsSnap.docs) {
     const data = d.data() as PowerupDoc;
     const powerupType = String(data.powerupType || "").toUpperCase();
-    if (powerupType !== "ALL_IN" && powerupType !== "SAFETY_NET")
-      continue;
+    if (powerupType !== "ALL_IN" && powerupType !== "SAFETY_NET") continue;
     powerupByUid.set(d.id, {
       fixtureId: Number(data.fixtureId),
       locked: !!data.locked,
@@ -179,15 +176,15 @@ async function scoreSingleGw(
     let total = 0;
     const breakdown: Record<
       string,
-        {
-          pred: string | null;
-          actual: string;
-          base: number;
-          golden: boolean;
-          powerupType: "ALL_IN" | "SAFETY_NET" | null;
-          total: number;
-        }
-      > = {};
+      {
+        pred: string | null;
+        actual: string;
+        base: number;
+        golden: boolean;
+        powerupType: "ALL_IN" | "SAFETY_NET" | null;
+        total: number;
+      }
+    > = {};
 
     const g = goldenByUid.get(uid);
     const goldenFixtureId = g?.locked ? g.fixtureId : null;
@@ -220,9 +217,7 @@ async function scoreSingleGw(
       };
     }
 
-    const scoreRef = adminDb.doc(
-      `${seasonBase}/scores/gw-${gw}/users/${uid}`,
-    );
+    const scoreRef = adminDb.doc(`${seasonBase}/scores/gw-${gw}/users/${uid}`);
     batch.set(
       scoreRef,
       {
@@ -274,7 +269,9 @@ export async function POST(req: Request) {
 
     const baseUrl = buildBaseUrl(req);
 
-    const targetGws = currentOnly ? [gwn] : [gwn, gwn - 1, gwn - 2].filter((n) => n >= 1);
+    const targetGws = currentOnly
+      ? [gwn]
+      : [gwn, gwn - 1, gwn - 2].filter((n) => n >= 1);
     const results: GwRunResult[] = [];
 
     for (const targetGw of targetGws) {

@@ -34,7 +34,10 @@ export type SeasonScoresSnapshot = {
 const STORAGE_PREFIX = "seasonScores:v1:";
 const TTL_MS = 45_000;
 
-const memCache = new Map<string, { expiresAt: number; data: SeasonScoresSnapshot }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: SeasonScoresSnapshot }
+>();
 const pending = new Map<string, Promise<SeasonScoresSnapshot>>();
 
 function parseGwId(id: string): number | null {
@@ -99,7 +102,10 @@ function setStorage(key: string, data: SeasonScoresSnapshot) {
   }
 }
 
-async function fetchSnapshot(roomCode: string, seasonKey: string): Promise<SeasonScoresSnapshot> {
+async function fetchSnapshot(
+  roomCode: string,
+  seasonKey: string,
+): Promise<SeasonScoresSnapshot> {
   const upperRoom = String(roomCode || "").toUpperCase();
   const season = String(seasonKey || "");
 
@@ -204,7 +210,9 @@ export async function getSeasonScoresSnapshotCached(
   return req;
 }
 
-export function prewarmSeasonScoresSnapshot(roomCode: string, seasonKey: string) {
+export function prewarmSeasonScoresSnapshot(
+  roomCode: string,
+  seasonKey: string,
+) {
   void getSeasonScoresSnapshotCached(roomCode, seasonKey).catch(() => {});
 }
-

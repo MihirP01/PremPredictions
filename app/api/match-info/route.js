@@ -174,7 +174,10 @@ function absoluteFotmobUrl(url) {
 
 async function fetchJson(url) {
   const res = await fetch(url, {
-    headers: { ...DEFAULT_HEADERS, Accept: "application/json, text/plain, */*" },
+    headers: {
+      ...DEFAULT_HEADERS,
+      Accept: "application/json, text/plain, */*",
+    },
     cache: "no-store",
   });
   if (!res.ok) {
@@ -243,7 +246,9 @@ function toMiniMatch(match) {
       emblem: null,
     },
     result: normalizeScore(match?.status?.scoreStr),
-    status: cleanText(match?.status?.reason?.short || match?.status?.liveTime?.short || ""),
+    status: cleanText(
+      match?.status?.reason?.short || match?.status?.liveTime?.short || "",
+    ),
   };
 }
 
@@ -258,7 +263,9 @@ function toFormResult(match, teamId) {
 
 function mapPlayer(player) {
   const tags = [];
-  const events = Array.isArray(player?.performance?.events) ? player.performance.events : [];
+  const events = Array.isArray(player?.performance?.events)
+    ? player.performance.events
+    : [];
   let goalCount = 0;
   let ownGoalCount = 0;
   let assistCount = 0;
@@ -292,7 +299,9 @@ function mapPlayer(player) {
     id: Number(player?.id || 0) || null,
     name: String(player?.name || "Player"),
     shirtNumber: player?.shirtNumber ? String(player.shirtNumber) : null,
-    positionId: Number.isFinite(Number(player?.positionId)) ? Number(player.positionId) : null,
+    positionId: Number.isFinite(Number(player?.positionId))
+      ? Number(player.positionId)
+      : null,
     photo: playerImageUrl(player?.id),
     layout:
       Number.isFinite(Number(player?.verticalLayout?.x)) &&
@@ -303,10 +312,9 @@ function mapPlayer(player) {
           }
         : null,
     positionLabel: positionLabelFromId(player?.usualPlayingPositionId),
-    rating:
-      Number.isFinite(Number(player?.performance?.rating))
-        ? Number(player.performance.rating)
-        : null,
+    rating: Number.isFinite(Number(player?.performance?.rating))
+      ? Number(player.performance.rating)
+      : null,
     goalCount,
     ownGoalCount,
     assistCount,
@@ -316,7 +324,9 @@ function mapPlayer(player) {
     statusTags: tags,
     substitutionEvents: Array.isArray(player?.performance?.substitutionEvents)
       ? player.performance.substitutionEvents.map((event) => ({
-          time: Number.isFinite(Number(event?.time)) ? Number(event.time) : null,
+          time: Number.isFinite(Number(event?.time))
+            ? Number(event.time)
+            : null,
           type: cleanText(event?.type),
         }))
       : [],
@@ -331,26 +341,37 @@ function mapLineupTeam(team) {
     coach: team?.coach?.name ? String(team.coach.name) : null,
     starters: Array.isArray(team?.starters) ? team.starters.map(mapPlayer) : [],
     subs: Array.isArray(team?.subs) ? team.subs.map(mapPlayer) : [],
-    unavailable: Array.isArray(team?.unavailable) ? team.unavailable.map(mapPlayer) : [],
+    unavailable: Array.isArray(team?.unavailable)
+      ? team.unavailable.map(mapPlayer)
+      : [],
   };
 }
 
 function extractTopStats(statsRoot) {
-  const groups = Array.isArray(statsRoot?.Periods?.All?.stats) ? statsRoot.Periods.All.stats : [];
+  const groups = Array.isArray(statsRoot?.Periods?.All?.stats)
+    ? statsRoot.Periods.All.stats
+    : [];
   const preferred =
     groups.find((group) => String(group?.key || "") === "top_stats") ||
     groups[0] ||
     null;
   const stats = Array.isArray(preferred?.stats) ? preferred.stats : [];
   return stats
-    .filter((row) => Array.isArray(row?.stats) && row.stats.length >= 2 && row?.type !== "title")
+    .filter(
+      (row) =>
+        Array.isArray(row?.stats) &&
+        row.stats.length >= 2 &&
+        row?.type !== "title",
+    )
     .slice(0, 8)
     .map((row) => ({
       label: String(row?.title || "Stat"),
       home: String(row.stats[0] ?? "—"),
       away: String(row.stats[1] ?? "—"),
       highlighted:
-        row?.highlighted === "home" || row?.highlighted === "away" || row?.highlighted === "equal"
+        row?.highlighted === "home" ||
+        row?.highlighted === "away" ||
+        row?.highlighted === "equal"
           ? row.highlighted
           : null,
     }));
@@ -391,10 +412,13 @@ function extractRecentForm(teamData, excludeMatchId, teamId) {
   if (!Array.isArray(list)) return [];
   return list
     .filter((match) => Number(match?.id) !== excludeMatchId)
-    .filter((match) => Boolean(match?.status?.finished || match?.status?.awarded))
+    .filter((match) =>
+      Boolean(match?.status?.finished || match?.status?.awarded),
+    )
     .sort(
       (a, b) =>
-        Date.parse(String(b?.status?.utcTime || 0)) - Date.parse(String(a?.status?.utcTime || 0)),
+        Date.parse(String(b?.status?.utcTime || 0)) -
+        Date.parse(String(a?.status?.utcTime || 0)),
     )
     .slice(0, 5)
     .map((match) => ({
@@ -413,10 +437,10 @@ function deriveLineupPhase(kickoff) {
 function isLiveLeagueStatus(status) {
   return Boolean(
     status &&
-      status.started &&
-      !status.finished &&
-      !status.awarded &&
-      !status.cancelled,
+    status.started &&
+    !status.finished &&
+    !status.awarded &&
+    !status.cancelled,
   );
 }
 
@@ -433,7 +457,10 @@ export async function GET(req) {
   const awayShortName = searchParams.get("awayShortName");
 
   if (!Number.isFinite(fixtureId)) {
-    return NextResponse.json({ error: "fixtureId is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "fixtureId is required" },
+      { status: 400 },
+    );
   }
   if (!seasonKey || !kickoff || !homeName || !awayName) {
     return NextResponse.json(
@@ -455,7 +482,10 @@ export async function GET(req) {
     });
 
     if (!leagueMatch?.pageUrl) {
-      return NextResponse.json({ error: "Match not found on FotMob." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Match not found on FotMob." },
+        { status: 404 },
+      );
     }
 
     const matchUrl = `https://www.fotmob.com${leagueMatch.pageUrl.split("#")[0]}`;
@@ -469,11 +499,15 @@ export async function GET(req) {
     const awayHeaderTeam = headerTeams[1] || {};
 
     const teamResults = await Promise.allSettled(
-      headerTeams.slice(0, 2).map((team) =>
-        team?.pageUrl
-          ? fetchHtml(`https://www.fotmob.com${String(team.pageUrl).split("#")[0]}`)
-          : Promise.resolve(""),
-      ),
+      headerTeams
+        .slice(0, 2)
+        .map((team) =>
+          team?.pageUrl
+            ? fetchHtml(
+                `https://www.fotmob.com${String(team.pageUrl).split("#")[0]}`,
+              )
+            : Promise.resolve(""),
+        ),
     );
 
     const homeTeamPage =
@@ -485,8 +519,14 @@ export async function GET(req) {
         ? parseNextDataSafe(teamResults[1].value)
         : null;
 
-    const homeTeamData = extractTeamFallback(homeTeamPage, Number(homeHeaderTeam?.id || 0));
-    const awayTeamData = extractTeamFallback(awayTeamPage, Number(awayHeaderTeam?.id || 0));
+    const homeTeamData = extractTeamFallback(
+      homeTeamPage,
+      Number(homeHeaderTeam?.id || 0),
+    );
+    const awayTeamData = extractTeamFallback(
+      awayTeamPage,
+      Number(awayHeaderTeam?.id || 0),
+    );
 
     const headToHead = Array.isArray(content?.h2h?.matches)
       ? content.h2h.matches.slice(0, 5).map(toMiniMatch)
@@ -545,7 +585,10 @@ export async function GET(req) {
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to load match info." },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to load match info.",
+      },
       { status: 502 },
     );
   }

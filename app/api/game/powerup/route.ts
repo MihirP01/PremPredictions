@@ -48,14 +48,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Bad input" }, { status: 400 });
     }
     if (type !== "ALL_IN" && type !== "SAFETY_NET") {
-      return NextResponse.json({ error: "Unsupported power-up type" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Unsupported power-up type" },
+        { status: 400 },
+      );
     }
 
     const seasonBase = `rooms/${rc}/seasons/${sk}`;
     const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}`);
-    const powerupRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}/powerups/${userUid}`);
-    const pickRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}/picks/${userUid}_${fxId}`);
-    const goldenRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}/golden/${userUid}`);
+    const powerupRef = adminDb.doc(
+      `${seasonBase}/games/gw-${gwn}/powerups/${userUid}`,
+    );
+    const pickRef = adminDb.doc(
+      `${seasonBase}/games/gw-${gwn}/picks/${userUid}_${fxId}`,
+    );
+    const goldenRef = adminDb.doc(
+      `${seasonBase}/games/gw-${gwn}/golden/${userUid}`,
+    );
 
     const preGameSnap = await gameRef.get();
     if (!preGameSnap.exists) {
@@ -85,7 +94,11 @@ export async function POST(req: Request) {
       if (goldenSnap.exists) {
         const golden = goldenSnap.data() as GoldenDoc;
         const goldenFixtureId = Number(golden.fixtureId);
-        if (golden.locked && Number.isFinite(goldenFixtureId) && goldenFixtureId === fxId) {
+        if (
+          golden.locked &&
+          Number.isFinite(goldenFixtureId) &&
+          goldenFixtureId === fxId
+        ) {
           throw new Error("Power-Up cannot be used on your Golden fixture");
         }
       }
@@ -99,7 +112,9 @@ export async function POST(req: Request) {
       const powerupRefs = players.map((puid) =>
         adminDb.doc(`${seasonBase}/games/gw-${gwn}/powerups/${puid}`),
       );
-      const powerupSnaps = powerupRefs.length ? await tx.getAll(...powerupRefs) : [];
+      const powerupSnaps = powerupRefs.length
+        ? await tx.getAll(...powerupRefs)
+        : [];
       const lockedBefore = powerupSnaps.reduce((acc, s) => {
         const d = s.exists ? (s.data() as PowerupDoc) : null;
         return acc + (d?.locked ? 1 : 0);

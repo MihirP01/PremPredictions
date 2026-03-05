@@ -52,10 +52,17 @@ export function ModalHeader({ title, onClose, ariaLabel }: ModalHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/45">Room Controls</div>
-        <div className="font-display text-lg font-semibold text-foreground">{title}</div>
+        <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/45">
+          Room Controls
+        </div>
+        <div className="font-display text-lg font-semibold text-foreground">
+          {title}
+        </div>
       </div>
-      <ModalExitButton onClick={onClose} ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`} />
+      <ModalExitButton
+        onClick={onClose}
+        ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`}
+      />
     </div>
   );
 }
@@ -92,7 +99,9 @@ export function ConfirmDialog({
           background: "var(--editorial-action-bg)",
         }}
       >
-        <div className="font-display text-lg font-semibold text-foreground">{title}</div>
+        <div className="font-display text-lg font-semibold text-foreground">
+          {title}
+        </div>
         <div className="text-sm text-muted">{body}</div>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -112,7 +121,9 @@ export function ConfirmDialog({
           disabled={confirming}
           className={[
             "rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:opacity-60",
-            danger ? "bg-rose-500 text-white" : "bg-accent text-accent-foreground",
+            danger
+              ? "bg-rose-500 text-white"
+              : "bg-accent text-accent-foreground",
           ].join(" ")}
         >
           {confirming ? `${confirmLabel}...` : confirmLabel}

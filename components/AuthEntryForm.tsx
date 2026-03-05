@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import AnimatedModal from "./AnimatedModal";
@@ -21,23 +24,31 @@ export default function AuthEntryForm() {
   const [error, setError] = useState<string | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isPhone, setIsPhone] = useState(false);
-  const [installPlatform, setInstallPlatform] = useState<InstallPlatform>("other");
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPlatform, setInstallPlatform] =
+    useState<InstallPlatform>("other");
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     const evaluateDevice = () => {
       if (typeof window === "undefined") return;
       const ua = window.navigator.userAgent || "";
       const platform = window.navigator.platform || "";
-      const touchPoints = (window.navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints ?? 0;
+      const touchPoints =
+        (window.navigator as Navigator & { maxTouchPoints?: number })
+          .maxTouchPoints ?? 0;
 
       const iosPhone = /iPhone|iPod/i.test(ua);
       const androidPhone = /Android/i.test(ua);
       const standalone =
         window.matchMedia?.("(display-mode: standalone)")?.matches ||
-        Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-      const smallScreen = window.matchMedia?.("(max-width: 900px)")?.matches ?? false;
-      const mobileLike = iosPhone || androidPhone || (/Mac/i.test(platform) && touchPoints > 1);
+        Boolean(
+          (window.navigator as Navigator & { standalone?: boolean }).standalone,
+        );
+      const smallScreen =
+        window.matchMedia?.("(max-width: 900px)")?.matches ?? false;
+      const mobileLike =
+        iosPhone || androidPhone || (/Mac/i.test(platform) && touchPoints > 1);
 
       setIsPhone(!standalone && smallScreen && mobileLike);
       if (iosPhone) setInstallPlatform("ios");
@@ -56,7 +67,11 @@ export default function AuthEntryForm() {
       setDeferredPrompt(event as BeforeInstallPromptEvent);
     };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    return () =>
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
   }, []);
 
   const submit = async () => {
@@ -65,7 +80,11 @@ export default function AuthEntryForm() {
 
     try {
       if (mode === "signup") {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
         const uid = cred.user.uid;
 
         await setDoc(
@@ -119,20 +138,38 @@ export default function AuthEntryForm() {
                   A cleaner control room for every matchday.
                 </h1>
                 <p className="max-w-lg text-sm leading-7 text-white/62 sm:text-base">
-                  This concept reduces clutter, keeps room controls predictable, and makes the product feel like a polished SaaS dashboard instead of a raw utility.
+                  This concept reduces clutter, keeps room controls predictable,
+                  and makes the product feel like a polished SaaS dashboard
+                  instead of a raw utility.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               {[
-                ["Room Access", "Sign in and return to the exact room context you left."],
-                ["Stable Navigation", "Core routes stay visible and predictable across devices."],
-                ["Low Friction", "The interface prioritizes the next useful action, not decoration."],
+                [
+                  "Room Access",
+                  "Sign in and return to the exact room context you left.",
+                ],
+                [
+                  "Stable Navigation",
+                  "Core routes stay visible and predictable across devices.",
+                ],
+                [
+                  "Low Friction",
+                  "The interface prioritizes the next useful action, not decoration.",
+                ],
               ].map(([label, body]) => (
-                <div key={label} className="rounded-3xl border border-white/8 bg-white/[0.03] p-4">
-                  <div className="font-display text-sm font-semibold text-foreground">{label}</div>
-                  <div className="mt-2 text-xs leading-6 text-white/55">{body}</div>
+                <div
+                  key={label}
+                  className="rounded-3xl border border-white/8 bg-white/[0.03] p-4"
+                >
+                  <div className="font-display text-sm font-semibold text-foreground">
+                    {label}
+                  </div>
+                  <div className="mt-2 text-xs leading-6 text-white/55">
+                    {body}
+                  </div>
                 </div>
               ))}
             </div>
@@ -143,10 +180,12 @@ export default function AuthEntryForm() {
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
           <div className="relative z-[1] flex h-full flex-col gap-5">
             <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] p-1.5">
-              {([
-                ["signin", "Sign In"],
-                ["signup", "Create Account"],
-              ] as const).map(([value, label]) => (
+              {(
+                [
+                  ["signin", "Sign In"],
+                  ["signup", "Create Account"],
+                ] as const
+              ).map(([value, label]) => (
                 <button
                   key={value}
                   type="button"
@@ -154,7 +193,9 @@ export default function AuthEntryForm() {
                   disabled={busy}
                   className={[
                     "flex-1 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                    mode === value ? "bg-white/[0.08] text-foreground" : "text-white/55 hover:text-foreground",
+                    mode === value
+                      ? "bg-white/[0.08] text-foreground"
+                      : "text-white/55 hover:text-foreground",
                   ].join(" ")}
                 >
                   {label}
@@ -164,17 +205,22 @@ export default function AuthEntryForm() {
 
             <div className="space-y-2">
               <div className="font-display text-2xl font-semibold text-foreground">
-                {mode === "signin" ? "Access your room dashboard" : "Create your player profile"}
+                {mode === "signin"
+                  ? "Access your room dashboard"
+                  : "Create your player profile"}
               </div>
               <div className="text-sm leading-6 text-white/58">
-                Authentication, routing, and room membership stay the same. Only the control surface changes.
+                Authentication, routing, and room membership stay the same. Only
+                the control surface changes.
               </div>
             </div>
 
             <div className="space-y-4">
               {mode === "signup" ? (
                 <div className="space-y-2">
-                  <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Full Name</label>
+                  <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">
+                    Full Name
+                  </label>
                   <input
                     className={inputClassName}
                     value={displayName}
@@ -187,7 +233,9 @@ export default function AuthEntryForm() {
               ) : null}
 
               <div className="space-y-2">
-                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Email</label>
+                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">
+                  Email
+                </label>
                 <input
                   type="email"
                   className={inputClassName}
@@ -203,7 +251,9 @@ export default function AuthEntryForm() {
               </div>
 
               <div className="space-y-2">
-                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">Password</label>
+                <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">
+                  Password
+                </label>
                 <input
                   type="password"
                   className={inputClassName}
@@ -211,13 +261,19 @@ export default function AuthEntryForm() {
                   disabled={busy}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  autoComplete={
+                    mode === "signin" ? "current-password" : "new-password"
+                  }
                   inputMode="text"
                 />
               </div>
             </div>
 
-            {error ? <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+            {error ? (
+              <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <button
@@ -225,10 +281,16 @@ export default function AuthEntryForm() {
                 disabled={busy}
                 className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground shadow-[0_16px_28px_rgba(3,8,20,0.24)] transition disabled:opacity-60"
               >
-                {busy ? "Please wait..." : mode === "signin" ? "Enter Dashboard" : "Create Account"}
+                {busy
+                  ? "Please wait..."
+                  : mode === "signin"
+                    ? "Enter Dashboard"
+                    : "Create Account"}
               </button>
               <button
-                onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
+                onClick={() =>
+                  setMode((m) => (m === "signin" ? "signup" : "signin"))
+                }
                 disabled={busy}
                 className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
               >
@@ -261,8 +323,12 @@ export default function AuthEntryForm() {
       >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/45">Install</div>
-            <div className="font-display text-lg font-semibold text-foreground">Home Screen Setup</div>
+            <div className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/45">
+              Install
+            </div>
+            <div className="font-display text-lg font-semibold text-foreground">
+              Home Screen Setup
+            </div>
           </div>
           <button
             type="button"
@@ -273,7 +339,9 @@ export default function AuthEntryForm() {
           </button>
         </div>
         <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-white/60">
-          Install only from this login page (<span className="font-display text-foreground">/</span>) so the app launches correctly.
+          Install only from this login page (
+          <span className="font-display text-foreground">/</span>) so the app
+          launches correctly.
         </div>
 
         {installPlatform === "ios" ? (
@@ -295,7 +363,9 @@ export default function AuthEntryForm() {
                 Install Now
               </button>
             ) : (
-              <div>2. Open browser menu and tap Install app / Add to Home screen.</div>
+              <div>
+                2. Open browser menu and tap Install app / Add to Home screen.
+              </div>
             )}
           </div>
         ) : (

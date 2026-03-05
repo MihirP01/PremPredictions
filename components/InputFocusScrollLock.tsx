@@ -8,7 +8,18 @@ function isTextEntryElement(el: Element | null): boolean {
   if (el instanceof HTMLInputElement) {
     if (el.disabled || el.readOnly) return false;
     const type = (el.type || "text").toLowerCase();
-    return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(type);
+    return ![
+      "button",
+      "checkbox",
+      "color",
+      "file",
+      "hidden",
+      "image",
+      "radio",
+      "range",
+      "reset",
+      "submit",
+    ].includes(type);
   }
   if (el instanceof HTMLElement) return el.isContentEditable;
   return false;

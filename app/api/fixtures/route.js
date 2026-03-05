@@ -6,7 +6,8 @@ const SEASON_START_MONTH_UTC = 7; // Aug
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
-  const startYear = now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
+  const startYear =
+    now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
   const yyStart = String(startYear % 100).padStart(2, "0");
   const yyEnd = String((startYear + 1) % 100).padStart(2, "0");
   return `${yyStart}${yyEnd}`;
@@ -55,11 +56,7 @@ function normalizeName(value) {
 }
 
 function teamCandidates(team) {
-  const base = [
-    team?.name,
-    team?.shortName,
-    team?.tla,
-  ]
+  const base = [team?.name, team?.shortName, team?.tla]
     .map((v) => normalizeName(v))
     .filter(Boolean);
 
@@ -128,9 +125,13 @@ function countTeamRedCards(teamLineup) {
   ];
   let total = 0;
   for (const player of players) {
-    const events = Array.isArray(player?.performance?.events) ? player.performance.events : [];
+    const events = Array.isArray(player?.performance?.events)
+      ? player.performance.events
+      : [];
     for (const event of events) {
-      const type = String(event?.type || "").trim().toLowerCase();
+      const type = String(event?.type || "")
+        .trim()
+        .toLowerCase();
       if (
         type === "redcard" ||
         type === "yellowredcard" ||
@@ -147,10 +148,15 @@ function countTeamRedCards(teamLineup) {
 async function fetchMatchRedCards(pageUrl, forceRefresh) {
   if (!pageUrl) return null;
   try {
-    const res = await fetch(`https://www.fotmob.com${String(pageUrl).split("#")[0]}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      ...(forceRefresh ? { cache: "no-store" } : { next: { revalidate: 20 } }),
-    });
+    const res = await fetch(
+      `https://www.fotmob.com${String(pageUrl).split("#")[0]}`,
+      {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        ...(forceRefresh
+          ? { cache: "no-store" }
+          : { next: { revalidate: 20 } }),
+      },
+    );
     if (!res.ok) return null;
     const html = await res.text();
     const data = parseNextData(html);
@@ -258,7 +264,9 @@ function fallbackFixtureFromFotmob(match, forceGameweek) {
     result != null
       ? (() => {
           const [home, away] = result.split("-").map(Number);
-          return Number.isFinite(home) && Number.isFinite(away) ? { home, away } : null;
+          return Number.isFinite(home) && Number.isFinite(away)
+            ? { home, away }
+            : null;
         })()
       : null;
 
@@ -322,11 +330,15 @@ export async function GET(req) {
     [response, fotmobResponse] = await Promise.all([
       fetch(url, {
         headers: { "X-Auth-Token": API_KEY },
-        ...(forceRefresh ? { cache: "no-store" } : { next: { revalidate: 60 } }),
+        ...(forceRefresh
+          ? { cache: "no-store" }
+          : { next: { revalidate: 60 } }),
       }),
       fetch(fotmobUrl, {
         headers: { "User-Agent": "Mozilla/5.0" },
-        ...(forceRefresh ? { cache: "no-store" } : { next: { revalidate: 30 } }),
+        ...(forceRefresh
+          ? { cache: "no-store" }
+          : { next: { revalidate: 30 } }),
       }).catch(() => null),
     ]);
   } catch {
@@ -352,7 +364,8 @@ export async function GET(req) {
     : [];
   const selectedFotmobMatches = gameweek
     ? fotmobMatches.filter(
-        (match) => Number(match?.roundName ?? match?.round) === Number(gameweek),
+        (match) =>
+          Number(match?.roundName ?? match?.round) === Number(gameweek),
       )
     : fotmobMatches;
 
@@ -375,11 +388,19 @@ export async function GET(req) {
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
       return NextResponse.json(
-        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          generatedAt: new Date().toISOString(),
+          seasonKey,
+          fixtures,
+          source: "fotmob-fallback",
+        },
         {
           status: 200,
           headers: forceRefresh
-            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            ? {
+                "Cache-Control":
+                  "no-store, no-cache, must-revalidate, max-age=0",
+              }
             : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
         },
       );
@@ -394,7 +415,9 @@ export async function GET(req) {
       {
         status: 200,
         headers: forceRefresh
-          ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+          ? {
+              "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            }
           : { "Cache-Control": "s-maxage=60, stale-while-revalidate=30" },
       },
     );
@@ -406,11 +429,19 @@ export async function GET(req) {
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
       return NextResponse.json(
-        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          generatedAt: new Date().toISOString(),
+          seasonKey,
+          fixtures,
+          source: "fotmob-fallback",
+        },
         {
           status: 200,
           headers: forceRefresh
-            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            ? {
+                "Cache-Control":
+                  "no-store, no-cache, must-revalidate, max-age=0",
+              }
             : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
         },
       );
@@ -434,11 +465,19 @@ export async function GET(req) {
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
       return NextResponse.json(
-        { generatedAt: new Date().toISOString(), seasonKey, fixtures, source: "fotmob-fallback" },
+        {
+          generatedAt: new Date().toISOString(),
+          seasonKey,
+          fixtures,
+          source: "fotmob-fallback",
+        },
         {
           status: 200,
           headers: forceRefresh
-            ? { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" }
+            ? {
+                "Cache-Control":
+                  "no-store, no-cache, must-revalidate, max-age=0",
+              }
             : { "Cache-Control": "s-maxage=20, stale-while-revalidate=15" },
         },
       );
@@ -451,72 +490,76 @@ export async function GET(req) {
 
   const data = await response.json();
 
-  const fixtures = await Promise.all((data.matches ?? []).map(async (match) => {
-    const homeFT = match?.score?.fullTime?.home;
-    const awayFT = match?.score?.fullTime?.away;
-    const status = String(match?.status || "").toUpperCase();
+  const fixtures = await Promise.all(
+    (data.matches ?? []).map(async (match) => {
+      const homeFT = match?.score?.fullTime?.home;
+      const awayFT = match?.score?.fullTime?.away;
+      const status = String(match?.status || "").toUpperCase();
 
-    const hasFT =
-      Number.isFinite(homeFT) && Number.isFinite(awayFT);
+      const hasFT = Number.isFinite(homeFT) && Number.isFinite(awayFT);
 
-    const baseFixture = {
-      fixtureId: match.id,
-      gameweek: match.matchday,
-      kickoff: match.utcDate,
-      venue: match.venue ?? "TBD",
-      status,
-      home: {
-        id: match.homeTeam.id,
-        name: match.homeTeam.name,
-        tla: match.homeTeam.tla || null,
-        shortName:
-          match.homeTeam.shortName ||
-          match.homeTeam.tla ||
-          match.homeTeam.name,
-        badge: match.homeTeam.crest || null,
-      },
-      away: {
-        id: match.awayTeam.id,
-        name: match.awayTeam.name,
-        tla: match.awayTeam.tla || null,
-        shortName:
-          match.awayTeam.shortName ||
-          match.awayTeam.tla ||
-          match.awayTeam.name,
-        badge: match.awayTeam.crest || null,
-      },
+      const baseFixture = {
+        fixtureId: match.id,
+        gameweek: match.matchday,
+        kickoff: match.utcDate,
+        venue: match.venue ?? "TBD",
+        status,
+        home: {
+          id: match.homeTeam.id,
+          name: match.homeTeam.name,
+          tla: match.homeTeam.tla || null,
+          shortName:
+            match.homeTeam.shortName ||
+            match.homeTeam.tla ||
+            match.homeTeam.name,
+          badge: match.homeTeam.crest || null,
+        },
+        away: {
+          id: match.awayTeam.id,
+          name: match.awayTeam.name,
+          tla: match.awayTeam.tla || null,
+          shortName:
+            match.awayTeam.shortName ||
+            match.awayTeam.tla ||
+            match.awayTeam.name,
+          badge: match.awayTeam.crest || null,
+        },
 
-      // ✅ actual result (past gameweeks will populate automatically)
-      result: hasFT ? `${homeFT}-${awayFT}` : null,
+        // ✅ actual result (past gameweeks will populate automatically)
+        result: hasFT ? `${homeFT}-${awayFT}` : null,
 
-      // (optional) keep raw numbers if you prefer rendering without parsing
-      resultFT: hasFT ? { home: homeFT, away: awayFT } : null,
-    };
+        // (optional) keep raw numbers if you prefer rendering without parsing
+        resultFT: hasFT ? { home: homeFT, away: awayFT } : null,
+      };
 
-    const fotmobMatch = findFotmobMatch(fotmobIndex, baseFixture);
-    if (!fotmobMatch?.status) return baseFixture;
+      const fotmobMatch = findFotmobMatch(fotmobIndex, baseFixture);
+      if (!fotmobMatch?.status) return baseFixture;
 
-    const fotmobScore = normalizeScoreStr(fotmobMatch.status.scoreStr);
-    const mergedStatus = overlayStatus(baseFixture.status, fotmobMatch.status);
+      const fotmobScore = normalizeScoreStr(fotmobMatch.status.scoreStr);
+      const mergedStatus = overlayStatus(
+        baseFixture.status,
+        fotmobMatch.status,
+      );
 
-    return {
-      ...baseFixture,
-      status: mergedStatus,
-      result: fotmobScore || baseFixture.result,
-      resultFT: fotmobScore
-        ? (() => {
-            const [home, away] = fotmobScore.split("-").map(Number);
-            return Number.isFinite(home) && Number.isFinite(away)
-              ? { home, away }
-              : baseFixture.resultFT;
-          })()
-        : baseFixture.resultFT,
-      redCards:
-        gameweek && fotmobMatch.status?.started && fotmobMatch.pageUrl
-          ? await fetchMatchRedCards(fotmobMatch.pageUrl, forceRefresh)
-          : null,
-    };
-  }));
+      return {
+        ...baseFixture,
+        status: mergedStatus,
+        result: fotmobScore || baseFixture.result,
+        resultFT: fotmobScore
+          ? (() => {
+              const [home, away] = fotmobScore.split("-").map(Number);
+              return Number.isFinite(home) && Number.isFinite(away)
+                ? { home, away }
+                : baseFixture.resultFT;
+            })()
+          : baseFixture.resultFT,
+        redCards:
+          gameweek && fotmobMatch.status?.started && fotmobMatch.pageUrl
+            ? await fetchMatchRedCards(fotmobMatch.pageUrl, forceRefresh)
+            : null,
+      };
+    }),
+  );
 
   return NextResponse.json(
     { generatedAt: new Date().toISOString(), seasonKey, fixtures },

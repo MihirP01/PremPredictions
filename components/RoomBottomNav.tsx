@@ -4,7 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
-import { getRoomBootstrapCached, peekRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  peekRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
 
 type NavItem = {
@@ -48,12 +51,18 @@ export default function RoomBottomNav() {
         if (cancelled) return;
         const seasonKey = String(current?.seasonKey || "");
         const gw = Number(current?.currentGameweek || 1);
-        const bootstrapState = String(current?.gameState || "").trim().toUpperCase();
+        const bootstrapState = String(current?.gameState || "")
+          .trim()
+          .toUpperCase();
 
         if (bootstrapState === "REVEAL") {
           setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
           setPredictionsDisabled(false);
-        } else if (bootstrapState === "DRAFT" || bootstrapState === "GOLDEN" || bootstrapState === "POWERUPS") {
+        } else if (
+          bootstrapState === "DRAFT" ||
+          bootstrapState === "GOLDEN" ||
+          bootstrapState === "POWERUPS"
+        ) {
           setPredictionsHref(`/room/${roomCode}/minigame`);
           setPredictionsDisabled(true);
         } else {
@@ -68,14 +77,22 @@ export default function RoomBottomNav() {
           seasonKey,
           gw,
           (snap) => {
-            const state = String((snap as { state?: string } | null)?.state || "").trim().toUpperCase();
+            const state = String(
+              (snap as { state?: string } | null)?.state || "",
+            )
+              .trim()
+              .toUpperCase();
 
             if (state === "REVEAL") {
               setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
               setPredictionsDisabled(false);
               return;
             }
-            if (state === "DRAFT" || state === "GOLDEN" || state === "POWERUPS") {
+            if (
+              state === "DRAFT" ||
+              state === "GOLDEN" ||
+              state === "POWERUPS"
+            ) {
               setPredictionsHref(`/room/${roomCode}/minigame`);
               setPredictionsDisabled(true);
               return;
@@ -118,7 +135,8 @@ export default function RoomBottomNav() {
         href: predictionsHref || `/room/${roomCode}/minigame`,
         icon: Gamepad2,
         active:
-          pathname === `/room/${roomCode}/minigame` || pathname.startsWith(`/room/${roomCode}/minigame/`),
+          pathname === `/room/${roomCode}/minigame` ||
+          pathname.startsWith(`/room/${roomCode}/minigame/`),
         disabled: predictionsDisabled,
       },
       {
@@ -167,7 +185,9 @@ export default function RoomBottomNav() {
   }, [roomCode, router]);
 
   const predictionsRouteForState = (state: string) =>
-    String(state || "").trim().toUpperCase() === "REVEAL"
+    String(state || "")
+      .trim()
+      .toUpperCase() === "REVEAL"
       ? `/room/${roomCode}/minigame/reveal`
       : `/room/${roomCode}/minigame`;
 
@@ -182,12 +202,19 @@ export default function RoomBottomNav() {
       .catch(() => {});
   };
 
-  const onNavClick = (key: NavItem["key"], href: string, active: boolean, disabled?: boolean) => {
+  const onNavClick = (
+    key: NavItem["key"],
+    href: string,
+    active: boolean,
+    disabled?: boolean,
+  ) => {
     setNavFxTick((prev) => ({ ...prev, [key]: prev[key] + 1 }));
     if (active || disabled) return;
     if (key === "predictions") {
       const cachedBootstrap = peekRoomBootstrapCached(roomCode);
-      const immediateHref = predictionsHref || predictionsRouteForState(cachedBootstrap?.gameState || "");
+      const immediateHref =
+        predictionsHref ||
+        predictionsRouteForState(cachedBootstrap?.gameState || "");
       router.push(immediateHref);
       if (!cachedBootstrap) syncPredictionsRoute(immediateHref);
       return;
@@ -195,7 +222,10 @@ export default function RoomBottomNav() {
     router.push(href);
   };
 
-  const onNavPointerDown = (event: React.PointerEvent<HTMLButtonElement>, item: NavItem) => {
+  const onNavPointerDown = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    item: NavItem,
+  ) => {
     if (event.pointerType === "mouse") return;
     lastTouchHandledAtRef.current = Date.now();
     event.preventDefault();
@@ -203,7 +233,12 @@ export default function RoomBottomNav() {
     onNavClick(item.key, item.href, item.active, item.disabled);
   };
 
-  if (!mounted || !roomCode || hideForActiveGamePhase || typeof document === "undefined") {
+  if (
+    !mounted ||
+    !roomCode ||
+    hideForActiveGamePhase ||
+    typeof document === "undefined"
+  ) {
     return null;
   }
 
@@ -271,22 +306,47 @@ export default function RoomBottomNav() {
                   className={[
                     item.active ? "text-foreground" : "text-muted",
                     item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
-                    item.key === "predictions" ? "nav-icon-predictions-fix" : "",
+                    item.key === "predictions"
+                      ? "nav-icon-predictions-fix"
+                      : "",
                     item.key === "home" ? "nav-icon-home-fix" : "",
-                    item.key === "home" && item.active ? "hub-icon-active-theme" : "",
+                    item.key === "home" && item.active
+                      ? "hub-icon-active-theme"
+                      : "",
                     item.key === "stats" ? "nav-icon-stats-fix" : "",
-                    item.key === "home" && item.active ? "home-icon--active" : "",
-                    item.key === "stats" && item.active ? "stats-icon--active" : "",
-                    item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0) ? "leaderboard-icon-pop" : "",
-                    item.key === "fixtures" && (item.active || navFxTick.fixtures > 0) ? "fixtures-icon-pop" : "",
-                    item.key === "predictions" && (item.active || navFxTick.predictions > 0) ? "predictions-icon-pop" : "",
-                    item.key === "home" && (item.active || navFxTick.home > 0) ? "home-icon-pop" : "",
-                    item.key === "stats" && (item.active || navFxTick.stats > 0) ? "stats-icon-pop" : "",
+                    item.key === "home" && item.active
+                      ? "home-icon--active"
+                      : "",
+                    item.key === "stats" && item.active
+                      ? "stats-icon--active"
+                      : "",
+                    item.key === "leaderboard" &&
+                    (item.active || navFxTick.leaderboard > 0)
+                      ? "leaderboard-icon-pop"
+                      : "",
+                    item.key === "fixtures" &&
+                    (item.active || navFxTick.fixtures > 0)
+                      ? "fixtures-icon-pop"
+                      : "",
+                    item.key === "predictions" &&
+                    (item.active || navFxTick.predictions > 0)
+                      ? "predictions-icon-pop"
+                      : "",
+                    item.key === "home" && (item.active || navFxTick.home > 0)
+                      ? "home-icon-pop"
+                      : "",
+                    item.key === "stats" && (item.active || navFxTick.stats > 0)
+                      ? "stats-icon-pop"
+                      : "",
                   ].join(" ")}
                 />
-                {item.key === "leaderboard" && (item.active || navFxTick.leaderboard > 0) ? (
+                {item.key === "leaderboard" &&
+                (item.active || navFxTick.leaderboard > 0) ? (
                   <>
-                    <span key={`lb-ring-${navFxTick.leaderboard}`} className="leaderboard-burst-once" />
+                    <span
+                      key={`lb-ring-${navFxTick.leaderboard}`}
+                      className="leaderboard-burst-once"
+                    />
                     {[
                       { x: -14, y: -10, d: "0ms" },
                       { x: 13, y: -12, d: "60ms" },
@@ -297,36 +357,64 @@ export default function RoomBottomNav() {
                       <span
                         key={`lb-spark-${navFxTick.leaderboard}-${idx}`}
                         className="leaderboard-firework-once"
-                        style={{
-                          "--sx": `${spark.x}px`,
-                          "--sy": `${spark.y}px`,
-                          animationDelay: spark.d,
-                        } as React.CSSProperties}
+                        style={
+                          {
+                            "--sx": `${spark.x}px`,
+                            "--sy": `${spark.y}px`,
+                            animationDelay: spark.d,
+                          } as React.CSSProperties
+                        }
                       />
                     ))}
                   </>
                 ) : null}
-                {item.key === "fixtures" && (item.active || navFxTick.fixtures > 0) ? (
-                  <span key={`fx-wave-${navFxTick.fixtures}`} className="fixtures-wave-once" />
+                {item.key === "fixtures" &&
+                (item.active || navFxTick.fixtures > 0) ? (
+                  <span
+                    key={`fx-wave-${navFxTick.fixtures}`}
+                    className="fixtures-wave-once"
+                  />
                 ) : null}
-                {item.key === "predictions" && (item.active || navFxTick.predictions > 0) ? (
+                {item.key === "predictions" &&
+                (item.active || navFxTick.predictions > 0) ? (
                   <>
-                    <span key={`pr-dot-l-${navFxTick.predictions}`} className="predictions-dot-once predictions-dot-once--left" />
-                    <span key={`pr-dot-r-${navFxTick.predictions}`} className="predictions-dot-once predictions-dot-once--right" />
+                    <span
+                      key={`pr-dot-l-${navFxTick.predictions}`}
+                      className="predictions-dot-once predictions-dot-once--left"
+                    />
+                    <span
+                      key={`pr-dot-r-${navFxTick.predictions}`}
+                      className="predictions-dot-once predictions-dot-once--right"
+                    />
                   </>
                 ) : null}
                 {item.key === "home" && (item.active || navFxTick.home > 0) ? (
-                  <span key={`home-ring-${navFxTick.home}`} className="home-ring-once" />
+                  <span
+                    key={`home-ring-${navFxTick.home}`}
+                    className="home-ring-once"
+                  />
                 ) : null}
-                {item.key === "stats" && (item.active || navFxTick.stats > 0) ? (
+                {item.key === "stats" &&
+                (item.active || navFxTick.stats > 0) ? (
                   <>
-                    <span key={`st-bar-1-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--1" />
-                    <span key={`st-bar-2-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--2" />
-                    <span key={`st-bar-3-${navFxTick.stats}`} className="stats-bar-once stats-bar-once--3" />
+                    <span
+                      key={`st-bar-1-${navFxTick.stats}`}
+                      className="stats-bar-once stats-bar-once--1"
+                    />
+                    <span
+                      key={`st-bar-2-${navFxTick.stats}`}
+                      className="stats-bar-once stats-bar-once--2"
+                    />
+                    <span
+                      key={`st-bar-3-${navFxTick.stats}`}
+                      className="stats-bar-once stats-bar-once--3"
+                    />
                   </>
                 ) : null}
               </span>
-              <span className="truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]">{item.label}</span>
+              <span className="truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]">
+                {item.label}
+              </span>
             </button>
           );
         })}

@@ -7,19 +7,29 @@ type CurrentGwPayload = {
 };
 
 function normalizeRoomCode(value: string) {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const roomCode = normalizeRoomCode(req.nextUrl.searchParams.get("roomCode") || "");
+    const roomCode = normalizeRoomCode(
+      req.nextUrl.searchParams.get("roomCode") || "",
+    );
     if (!roomCode) {
-      return NextResponse.json({ error: "roomCode is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "roomCode is required" },
+        { status: 400 },
+      );
     }
 
-    const currentGwRes = await fetch(new URL("/api/current-gameweek", req.url), {
-      cache: "no-store",
-    });
+    const currentGwRes = await fetch(
+      new URL("/api/current-gameweek", req.url),
+      {
+        cache: "no-store",
+      },
+    );
     if (!currentGwRes.ok) {
       return NextResponse.json(
         { error: "Failed to resolve current gameweek" },
@@ -52,15 +62,21 @@ export async function GET(req: NextRequest) {
       );
       const gameSnap = await gameRef.get();
       const raw = gameSnap.data() as { state?: string } | undefined;
-      gameState = String(raw?.state || "LOBBY").trim().toUpperCase() || "LOBBY";
+      gameState =
+        String(raw?.state || "LOBBY")
+          .trim()
+          .toUpperCase() || "LOBBY";
     }
 
-    const seasonsSnap = await adminDb.collection(`rooms/${roomCode}/seasons`).get();
+    const seasonsSnap = await adminDb
+      .collection(`rooms/${roomCode}/seasons`)
+      .get();
     const seasonOptions = seasonsSnap.docs
       .map((d) => String(d.id))
       .filter((id) => /^\d{4}$/.test(id))
       .sort((a, b) => b.localeCompare(a));
-    if (seasonKey && !seasonOptions.includes(seasonKey)) seasonOptions.unshift(seasonKey);
+    if (seasonKey && !seasonOptions.includes(seasonKey))
+      seasonOptions.unshift(seasonKey);
 
     return NextResponse.json(
       {

@@ -18,4 +18,3 @@ export function verifyRoomPassword(
   if (candidate.length !== expected.length) return false;
   return timingSafeEqual(candidate, expected);
 }
-

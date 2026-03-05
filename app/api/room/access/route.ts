@@ -45,12 +45,17 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as AccessBody;
     const action = String(body.action || "").toLowerCase();
-    const roomCode = String(body.roomCode || "").trim().toUpperCase();
+    const roomCode = String(body.roomCode || "")
+      .trim()
+      .toUpperCase();
     const uid = String(body.uid || "").trim();
     const displayName = cleanDisplayName(String(body.displayName || ""));
     const password = cleanPassword(body.password);
 
-    if ((action !== "join" && action !== "create") || !validRoomCode(roomCode)) {
+    if (
+      (action !== "join" && action !== "create") ||
+      !validRoomCode(roomCode)
+    ) {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
     if (!uid) {
@@ -128,10 +133,16 @@ export async function POST(req: Request) {
         !sec.passwordSalt ||
         !verifyRoomPassword(password, sec.passwordSalt, sec.passwordHash)
       ) {
-        return NextResponse.json({ error: "Invalid room password." }, { status: 403 });
+        return NextResponse.json(
+          { error: "Invalid room password." },
+          { status: 403 },
+        );
       }
     } else if (room.settings?.hasPassword) {
-      return NextResponse.json({ error: "Invalid room password." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Invalid room password." },
+        { status: 403 },
+      );
     }
 
     const playerSnap = await playerRef.get();
@@ -142,7 +153,9 @@ export async function POST(req: Request) {
       {
         displayName,
         role,
-        joinedAt: playerSnap.exists ? playerSnap.data()?.joinedAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+        joinedAt: playerSnap.exists
+          ? playerSnap.data()?.joinedAt || FieldValue.serverTimestamp()
+          : FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
@@ -156,7 +169,10 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Failed room access.";
     if (msg === "ROOM_EXISTS") {
-      return NextResponse.json({ error: "Room code already used." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Room code already used." },
+        { status: 409 },
+      );
     }
     return NextResponse.json({ error: msg }, { status: 500 });
   }

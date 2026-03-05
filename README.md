@@ -1,6 +1,7 @@
 # PL Predictions
 
 Multiplayer Premier League prediction app with:
+
 - room-based play,
 - minigame draft + golden pick flow,
 - saved score docs for leaderboard,
@@ -74,6 +75,7 @@ FOOTBALLDATA_KEY=
 ```
 
 Notes:
+
 - `FIREBASE_PRIVATE_KEY` supports multiline PEM and `\n` format.
 - Server routes use Admin SDK, so Firestore write rules can stay locked down for client writes.
 

@@ -8,6 +8,7 @@ type PageLayoutProps = {
   children: React.ReactNode;
   width?: PageLayoutWidth;
   className?: string;
+  shellChrome?: boolean;
 };
 
 const WIDTH_CLASS: Record<PageLayoutWidth, string> = {
@@ -20,7 +21,22 @@ export default function PageLayout({
   children,
   width = "wide",
   className = "",
+  shellChrome = true,
 }: PageLayoutProps) {
+  if (!shellChrome) {
+    return (
+      <div
+        className={[
+          "w-full mx-auto relative",
+          WIDTH_CLASS[width],
+          className,
+        ].join(" ")}
+      >
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div
       className={[
@@ -38,7 +54,10 @@ export default function PageLayout({
     >
       <div
         className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent to-transparent"
-        style={{ backgroundImage: "linear-gradient(90deg, transparent, var(--editorial-shell-hairline), transparent)" }}
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, transparent, var(--editorial-shell-hairline), transparent)",
+        }}
       />
       <div
         className="pointer-events-none absolute left-8 top-8 h-24 w-24 rounded-full blur-3xl"

@@ -25,7 +25,10 @@ export default function Panel({
       <div className="pointer-events-none absolute inset-[1px] rounded-[23px] bg-[var(--editorial-panel-glass)]" />
       <div
         className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent to-transparent"
-        style={{ backgroundImage: "linear-gradient(90deg, transparent, var(--editorial-panel-rule), transparent)" }}
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, transparent, var(--editorial-panel-rule), transparent)",
+        }}
       />
       <div className="relative z-[1]">{children}</div>
     </div>

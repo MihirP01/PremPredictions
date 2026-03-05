@@ -1,26 +1,27 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Clock3, Medal, RefreshCw, Trophy } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
-import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../../components/RoomSettingsMenu";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
-import SpecialBreak from "../../../../components/SpecialBreak";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
+import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
-import {
-  collection,
-  onSnapshot,
-} from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
 function seasonLabel(seasonKey: string) {
@@ -132,7 +133,9 @@ function SummaryTile({ label, value, note, icon }: SummaryTileProps) {
 }
 
 function byName(a: Player, b: Player) {
-  return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
+  return a.displayName.localeCompare(b.displayName, undefined, {
+    sensitivity: "base",
+  });
 }
 
 function assignCompetitionRanks<T>(
@@ -166,11 +169,8 @@ export default function LeaderboardMatrixPage() {
   const [seasonKey, setSeasonKey] = useState<string>("");
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [leaderToolBusy, setLeaderToolBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [leaderUid, setLeaderUid] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [gwScoreComputedAt, setGwScoreComputedAt] = useState<Date | null>(null);
   const [leaderboardRefreshedAt, setLeaderboardRefreshedAt] =
     useState<Date | null>(null);
@@ -182,7 +182,6 @@ export default function LeaderboardMatrixPage() {
     "current",
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
-  const settingsWrapDesktopRef = useRef<HTMLDivElement | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -207,19 +206,14 @@ export default function LeaderboardMatrixPage() {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
-        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const options = Array.isArray(data.seasonOptions)
+          ? data.seasonOptions
+          : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
           setCurrentGw(Number.isFinite(n) ? n : 1);
           setSeasonKey(season);
-          setLeaderUid(data.leaderUid ?? null);
-          setSeasonOptions(
-            options.length
-              ? options
-              : season
-                ? [season]
-              : [],
-          );
+          setSeasonOptions(options.length ? options : season ? [season] : []);
         }
       } catch {
         if (cancelled) return;
@@ -273,7 +267,8 @@ export default function LeaderboardMatrixPage() {
         const seeded: Player[] = cached
           .map((p) => ({
             uid: p.uid,
-            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+            displayName:
+              String(p.nickName || "").trim() || p.displayName || "Player",
           }))
           .sort(byName);
         setPlayers(seeded);
@@ -287,7 +282,10 @@ export default function LeaderboardMatrixPage() {
         const list: Player[] = livePlayers
           .map((player) => {
             const nick = String(player.nickName || "").trim();
-            return { uid: player.uid, displayName: nick || player.displayName || "Player" };
+            return {
+              uid: player.uid,
+              displayName: nick || player.displayName || "Player",
+            };
           })
           .sort(byName);
         setPlayers(list);
@@ -304,116 +302,93 @@ export default function LeaderboardMatrixPage() {
   }, [roomCode]);
 
   useEffect(() => {
-    if (!settingsOpen) return;
-    const onPointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      const el = target as Element;
-      if (
-        typeof (el as Element).closest === "function" &&
-        el.closest("input, textarea, select, [contenteditable='true']")
-      ) {
-        return;
-      }
-      if (settingsWrapDesktopRef.current?.contains(target)) return;
-      setSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-    };
-  }, [settingsOpen]);
-
-  useEffect(() => {
     if (refreshLockedUntil <= nowMs) return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [refreshLockedUntil, nowMs]);
 
-  // room leader (for leader-only tools)
-  useEffect(() => {
-    return subscribeRoomMeta(
-      roomCode,
-      (roomMeta) => setLeaderUid(roomMeta?.leaderUid ?? null),
-      () => setLeaderUid(null),
-    );
-  }, [roomCode]);
+  const loadSavedScores = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (players.length === 0 || !seasonKey) return;
 
-  const loadSavedScores = useCallback(async (opts?: { force?: boolean }) => {
-    if (players.length === 0 || !seasonKey) return;
+      setBusy(true);
+      setError(null);
 
-    setBusy(true);
-    setError(null);
-
-    const matrix: Record<string, Record<number, number>> = {};
-    const predMatrix: Record<string, Record<number, boolean>> = {};
-    for (const p of players) {
-      matrix[p.uid] = {};
-      predMatrix[p.uid] = {};
-      for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
-      for (let gw = 1; gw <= currentGw; gw++) predMatrix[p.uid][gw] = false;
-    }
-
-    try {
-      const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey, {
-        force: opts?.force === true,
-      });
-      const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
-      let currentGwComputedAt: Date | null = null;
-      const currentWeek = weekByGw.get(currentGw);
-      if (currentWeek?.computedAtMs != null) {
-        currentGwComputedAt = new Date(currentWeek.computedAtMs);
+      const matrix: Record<string, Record<number, number>> = {};
+      const predMatrix: Record<string, Record<number, boolean>> = {};
+      for (const p of players) {
+        matrix[p.uid] = {};
+        predMatrix[p.uid] = {};
+        for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
+        for (let gw = 1; gw <= currentGw; gw++) predMatrix[p.uid][gw] = false;
       }
 
-      // "Scored" means we actually have per-user score docs for that GW.
-      // Do not infer scored weeks from summary doc ids alone.
-      const scoredWeeks = new Set<number>();
-
-      let computedGws = snapshot.weeks
-        .map((w) => w.gw)
-        .filter((n) => n >= 1 && n <= currentGw);
-
-      // If no score summaries, derive candidate weeks from seasonal games.
-      if (computedGws.length === 0) {
-        computedGws = snapshot.gameWeeks.filter((n) => n >= 1 && n <= currentGw);
-      }
-
-      computedGws = Array.from(new Set(computedGws)).sort((a, b) => a - b);
-
-      for (const gw of computedGws) {
-        const users = weekByGw.get(gw)?.users ?? [];
-        let gwHasMeaningfulScore = false;
-        for (const data of users) {
-          const uid = String(data.uid);
-          const points = Number(data.points ?? 0);
-          const hasPred = Object.values(data.breakdown ?? {}).some((b) =>
-            Boolean(String(b?.pred ?? "").trim()),
-          );
-
-          if (!Number.isFinite(points)) continue;
-          if (!matrix[uid]) continue; // only show current room players
-
-          matrix[uid][gw] = points;
-          predMatrix[uid][gw] = hasPred;
-          if (hasPred || points > 0) gwHasMeaningfulScore = true;
+      try {
+        const snapshot = await getSeasonScoresSnapshotCached(
+          roomCode,
+          seasonKey,
+          {
+            force: opts?.force === true,
+          },
+        );
+        const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
+        let currentGwComputedAt: Date | null = null;
+        const currentWeek = weekByGw.get(currentGw);
+        if (currentWeek?.computedAtMs != null) {
+          currentGwComputedAt = new Date(currentWeek.computedAtMs);
         }
-        if (gwHasMeaningfulScore) scoredWeeks.add(gw);
-      }
 
-      const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
-      setPointsByUserByGw(matrix);
-      setHasPredByUserByGw(predMatrix);
-      setGwScoreComputedAt(currentGwComputedAt);
-      setLeaderboardRefreshedAt(new Date());
-      setScoredGameweeks(scoredList);
-    } catch (e) {
-      setError(toErrorMessage(e, "Failed to load saved scores."));
-    } finally {
-      setBusy(false);
-    }
-  }, [players, currentGw, roomCode, seasonKey]);
+        // "Scored" means we actually have per-user score docs for that GW.
+        // Do not infer scored weeks from summary doc ids alone.
+        const scoredWeeks = new Set<number>();
+
+        let computedGws = snapshot.weeks
+          .map((w) => w.gw)
+          .filter((n) => n >= 1 && n <= currentGw);
+
+        // If no score summaries, derive candidate weeks from seasonal games.
+        if (computedGws.length === 0) {
+          computedGws = snapshot.gameWeeks.filter(
+            (n) => n >= 1 && n <= currentGw,
+          );
+        }
+
+        computedGws = Array.from(new Set(computedGws)).sort((a, b) => a - b);
+
+        for (const gw of computedGws) {
+          const users = weekByGw.get(gw)?.users ?? [];
+          let gwHasMeaningfulScore = false;
+          for (const data of users) {
+            const uid = String(data.uid);
+            const points = Number(data.points ?? 0);
+            const hasPred = Object.values(data.breakdown ?? {}).some((b) =>
+              Boolean(String(b?.pred ?? "").trim()),
+            );
+
+            if (!Number.isFinite(points)) continue;
+            if (!matrix[uid]) continue; // only show current room players
+
+            matrix[uid][gw] = points;
+            predMatrix[uid][gw] = hasPred;
+            if (hasPred || points > 0) gwHasMeaningfulScore = true;
+          }
+          if (gwHasMeaningfulScore) scoredWeeks.add(gw);
+        }
+
+        const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
+        setPointsByUserByGw(matrix);
+        setHasPredByUserByGw(predMatrix);
+        setGwScoreComputedAt(currentGwComputedAt);
+        setLeaderboardRefreshedAt(new Date());
+        setScoredGameweeks(scoredList);
+      } catch (e) {
+        setError(toErrorMessage(e, "Failed to load saved scores."));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [players, currentGw, roomCode, seasonKey],
+  );
 
   useEffect(() => {
     loadSavedScores().catch(() => {});
@@ -422,7 +397,14 @@ export default function LeaderboardMatrixPage() {
   // Live refresh when score docs change (e.g. recalc/cron writes).
   useEffect(() => {
     if (!seasonKey || players.length === 0) return;
-    const scoresRef = collection(db, "rooms", roomCode, "seasons", seasonKey, "scores");
+    const scoresRef = collection(
+      db,
+      "rooms",
+      roomCode,
+      "seasons",
+      seasonKey,
+      "scores",
+    );
     const unsub = onSnapshot(
       scoresRef,
       () => {
@@ -474,7 +456,8 @@ export default function LeaderboardMatrixPage() {
   const lastScoredGw = useMemo(() => {
     const beforeCurrent = scoredGameweeks.filter((gw) => gw < currentGw);
     if (beforeCurrent.length) return beforeCurrent[beforeCurrent.length - 1];
-    if (scoredGameweeks.length) return scoredGameweeks[scoredGameweeks.length - 1];
+    if (scoredGameweeks.length)
+      return scoredGameweeks[scoredGameweeks.length - 1];
     return currentGw;
   }, [scoredGameweeks, currentGw]);
   const medalsGw = lastScoredGw;
@@ -508,7 +491,6 @@ export default function LeaderboardMatrixPage() {
     return list;
   }, [players, pointsByUserByGw, currentGw]);
 
-  const isLeader = !!user && leaderUid === user.uid;
   const refreshLockSeconds = Math.max(
     0,
     Math.ceil((refreshLockedUntil - nowMs) / 1000),
@@ -518,12 +500,17 @@ export default function LeaderboardMatrixPage() {
     if (topView === "previous") return previousGwSortedPlayers;
     return sortedPlayers;
   }, [topView, sortedPlayers, currentGwSortedPlayers, previousGwSortedPlayers]);
-  const topThreePlayers = useMemo(() => rankedByTopView.slice(0, 3), [rankedByTopView]);
+  const topThreePlayers = useMemo(
+    () => rankedByTopView.slice(0, 3),
+    [rankedByTopView],
+  );
 
   const scoreForTopView = useCallback(
     (uid: string) => {
-      if (topView === "current") return pointsByUserByGw?.[uid]?.[currentGw] ?? 0;
-      if (topView === "previous") return pointsByUserByGw?.[uid]?.[lastScoredGw] ?? 0;
+      if (topView === "current")
+        return pointsByUserByGw?.[uid]?.[currentGw] ?? 0;
+      if (topView === "previous")
+        return pointsByUserByGw?.[uid]?.[lastScoredGw] ?? 0;
       return totalByUser[uid] ?? 0;
     },
     [topView, pointsByUserByGw, currentGw, lastScoredGw, totalByUser],
@@ -531,13 +518,15 @@ export default function LeaderboardMatrixPage() {
   const hasPredForTopView = useCallback(
     (uid: string) => {
       if (topView === "current") return !!hasPredByUserByGw?.[uid]?.[currentGw];
-      if (topView === "previous") return !!hasPredByUserByGw?.[uid]?.[lastScoredGw];
+      if (topView === "previous")
+        return !!hasPredByUserByGw?.[uid]?.[lastScoredGw];
       return weeks.some((gw) => !!hasPredByUserByGw?.[uid]?.[gw]);
     },
     [topView, hasPredByUserByGw, currentGw, lastScoredGw, weeks],
   );
   const scoreLabel = useCallback(
-    (score: number, hasPred: boolean) => (score === 0 && hasPred ? "🦆" : String(score)),
+    (score: number, hasPred: boolean) =>
+      score === 0 && hasPred ? "🦆" : String(score),
     [],
   );
   const mobileGwSortedPlayers = useMemo(() => {
@@ -598,7 +587,9 @@ export default function LeaderboardMatrixPage() {
   const podiumSlots = useMemo(() => {
     return [0, 1, 2].map((index) => {
       const player = topThreePlayers[index] ?? null;
-      const rank = player ? (topViewRankByUid[player.uid] ?? index + 1) : index + 1;
+      const rank = player
+        ? (topViewRankByUid[player.uid] ?? index + 1)
+        : index + 1;
       return {
         position: rank,
         player,
@@ -606,34 +597,6 @@ export default function LeaderboardMatrixPage() {
       };
     });
   }, [topThreePlayers, topViewRankByUid]);
-
-  async function recalcAndRefreshScores() {
-    if (!user || !isLeader || !seasonKey) return;
-    if (leaderToolBusy) return;
-
-    setLeaderToolBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/game/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomCode,
-          gw: currentGw,
-          leaderUid: user.uid,
-          seasonKey,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Failed to recalculate scores.");
-
-      await loadSavedScores({ force: true });
-    } catch (e) {
-      setError(toErrorMessage(e, "Failed to recalculate saved scores."));
-    } finally {
-      setLeaderToolBusy(false);
-    }
-  }
 
   async function refreshLeaderboard() {
     if (busy || refreshing || refreshLockSeconds > 0) return;
@@ -647,7 +610,9 @@ export default function LeaderboardMatrixPage() {
       const elapsed = Date.now() - startedAt;
       const minSpinMs = 450;
       if (elapsed < minSpinMs) {
-        await new Promise((resolve) => window.setTimeout(resolve, minSpinMs - elapsed));
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, minSpinMs - elapsed),
+        );
       }
       setRefreshing(false);
     }
@@ -655,38 +620,20 @@ export default function LeaderboardMatrixPage() {
 
   const topViewLabel =
     topView === "current"
-      ? `Gameweek ${currentGw}`
+      ? `Current GW`
       : topView === "previous"
-        ? `Gameweek ${medalsGw}`
+        ? `Previous GW`
         : "Season total";
   const leadingPlayer = topThreePlayers[0] ?? null;
   const leadingScore = leadingPlayer ? scoreForTopView(leadingPlayer.uid) : 0;
-  const leadingHasPred = leadingPlayer ? hasPredForTopView(leadingPlayer.uid) : false;
+  const leadingHasPred = leadingPlayer
+    ? hasPredForTopView(leadingPlayer.uid)
+    : false;
+  const standardSectionCardClass =
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const headerActions = (
     <div className="flex w-full items-center justify-end gap-2 sm:justify-between">
       <div className="flex items-center gap-2 sm:mr-auto">
-        {isLeader && (
-          <div ref={settingsWrapDesktopRef} className="relative z-[120]">
-            <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
-            <SettingsDropdownPanel open={settingsOpen} className="!left-auto !right-0 !z-[140]">
-              <div className="font-display font-semibold text-foreground">Leader Tools</div>
-              <div className="space-y-2">
-                <div className="text-xs text-muted">
-                  Recalculate score docs, then reload leaderboard data.
-                </div>
-                <button
-                  onClick={recalcAndRefreshScores}
-                  disabled={leaderToolBusy}
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:opacity-60"
-                >
-                  {leaderToolBusy
-                    ? `Recalculating around GW${currentGw}...`
-                    : "Recalculate Scores"}
-                </button>
-              </div>
-            </SettingsDropdownPanel>
-          </div>
-        )}
         <button
           onClick={refreshLeaderboard}
           disabled={busy || refreshing || refreshLockSeconds > 0}
@@ -707,19 +654,25 @@ export default function LeaderboardMatrixPage() {
     </div>
   );
   return (
-    <PageShell>
+    <PageShell
+      width="wide"
+      shellChrome={false}
+      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+      contentClassName="relative z-[1] space-y-4"
+    >
       <div className="space-y-3">
         <TopActionRow
           title="Leaderboard"
-          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "------")}`}
+          className="flex items-start justify-between gap-3 sm:items-end"
           actions={headerActions}
         />
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {error}
-        </div>
+        <SectionCard className={standardSectionCardClass}>
+          <div className="text-sm text-rose-300">{error}</div>
+        </SectionCard>
       )}
 
       <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
@@ -753,7 +706,11 @@ export default function LeaderboardMatrixPage() {
                 Table board
               </span>
               <span className="font-display text-sm font-semibold text-foreground">
-                {topView === "overall" ? "Season ladder" : topView === "current" ? `Current GW ${currentGw}` : `Previous GW ${medalsGw}`}
+                {topView === "overall"
+                  ? "Season ladder"
+                  : topView === "current"
+                    ? `Current GW ${currentGw}`
+                    : `Previous GW ${medalsGw}`}
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
@@ -778,7 +735,9 @@ export default function LeaderboardMatrixPage() {
                   GW{currentGw}
                 </div>
                 <div className="mt-1 text-xs text-muted">
-                  {scoredGameweeks.includes(currentGw) ? "Score docs saved for this round." : "Waiting on saved score docs."}
+                  {scoredGameweeks.includes(currentGw)
+                    ? "Score docs saved for this round."
+                    : "Waiting on saved score docs."}
                 </div>
               </div>
               <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -797,9 +756,7 @@ export default function LeaderboardMatrixPage() {
         </div>
       </SectionCard>
 
-      <SpecialBreak />
-
-      <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
+      <SectionCard className={standardSectionCardClass}>
         <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
           {!!seasonOptions.length && (
             <LeaderboardSelectField
@@ -835,14 +792,14 @@ export default function LeaderboardMatrixPage() {
       </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <SectionCard className={standardSectionCardClass}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                 Podium
               </div>
               <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                Top three for {topViewLabel.toLowerCase()}
+                {topViewLabel.toUpperCase()}
               </div>
             </div>
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
@@ -852,7 +809,9 @@ export default function LeaderboardMatrixPage() {
           <div className="mt-5 grid grid-cols-3 items-end gap-3">
             {podiumSlots.map((slot, idx) => {
               const points = slot.player ? scoreForTopView(slot.player.uid) : 0;
-              const hasPred = slot.player ? hasPredForTopView(slot.player.uid) : false;
+              const hasPred = slot.player
+                ? hasPredForTopView(slot.player.uid)
+                : false;
               const barHeight =
                 slot.tier === "gold"
                   ? "132px"
@@ -902,7 +861,7 @@ export default function LeaderboardMatrixPage() {
           </div>
         </SectionCard>
 
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <SectionCard className={standardSectionCardClass}>
           <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
             Full standings
           </div>
@@ -914,39 +873,75 @@ export default function LeaderboardMatrixPage() {
           </div>
           <button
             onClick={() => setFullPositionsExpanded((v) => !v)}
-            className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+            className="mt-4 inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
           >
-            {fullPositionsExpanded ? "Hide Full Room Positions" : "Show Full Room Positions"}
+            <span>
+              {fullPositionsExpanded
+                ? "Collapse Full Room Positions"
+                : "Show Full Room Positions"}
+            </span>
+            <span
+              className={[
+                "text-xs text-white/60 transition-transform duration-300 ease-out",
+                fullPositionsExpanded ? "rotate-180" : "",
+              ].join(" ")}
+            >
+              ▾
+            </span>
           </button>
           <div
             className={[
-              "grid overflow-hidden transition-all duration-300 ease-out",
+              "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
               fullPositionsExpanded
-                ? "grid-rows-[1fr] opacity-100 mt-4"
-                : "grid-rows-[0fr] opacity-0 mt-0",
+                ? "mt-4 grid-rows-[1fr] opacity-100 translate-y-0"
+                : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
             ].join(" ")}
           >
-            <div className="min-h-0 space-y-2">
-              {rankedByTopView.map((p, i) => (
-                <div
-                  key={`${topView}-rank-${p.uid}`}
-                  className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm"
-                >
-                  <span className="font-display text-foreground">
-                    {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
-                    {user?.uid === p.uid ? <span className={youPillClass()}>You</span> : null}
-                  </span>
-                  <span className="font-display font-semibold text-foreground">
-                    {scoreLabel(scoreForTopView(p.uid), hasPredForTopView(p.uid))}
-                  </span>
-                </div>
-              ))}
+            <div className="min-h-0">
+              <div
+                className={[
+                  "space-y-2 transition-all duration-300 ease-out",
+                  fullPositionsExpanded
+                    ? "opacity-100 translate-y-0"
+                    : "opacity-0 translate-y-1",
+                ].join(" ")}
+              >
+                {rankedByTopView.map((p, i) => (
+                  <div
+                    key={`${topView}-rank-${p.uid}`}
+                    className={[
+                      "flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm transition-all duration-300 ease-out",
+                      fullPositionsExpanded
+                        ? "opacity-100 translate-y-0"
+                        : "opacity-0 translate-y-1",
+                    ].join(" ")}
+                    style={{
+                      transitionDelay: fullPositionsExpanded
+                        ? `${Math.min(i, 8) * 32}ms`
+                        : "0ms",
+                    }}
+                  >
+                    <span className="font-display text-foreground">
+                      {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
+                      {user?.uid === p.uid ? (
+                        <span className={youPillClass()}>You</span>
+                      ) : null}
+                    </span>
+                    <span className="font-display font-semibold text-foreground">
+                      {scoreLabel(
+                        scoreForTopView(p.uid),
+                        hasPredForTopView(p.uid),
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </SectionCard>
       </div>
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+      <SectionCard className={standardSectionCardClass}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -1032,9 +1027,13 @@ export default function LeaderboardMatrixPage() {
                   ].join(" ")}
                 >
                   <div className="font-display text-sm text-foreground">
-                    {rankToHighlight > 0 && rankToHighlight <= 3 ? `${rankLabel(rankToHighlight)} ` : ""}
+                    {rankToHighlight > 0 && rankToHighlight <= 3
+                      ? `${rankLabel(rankToHighlight)} `
+                      : ""}
                     {p.displayName}
-                    {user?.uid === p.uid ? <span className={youPillClass()}>You</span> : null}
+                    {user?.uid === p.uid ? (
+                      <span className={youPillClass()}>You</span>
+                    ) : null}
                   </div>
                   <div className="font-display text-sm font-semibold text-foreground">
                     {scoreLabel(pts, hasPred)}
@@ -1055,7 +1054,9 @@ export default function LeaderboardMatrixPage() {
                     key={p.uid}
                     className="w-[120px] border-b border-subtle p-3 text-center font-semibold"
                   >
-                    <span className="font-display block truncate">{p.displayName}</span>
+                    <span className="font-display block truncate">
+                      {p.displayName}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -1113,16 +1114,24 @@ export default function LeaderboardMatrixPage() {
       </SectionCard>
 
       {(gwScoreComputedAt || leaderboardRefreshedAt) && (
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 text-xs text-muted">
+        <SectionCard
+          className={`${standardSectionCardClass} text-xs text-muted`}
+        >
           <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
             Audit trail
           </div>
           <div className="mt-3 space-y-1">
             {gwScoreComputedAt && (
-              <div>GW{currentGw} scores last calculated: {fmtDateTime(gwScoreComputedAt)}</div>
+              <div>
+                GW{currentGw} scores last calculated:{" "}
+                {fmtDateTime(gwScoreComputedAt)}
+              </div>
             )}
             {leaderboardRefreshedAt && (
-              <div>Leaderboard last refreshed: {fmtDateTime(leaderboardRefreshedAt)}</div>
+              <div>
+                Leaderboard last refreshed:{" "}
+                {fmtDateTime(leaderboardRefreshedAt)}
+              </div>
             )}
           </div>
         </SectionCard>

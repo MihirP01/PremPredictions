@@ -31,7 +31,9 @@ function validRoomCode(code: string) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as PasswordBody;
-    const roomCode = String(body.roomCode || "").trim().toUpperCase();
+    const roomCode = String(body.roomCode || "")
+      .trim()
+      .toUpperCase();
     const leaderUid = String(body.leaderUid || "").trim();
     const currentPassword = String(body.currentPassword || "");
     const newPassword = String(body.newPassword || "");
@@ -47,7 +49,10 @@ export async function POST(req: Request) {
       );
     }
     if (newPassword !== confirmPassword) {
-      return NextResponse.json({ error: "Passwords do not match." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Passwords do not match." },
+        { status: 400 },
+      );
     }
 
     const roomRef = adminDb.doc(`rooms/${roomCode}`);
@@ -70,7 +75,10 @@ export async function POST(req: Request) {
         !sec.passwordSalt ||
         !verifyRoomPassword(currentPassword, sec.passwordSalt, sec.passwordHash)
       ) {
-        return NextResponse.json({ error: "Current password is incorrect." }, { status: 403 });
+        return NextResponse.json(
+          { error: "Current password is incorrect." },
+          { status: 403 },
+        );
       }
     }
 

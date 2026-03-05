@@ -4,13 +4,28 @@ import LogoutButton from "../../../components/LogoutButton"; // adjust relative 
 import PageShell from "../../../components/PageShell";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gamepad2, Loader2, Trophy } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Gamepad2,
+  Loader2,
+  Trophy,
+} from "lucide-react";
 import SectionCard from "../../../components/SectionCard";
 import StatusPill from "../../../components/StatusPill";
-import { ConfirmDialog, ModalHeader, ThemedModal } from "../../../components/RoomModal";
+import {
+  ConfirmDialog,
+  ModalHeader,
+  ThemedModal,
+} from "../../../components/RoomModal";
 import TopActionRow from "../../../components/TopActionRow";
 import { useAuth } from "../../../components/AuthProvider";
-import { SettingsDropdownPanel, SettingsTriggerButton } from "../../../components/RoomSettingsMenu";
+import {
+  SettingsDropdownPanel,
+  SettingsTriggerButton,
+} from "../../../components/RoomSettingsMenu";
 import SpecialBreak from "../../../components/SpecialBreak";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
@@ -107,7 +122,9 @@ function HubNavTile({ label, hint, icon: Icon, onClick }: HubNavTileProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-display text-base font-semibold text-foreground">{label}</div>
+          <div className="font-display text-base font-semibold text-foreground">
+            {label}
+          </div>
           <div className="mt-1 text-xs text-muted">{hint}</div>
         </div>
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04] text-white/75 transition group-hover:border-white/14 group-hover:bg-white/[0.055]">
@@ -144,9 +161,9 @@ export default function RoomPage() {
   const [showKickControls, setShowKickControls] = useState(false);
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
   const [powerupsEnabled, setPowerupsEnabled] = useState(false);
-  const [gameModeStyle, setGameModeStyle] = useState<"round_robin" | "sprint" | "captain">(
-    "round_robin",
-  );
+  const [gameModeStyle, setGameModeStyle] = useState<
+    "round_robin" | "sprint" | "captain"
+  >("round_robin");
   const [themeAccent, setThemeAccent] = useState<string>("teal");
   const [hasPassword, setHasPassword] = useState(false);
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
@@ -163,6 +180,8 @@ export default function RoomPage() {
   const [nickNameDraft, setNickNameDraft] = useState("");
   const [nickNameBusy, setNickNameBusy] = useState(false);
   const [seasonKey, setSeasonKey] = useState("");
+  const [currentGw, setCurrentGw] = useState(1);
+  const [recalcBusy, setRecalcBusy] = useState(false);
   const [tableRows, setTableRows] = useState<TableRow[]>([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
@@ -199,11 +218,14 @@ export default function RoomPage() {
           .map((player) => ({
             uid: player.uid,
             displayName: player.displayName || "Player",
-            nickName: typeof player.nickName === "string" ? player.nickName.trim() : "",
+            nickName:
+              typeof player.nickName === "string" ? player.nickName.trim() : "",
             role: player.role || "member",
           }))
           .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+            a.displayName.localeCompare(b.displayName, undefined, {
+              sensitivity: "base",
+            }),
           );
         setPlayers(list);
       });
@@ -224,11 +246,14 @@ export default function RoomPage() {
       try {
         const bootstrap = await getRoomBootstrapCached(roomCode);
         if (cancelled) return;
-        const st = String(bootstrap?.gameState || "").trim().toUpperCase();
+        const st = String(bootstrap?.gameState || "")
+          .trim()
+          .toUpperCase();
         let target: string | null = null;
         if (st === "DRAFT") target = `/room/${roomCode}/minigame/play`;
         else if (st === "GOLDEN") target = `/room/${roomCode}/minigame/golden`;
-        else if (st === "POWERUPS") target = `/room/${roomCode}/minigame/powerups`;
+        else if (st === "POWERUPS")
+          target = `/room/${roomCode}/minigame/powerups`;
         if (target) {
           activePhaseRedirectedRef.current = true;
           router.replace(target);
@@ -252,18 +277,24 @@ export default function RoomPage() {
         const bootstrap = await getRoomBootstrapCached(roomCode);
         if (cancelled) return;
         const season = String(bootstrap?.seasonKey || "");
+        const nextGw = Number(bootstrap?.currentGameweek ?? 1);
         setSeasonKey(season);
+        setCurrentGw(Number.isFinite(nextGw) ? nextGw : 1);
         if (!season) return;
         setTableLoading(true);
         setTableError(null);
         try {
           const table = await getTableCached(season);
           if (cancelled) return;
-          setTableRows(Array.isArray(table?.standingsTotal) ? table.standingsTotal : []);
+          setTableRows(
+            Array.isArray(table?.standingsTotal) ? table.standingsTotal : [],
+          );
         } catch (e) {
           if (!cancelled) {
             setTableRows([]);
-            setTableError(e instanceof Error ? e.message : "Failed to load table.");
+            setTableError(
+              e instanceof Error ? e.message : "Failed to load table.",
+            );
           }
         } finally {
           if (!cancelled) setTableLoading(false);
@@ -284,13 +315,17 @@ export default function RoomPage() {
   }, [loading, user, roomCode]);
 
   const predictionsRouteForState = (state: string) =>
-    String(state || "").trim().toUpperCase() === "REVEAL"
+    String(state || "")
+      .trim()
+      .toUpperCase() === "REVEAL"
       ? `/room/${roomCode}/minigame/reveal`
       : `/room/${roomCode}/minigame`;
 
   async function openPredictionsTarget() {
     const cachedBootstrap = peekRoomBootstrapCached(roomCode);
-    const immediateHref = predictionsRouteForState(cachedBootstrap?.gameState || "");
+    const immediateHref = predictionsRouteForState(
+      cachedBootstrap?.gameState || "",
+    );
     router.push(immediateHref);
     if (cachedBootstrap) return;
     void getRoomBootstrapCached(roomCode)
@@ -341,7 +376,9 @@ export default function RoomPage() {
         setLeaderUid(roomMeta.leaderUid);
         const style = roomMeta.settings.gameModeStyle;
         setGameModeStyle(style);
-        setAllowIdenticalPicks(style === "sprint" ? true : !roomMeta.settings.sameResultLock);
+        setAllowIdenticalPicks(
+          style === "sprint" ? true : !roomMeta.settings.sameResultLock,
+        );
         setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
         setThemeAccent(roomMeta.settings.themeAccent);
         setHasPassword(roomMeta.settings.hasPassword);
@@ -353,9 +390,7 @@ export default function RoomPage() {
   const isLeader = !!user && leaderUid === user.uid;
   const me = players.find((p) => p.uid === user?.uid) ?? null;
   const myDisplayName =
-    me?.displayName ||
-    user?.email?.split("@")[0] ||
-    "Player";
+    me?.displayName || user?.email?.split("@")[0] || "Player";
   const myNickName = me?.nickName || "";
 
   useEffect(() => {
@@ -371,10 +406,18 @@ export default function RoomPage() {
       const checks = await Promise.all(
         roomsSnap.docs.map(async (roomDoc) => {
           try {
-            const membershipRef = doc(db, "rooms", roomDoc.id, "players", user.uid);
+            const membershipRef = doc(
+              db,
+              "rooms",
+              roomDoc.id,
+              "players",
+              user.uid,
+            );
             const membershipSnap = await getDoc(membershipRef);
             if (!membershipSnap.exists()) return null;
-            const data = membershipSnap.data() as { role?: "leader" | "member" };
+            const data = membershipSnap.data() as {
+              role?: "leader" | "member";
+            };
             return {
               roomCode: roomDoc.id,
               role: data.role === "leader" ? "leader" : "member",
@@ -411,7 +454,9 @@ export default function RoomPage() {
       setRoomSwitcherOpen(false);
       router.replace(`/room/${targetCode}`);
     } catch (e) {
-      setSwitcherError(e instanceof Error ? e.message : "Failed to switch room.");
+      setSwitcherError(
+        e instanceof Error ? e.message : "Failed to switch room.",
+      );
     } finally {
       setSwitcherBusy(false);
     }
@@ -463,7 +508,9 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      const password = window.prompt("Set room password (leave blank for none)");
+      const password = window.prompt(
+        "Set room password (leave blank for none)",
+      );
       if (password === null) return;
       const trimmed = password.trim();
       if (trimmed) {
@@ -489,7 +536,9 @@ export default function RoomPage() {
       setRoomSwitcherOpen(false);
       router.replace(`/room/${code}`);
     } catch (e) {
-      setSwitcherError(e instanceof Error ? e.message : "Failed to create room.");
+      setSwitcherError(
+        e instanceof Error ? e.message : "Failed to create room.",
+      );
     } finally {
       setSwitcherBusy(false);
     }
@@ -528,7 +577,9 @@ export default function RoomPage() {
       setRoomSwitcherOpen(false);
       router.replace("/room-gate");
     } catch (e) {
-      setSwitcherError(e instanceof Error ? e.message : "Failed to leave room.");
+      setSwitcherError(
+        e instanceof Error ? e.message : "Failed to leave room.",
+      );
     } finally {
       setSwitcherBusy(false);
     }
@@ -611,14 +662,17 @@ export default function RoomPage() {
       setHasPassword(true);
       setPasswordModalOpen(false);
     } catch (e) {
-      setPasswordError(e instanceof Error ? e.message : "Failed to save password.");
+      setPasswordError(
+        e instanceof Error ? e.message : "Failed to save password.",
+      );
     } finally {
       setPasswordBusy(false);
     }
   }
 
   async function toggleSameResultLock() {
-    if (!user || !isLeader || roomSettingsBusy || gameModeStyle === "sprint") return;
+    if (!user || !isLeader || roomSettingsBusy || gameModeStyle === "sprint")
+      return;
     const nextAllowIdentical = !allowIdenticalPicks;
     setRoomSettingsBusy(true);
     setError(null);
@@ -644,7 +698,9 @@ export default function RoomPage() {
     }
   }
 
-  async function updateGameModeStyle(nextStyle: "round_robin" | "sprint" | "captain") {
+  async function updateGameModeStyle(
+    nextStyle: "round_robin" | "sprint" | "captain",
+  ) {
     if (!user || !isLeader || roomSettingsBusy) return;
     setRoomSettingsBusy(true);
     setError(null);
@@ -720,6 +776,30 @@ export default function RoomPage() {
     }
   }
 
+  async function recalcScoresFromHub() {
+    if (!user || !isLeader || recalcBusy || !seasonKey) return;
+    setRecalcBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/game/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          gw: currentGw,
+          leaderUid: user.uid,
+          seasonKey,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to recalculate scores.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to recalculate scores.");
+    } finally {
+      setRecalcBusy(false);
+    }
+  }
+
   async function saveNickName() {
     if (!user || nickNameBusy) return;
     const trimmed = nickNameDraft.trim();
@@ -750,7 +830,9 @@ export default function RoomPage() {
   }
 
   const sortedPlayers = [...players].sort((a, b) =>
-    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+    a.displayName.localeCompare(b.displayName, undefined, {
+      sensitivity: "base",
+    }),
   );
   const resultLockSubtext =
     gameModeStyle === "sprint"
@@ -758,30 +840,42 @@ export default function RoomPage() {
       : gameModeStyle === "captain"
         ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
         : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
+  const standardSectionCardClass =
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const sharedButtonClass =
     "w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:opacity-60";
   const sharedInputClass =
-    "w-full rounded-2xl border border-white/8 bg-white/[0.035] px-3 py-2.5 text-foreground outline-none";
+    "w-full rounded-2xl border border-white/8 bg-white/[0.035] px-3 py-2.5 text-base text-foreground outline-none sm:text-sm";
   const modalSectionClass =
-    "rounded-[22px] border border-white/8 bg-white/[0.025] p-4";
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const modalSectionTitleClass =
     "font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48";
 
   return (
     <>
-      <PageShell width="standard">
+      <PageShell
+        width="wide"
+        shellChrome={false}
+        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+        contentClassName="relative z-[1] space-y-4"
+      >
         <div className="relative z-30">
           <TopActionRow
             title="Hub"
             subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            className="flex items-start justify-between gap-3 sm:items-end"
             actions={
-              <div ref={settingsWrapRef} className="relative ml-auto">
-                <SettingsTriggerButton onClick={() => setSettingsOpen((v) => !v)} />
+              <div ref={settingsWrapRef} className="relative z-[220] ml-auto">
+                <SettingsTriggerButton
+                  onClick={() => setSettingsOpen((v) => !v)}
+                />
                 <SettingsDropdownPanel
                   open={settingsOpen}
-                  className="right-0 left-auto top-[calc(100%+0.5rem)] mt-0"
+                  className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0 w-[min(22rem,calc(100vw-1.5rem))] !z-[340]"
                 >
-                  <div className="font-display font-semibold text-foreground">Settings</div>
+                  <div className="font-display font-semibold text-foreground">
+                    Settings
+                  </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
@@ -793,7 +887,11 @@ export default function RoomPage() {
                         className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
                       >
                         {nicknameExpanded ? "Collapse" : "Expand"}
-                        {nicknameExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {nicknameExpanded ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
                       </button>
                     </div>
                     {nicknameExpanded && (
@@ -813,13 +911,14 @@ export default function RoomPage() {
                           {nickNameBusy ? "Saving..." : "Save"}
                         </button>
                         <div className="text-xs text-muted">
-                          Nickname shows across the room. Leave blank to use your name.
+                          Nickname shows across the room. Leave blank to use
+                          your name.
                         </div>
                       </div>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <SpecialBreak />
+                    <SpecialBreak className="mt-2"/>
                     <button
                       onClick={async () => {
                         setSettingsOpen(false);
@@ -834,7 +933,10 @@ export default function RoomPage() {
                     {isLeader && (
                       <div className="space-y-2">
                         <SpecialBreak />
-                        <button onClick={() => setRoomRulesOpen(true)} className={sharedButtonClass}>
+                        <button
+                          onClick={() => setRoomRulesOpen(true)}
+                          className={sharedButtonClass}
+                        >
                           Room Settings
                         </button>
                       </div>
@@ -847,9 +949,9 @@ export default function RoomPage() {
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </div>
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-rose-300">{error}</div>
+          </SectionCard>
         )}
 
         <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
@@ -869,21 +971,13 @@ export default function RoomPage() {
                     </span>
                   </div>
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                    Season
-                  </div>
-                  <div className="font-display text-lg font-semibold text-foreground">
-                    {seasonLabel(seasonKey || "----")}
-                  </div>
-                </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
                 <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
                   Control centre
                 </span>
                 <span className="font-display text-sm font-semibold text-foreground">
-                  Live room snapshot
+                  Welcome, Lets GO!
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -918,9 +1012,7 @@ export default function RoomPage() {
           </div>
         </SectionCard>
 
-        <SpecialBreak />
-
-        <SectionCard className="hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5 lg:block">
+        <SectionCard className={`hidden lg:block ${standardSectionCardClass}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -964,7 +1056,7 @@ export default function RoomPage() {
           </div>
         </SectionCard>
 
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+        <SectionCard className={standardSectionCardClass}>
           <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
             Your seat
           </div>
@@ -973,32 +1065,51 @@ export default function RoomPage() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Display</div>
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                Display
+              </div>
               <div className="mt-2 font-display text-lg font-semibold text-foreground">
-                {myNickName ? `${myNickName} • ${myDisplayName}` : myDisplayName}
+                {myNickName
+                  ? `${myNickName} • ${myDisplayName}`
+                  : myDisplayName}
               </div>
             </div>
             <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Role</div>
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                Role
+              </div>
               <div className="mt-2 flex items-center gap-2">
-                <StatusPill label={isLeader ? "Leader" : "Member"} tone="neutral" />
-                {user?.uid ? <StatusPill label="You" tone="you" className="text-[10px] py-0.5" /> : null}
+                <StatusPill
+                  label={isLeader ? "Leader" : "Member"}
+                  tone="neutral"
+                />
+                {user?.uid ? (
+                  <StatusPill
+                    label="You"
+                    tone="you"
+                    className="text-[10px] py-0.5"
+                  />
+                ) : null}
               </div>
             </div>
             <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">Security</div>
+              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                Security
+              </div>
               <div className="mt-2 font-display text-sm font-semibold text-foreground">
                 {hasPassword ? "Private room" : "Open room"}
               </div>
               <div className="mt-1 text-xs text-muted">
-                {hasPassword ? "Password is enabled for new joins." : "Members can join without a password."}
+                {hasPassword
+                  ? "Password is enabled for new joins."
+                  : "Members can join without a password."}
               </div>
             </div>
           </div>
         </SectionCard>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <SectionCard className={standardSectionCardClass}>
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -1019,8 +1130,12 @@ export default function RoomPage() {
               ) : null}
             </div>
             {tableError ? (
-              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
                 {tableError}
+              </div>
+            ) : !tableLoading && tableRows.length === 0 ? (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+                No table rows available yet.
               </div>
             ) : (
               <div className="max-h-[460px] overflow-auto no-scrollbar rounded-[22px] border border-white/8 bg-white/[0.02]">
@@ -1040,23 +1155,37 @@ export default function RoomPage() {
                         key={`${row.position}-${row.team.name}`}
                         className="border-b border-white/8 last:border-0"
                       >
-                        <td className="px-3 py-2 font-display text-foreground">{row.position}</td>
+                        <td className="px-3 py-2 font-display text-foreground">
+                          {row.position}
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/[0.03]">
                               {row.team.badge ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={row.team.badge} alt={row.team.name} className="h-5 w-5 object-contain" />
+                                <img
+                                  src={row.team.badge}
+                                  alt={row.team.name}
+                                  className="h-5 w-5 object-contain"
+                                />
                               ) : null}
                             </div>
                             <span className="font-display text-foreground">
-                              {row.team.tla || row.team.shortName || row.team.name}
+                              {row.team.tla ||
+                                row.team.shortName ||
+                                row.team.name}
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-center text-foreground">{row.playedGames}</td>
-                        <td className="px-3 py-2 text-center text-foreground">{row.goalDifference}</td>
-                        <td className="px-3 py-2 text-center font-display font-semibold text-foreground">{row.points}</td>
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {row.playedGames}
+                        </td>
+                        <td className="px-3 py-2 text-center text-foreground">
+                          {row.goalDifference}
+                        </td>
+                        <td className="px-3 py-2 text-center font-display font-semibold text-foreground">
+                          {row.points}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1065,13 +1194,15 @@ export default function RoomPage() {
             )}
           </SectionCard>
 
-          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+          <SectionCard className={standardSectionCardClass}>
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                   Squad
                 </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">Room players</div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Room players
+                </div>
               </div>
               {isLeader && (
                 <button
@@ -1091,19 +1222,31 @@ export default function RoomPage() {
                   <div className="min-w-0 flex-1">
                     <div className="font-display text-sm font-semibold text-foreground">
                       <span className="block truncate">
-                        {p.nickName ? `(${p.nickName}) ${p.displayName}` : p.displayName}
+                        {p.nickName
+                          ? `(${p.nickName}) ${p.displayName}`
+                          : p.displayName}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       {p.uid === user?.uid ? (
-                        <StatusPill label="You" tone="you" className="shrink-0 text-[10px] py-0.5" />
+                        <StatusPill
+                          label="You"
+                          tone="you"
+                          className="shrink-0 text-[10px] py-0.5"
+                        />
                       ) : null}
-                      {p.role === "leader" ? <StatusPill label="Leader" tone="neutral" /> : null}
+                      {p.role === "leader" ? (
+                        <StatusPill label="Leader" tone="neutral" />
+                      ) : null}
                     </div>
                   </div>
                   <div className="ml-2 flex h-8 items-center justify-end">
                     {isLeader && showKickControls && p.uid !== user?.uid ? (
-                      <StatusPill label="Kick" tone="danger" onClick={() => setKickTarget(p)} />
+                      <StatusPill
+                        label="Kick"
+                        tone="danger"
+                        onClick={() => setKickTarget(p)}
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -1125,7 +1268,8 @@ export default function RoomPage() {
                 ? `(${kickTarget.nickName}) ${kickTarget.displayName}`
                 : kickTarget?.displayName}
             </span>{" "}
-            from room <span className="font-display text-foreground">{roomCode}</span>?
+            from room{" "}
+            <span className="font-display text-foreground">{roomCode}</span>?
           </>
         }
         confirmLabel="Confirm Remove"
@@ -1135,106 +1279,112 @@ export default function RoomPage() {
       <ThemedModal
         open={roomSwitcherOpen}
         onClose={() => setRoomSwitcherOpen(false)}
-        maxWidthClassName="max-w-xl"
+        maxWidthClassName="max-w-2xl"
       >
-            <ModalHeader title="Switch Rooms" onClose={() => setRoomSwitcherOpen(false)} />
+        <ModalHeader
+          title="Switch Rooms"
+          onClose={() => setRoomSwitcherOpen(false)}
+        />
 
-            {switcherError && (
-              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {switcherError}
+        {switcherError && (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
+            {switcherError}
+          </div>
+        )}
+
+        <div className={modalSectionClass}>
+          <div className={modalSectionTitleClass}>Your Rooms</div>
+          <div className="mt-1 text-sm text-muted">
+            Move between rooms you already belong to without leaving the hub.
+          </div>
+          <div className="mt-4 space-y-2">
+            {switcherBusy ? (
+              <div className="text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading rooms…</span>
               </div>
+            ) : memberRooms.length === 0 ? (
+              <div className="text-sm text-muted">No joined rooms found.</div>
+            ) : (
+              memberRooms.map((r) => (
+                <button
+                  key={r.roomCode}
+                  disabled={switcherBusy || r.roomCode === roomCode}
+                  onClick={() => switchToRoom(r.roomCode)}
+                  className={`${sharedButtonClass} text-left`}
+                >
+                  <span className="font-display">{r.roomCode}</span>{" "}
+                  {r.roomCode === roomCode ? "• Current" : ""}
+                </button>
+              ))
             )}
-
-            <div className={modalSectionClass}>
-              <div className={modalSectionTitleClass}>Your Rooms</div>
-              <div className="mt-1 text-sm text-muted">
-                Move between rooms you already belong to without leaving the hub.
-              </div>
-              <div className="mt-4 space-y-2">
-              {switcherBusy ? (
-                <div className="text-sm text-muted inline-flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Loading rooms…</span>
-                </div>
-              ) : memberRooms.length === 0 ? (
-                <div className="text-sm text-muted">No joined rooms found.</div>
-              ) : (
-                memberRooms.map((r) => (
-                  <button
-                    key={r.roomCode}
-                    disabled={switcherBusy || r.roomCode === roomCode}
-                    onClick={() => switchToRoom(r.roomCode)}
-                    className={`${sharedButtonClass} text-left`}
-                  >
-                    <span className="font-display">{r.roomCode}</span> {r.roomCode === roomCode ? "• Current" : ""}
-                  </button>
-                ))
-              )}
-              </div>
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className={modalSectionClass}>
+            <div className={modalSectionTitleClass}>Join New Room</div>
+            <div className="mt-1 text-sm text-muted">
+              Enter a room code to join another active room.
             </div>
-            <SpecialBreak />
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className={modalSectionClass}>
-                <div className={modalSectionTitleClass}>Join New Room</div>
-                <div className="mt-1 text-sm text-muted">
-                  Enter a room code to join another active room.
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  <input
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value)}
-                    placeholder="AB12"
-                    className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
-                    inputMode="text"
-                  />
-                  <button
-                    onClick={joinNewRoom}
-                    disabled={switcherBusy}
-                    className={sharedButtonClass}
-                  >
-                    Join
-                  </button>
-                </div>
-              </div>
-
-              <div className={modalSectionClass}>
-                <div className={modalSectionTitleClass}>Create New Room</div>
-                <div className="mt-1 text-sm text-muted">
-                  Create a fresh room using a new code.
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  <input
-                    value={createCode}
-                    onChange={(e) => setCreateCode(e.target.value)}
-                    placeholder="NEW25"
-                    className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
-                    inputMode="text"
-                  />
-                  <button
-                    onClick={createNewRoom}
-                    disabled={switcherBusy}
-                    className={sharedButtonClass}
-                  >
-                    Create
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}>
-              <div className={modalSectionTitleClass}>Current Room</div>
-              <div className="mt-1 text-sm text-muted">
-                Leave <span className="font-display text-foreground">{roomCode}</span> and return to room selection.
-              </div>
+            <div className="mt-4 flex flex-col gap-2">
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="AB12"
+                className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                inputMode="text"
+              />
               <button
-                onClick={leaveCurrentRoom}
+                onClick={joinNewRoom}
                 disabled={switcherBusy}
-                className={`${sharedButtonClass} mt-4 text-danger`}
+                className={sharedButtonClass}
               >
-                Leave Current Room
+                Join
               </button>
             </div>
+          </div>
+
+          <div className={modalSectionClass}>
+            <div className={modalSectionTitleClass}>Create New Room</div>
+            <div className="mt-1 text-sm text-muted">
+              Create a fresh room using a new code.
+            </div>
+            <div className="mt-4 flex flex-col gap-2">
+              <input
+                value={createCode}
+                onChange={(e) => setCreateCode(e.target.value)}
+                placeholder="NEW25"
+                className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                inputMode="text"
+              />
+              <button
+                onClick={createNewRoom}
+                disabled={switcherBusy}
+                className={sharedButtonClass}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}
+        >
+          <div className={modalSectionTitleClass}>Current Room</div>
+          <div className="mt-1 text-sm text-muted">
+            Leave{" "}
+            <span className="font-display text-foreground">{roomCode}</span> and
+            return to room selection.
+          </div>
+          <button
+            onClick={leaveCurrentRoom}
+            disabled={switcherBusy}
+            className={`${sharedButtonClass} mt-4 text-danger`}
+          >
+            Leave Current Room
+          </button>
+        </div>
       </ThemedModal>
       <ConfirmDialog
         open={leaveConfirmOpen}
@@ -1258,7 +1408,8 @@ export default function RoomPage() {
         title="Delete Room"
         body={
           <>
-            Delete room <span className="font-display text-foreground">{roomCode}</span> for
+            Delete room{" "}
+            <span className="font-display text-foreground">{roomCode}</span> for
             everyone? This cannot be undone.
           </>
         }
@@ -1266,60 +1417,74 @@ export default function RoomPage() {
         confirming={deleteBusy}
         danger
       />
-      <ThemedModal open={roomRulesOpen} onClose={() => setRoomRulesOpen(false)} maxWidthClassName="max-w-2xl">
-            <ModalHeader
-              title="Room Settings"
-              onClose={() => setRoomRulesOpen(false)}
-              ariaLabel="Exit room settings"
-            />
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-4">
-                <div className={modalSectionClass}>
-                  <div className={modalSectionTitleClass}>Access</div>
-                  <div className="mt-1 text-sm text-muted">
-                    Control room privacy and password protection for new joins.
-                  </div>
-                  <button
-                    onClick={openPasswordModal}
-                    disabled={roomSettingsBusy}
-                    className={`${sharedButtonClass} mt-4`}
-                  >
-                    {hasPassword ? "Change Password" : "Set Password"}
-                  </button>
-                </div>
-
-                <div className={modalSectionClass}>
-                  <div className={modalSectionTitleClass}>Theme Accent</div>
-                  <div className="mt-1 text-sm text-muted">
-                    Apply a room-wide visual accent across shared surfaces.
-                  </div>
-                  <div className="relative mt-4">
-                    <select
-                      value={themeAccent}
-                      onChange={(e) => updateThemeAccent(e.target.value)}
-                      disabled={roomSettingsBusy}
-                      className="h-11 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-8 text-center font-display text-sm font-semibold text-foreground outline-none [text-align-last:center] disabled:opacity-60"
-                    >
-                      {THEME_ACCENT_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
-                      ▼
-                    </span>
-                  </div>
-                </div>
+      <ThemedModal
+        open={roomRulesOpen}
+        onClose={() => setRoomRulesOpen(false)}
+        maxWidthClassName="max-w-3xl"
+      >
+        <ModalHeader
+          title="Room Settings"
+          onClose={() => setRoomRulesOpen(false)}
+          ariaLabel="Exit room settings"
+        />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="space-y-4">
+            <div className={modalSectionClass}>
+              <div className={modalSectionTitleClass}>Access</div>
+              <div className="mt-1 text-sm text-muted">
+                Control room privacy and password protection for new joins.
               </div>
+              <button
+                onClick={openPasswordModal}
+                disabled={roomSettingsBusy}
+                className={`${sharedButtonClass} mt-4`}
+              >
+                {hasPassword ? "Change Password" : "Set Password"}
+              </button>
+              <button
+                onClick={recalcScoresFromHub}
+                disabled={recalcBusy || !seasonKey}
+                className={`${sharedButtonClass} mt-2`}
+              >
+                {recalcBusy ? `Recalculating GW${currentGw}...` : "Recalculate Scores"}
+              </button>
+              <div className="mt-2 text-xs text-muted text-center">
+                Rebuilds score docs for GW{currentGw}.
+              </div>
+            </div>
 
-              <div className="space-y-4">
-                <div className={modalSectionClass}>
-                  <div className={modalSectionTitleClass}>Game Mode</div>
-                  <div className="mt-1 text-sm text-muted">
-                    Choose the draft format used when the mini-game starts.
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className={modalSectionClass}>
+              <div className={modalSectionTitleClass}>Theme Accent</div>
+              <div className="mt-1 text-sm text-muted">
+                Apply a room-wide visual accent across shared surfaces.
+              </div>
+              <div className="relative mt-4">
+                <select
+                  value={themeAccent}
+                  onChange={(e) => updateThemeAccent(e.target.value)}
+                  disabled={roomSettingsBusy}
+                  className="h-11 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-8 text-center font-display text-sm font-semibold text-foreground outline-none [text-align-last:center] disabled:opacity-60"
+                >
+                  {THEME_ACCENT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
+                  ▼
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className={modalSectionClass}>
+              <div className={modalSectionTitleClass}>Game Mode</div>
+              <div className="mt-1 text-sm text-muted">
+                Choose the draft format used when the mini-game starts.
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 <button
                   onClick={() => updateGameModeStyle("round_robin")}
                   disabled={roomSettingsBusy}
@@ -1356,122 +1521,132 @@ export default function RoomPage() {
                 >
                   Sprint
                 </button>
-                  </div>
-                  <div className="mt-3 text-xs text-muted text-center">
-                    {gameModeStyle === "sprint"
-                      ? "Sprint is the quickest mode for larger rooms."
-                      : "Recommended for 5 or fewer players."}
-                  </div>
-                </div>
+              </div>
+              <div className="mt-3 text-xs text-muted text-center">
+                {gameModeStyle === "sprint"
+                  ? "Sprint is the quickest mode for larger rooms."
+                  : "Recommended for 5 or fewer players."}
+              </div>
+            </div>
 
-                <div className={modalSectionClass}>
-                  <div className={modalSectionTitleClass}>Scoring Rules</div>
-                  <div className="mt-1 text-sm text-muted">
-                    Tune duplicate pick rules and optional power-up rounds.
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    <button
-                      onClick={toggleSameResultLock}
-                      disabled={roomSettingsBusy || gameModeStyle === "sprint"}
-                      className={[
-                        "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                        gameModeStyle === "sprint"
-                          ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
-                          : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                      ].join(" ")}
-                    >
-                      {roomSettingsBusy
-                        ? "Saving..."
-                        : gameModeStyle === "sprint"
-                          ? "Allow Identical Picks: ON (Sprint)"
-                          : allowIdenticalPicks
-                            ? "Allow Identical Picks: ON"
-                            : "Allow Identical Picks: OFF"}
-                    </button>
-                    <div className="text-xs text-muted text-center">
-                      {resultLockSubtext}
-                    </div>
-                    <button
-                      onClick={togglePowerups}
-                      disabled={roomSettingsBusy}
-                      className={[
-                        "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                        "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                      ].join(" ")}
-                    >
-                      {roomSettingsBusy
-                        ? "Saving..."
-                        : powerupsEnabled
-                          ? "Power-Ups: ON"
-                          : "Power-Ups: OFF"}
-                    </button>
-                    <div className="text-xs text-muted text-center">
-                      Adds a Power-Ups phase after Golden for this week.
-                    </div>
-                  </div>
+            <div className={modalSectionClass}>
+              <div className={modalSectionTitleClass}>Scoring Rules</div>
+              <div className="mt-1 text-sm text-muted">
+                Tune duplicate pick rules and optional power-up rounds.
+              </div>
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={toggleSameResultLock}
+                  disabled={roomSettingsBusy || gameModeStyle === "sprint"}
+                  className={[
+                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
+                    gameModeStyle === "sprint"
+                      ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
+                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
+                  ].join(" ")}
+                >
+                  {roomSettingsBusy
+                    ? "Saving..."
+                    : gameModeStyle === "sprint"
+                      ? "Allow Identical Picks: ON (Sprint)"
+                      : allowIdenticalPicks
+                        ? "Allow Identical Picks: ON"
+                        : "Allow Identical Picks: OFF"}
+                </button>
+                <div className="text-xs text-muted text-center">
+                  {resultLockSubtext}
                 </div>
-
-                <div className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}>
-                  <div className={modalSectionTitleClass}>Danger Zone</div>
-                  <div className="mt-1 text-sm text-muted">
-                    Delete this room and remove it for every player.
-                  </div>
-                  <button
-                    onClick={deleteRoomAsLeader}
-                    disabled={deleteBusy}
-                    className={`${sharedButtonClass} mt-4 text-danger`}
-                  >
-                    {deleteBusy ? "Deleting room…" : "Delete Room"}
-                  </button>
+                <button
+                  onClick={togglePowerups}
+                  disabled={roomSettingsBusy}
+                  className={[
+                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
+                    "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
+                  ].join(" ")}
+                >
+                  {roomSettingsBusy
+                    ? "Saving..."
+                    : powerupsEnabled
+                      ? "Power-Ups: ON"
+                      : "Power-Ups: OFF"}
+                </button>
+                <div className="text-xs text-muted text-center">
+                  Adds a Power-Ups phase after Golden for this week.
                 </div>
               </div>
             </div>
-      </ThemedModal>
-      <ThemedModal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} maxWidthClassName="max-w-lg">
-            <ModalHeader
-              title={hasPassword ? "Change Room Password" : "Set Room Password"}
-              onClose={() => setPasswordModalOpen(false)}
-              ariaLabel="Close password settings"
-            />
-            {hasPassword && (
-              <div className="space-y-1">
-                <label className="text-xs text-muted">Current Password</label>
-              <input
-                type="password"
-                value={currentPasswordDraft}
-                onChange={(e) => setCurrentPasswordDraft(e.target.value)}
-                className={sharedInputClass}
-              />
-              </div>
-            )}
-            <div className="space-y-1">
-              <label className="text-xs text-muted">New Password</label>
-              <input
-                type="password"
-                value={newPasswordDraft}
-                onChange={(e) => setNewPasswordDraft(e.target.value)}
-                className={sharedInputClass}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted">Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPasswordDraft}
-                onChange={(e) => setConfirmPasswordDraft(e.target.value)}
-                className={sharedInputClass}
-              />
-            </div>
-            {passwordError && (
-              <div className="text-sm text-danger">{passwordError}</div>
-            )}
-            <button
-              onClick={saveRoomPassword}
-              disabled={passwordBusy}
-              className={sharedButtonClass}
+
+            <div
+              className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}
             >
-              {passwordBusy ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
-            </button>
+              <div className={modalSectionTitleClass}>Danger Zone</div>
+              <div className="mt-1 text-sm text-muted">
+                Delete this room and remove it for every player.
+              </div>
+              <button
+                onClick={deleteRoomAsLeader}
+                disabled={deleteBusy}
+                className={`${sharedButtonClass} mt-4 text-danger`}
+              >
+                {deleteBusy ? "Deleting room…" : "Delete Room"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </ThemedModal>
+      <ThemedModal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        maxWidthClassName="max-w-lg"
+      >
+        <ModalHeader
+          title={hasPassword ? "Change Room Password" : "Set Room Password"}
+          onClose={() => setPasswordModalOpen(false)}
+          ariaLabel="Close password settings"
+        />
+        {hasPassword && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted">Current Password</label>
+            <input
+              type="password"
+              value={currentPasswordDraft}
+              onChange={(e) => setCurrentPasswordDraft(e.target.value)}
+              className={sharedInputClass}
+            />
+          </div>
+        )}
+        <div className="space-y-1">
+          <label className="text-xs text-muted">New Password</label>
+          <input
+            type="password"
+            value={newPasswordDraft}
+            onChange={(e) => setNewPasswordDraft(e.target.value)}
+            className={sharedInputClass}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-muted">Confirm Password</label>
+          <input
+            type="password"
+            value={confirmPasswordDraft}
+            onChange={(e) => setConfirmPasswordDraft(e.target.value)}
+            className={sharedInputClass}
+          />
+        </div>
+        {passwordError && (
+          <div className="text-sm text-danger">{passwordError}</div>
+        )}
+        <button
+          onClick={saveRoomPassword}
+          disabled={passwordBusy}
+          className={sharedButtonClass}
+        >
+          {passwordBusy
+            ? "Saving..."
+            : hasPassword
+              ? "Change Password"
+              : "Set Password"}
+        </button>
       </ThemedModal>
     </>
   );

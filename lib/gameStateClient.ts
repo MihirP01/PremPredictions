@@ -18,7 +18,10 @@ export type CachedRoomGameState = {
 
 const TTL_MS = 20 * 1000;
 const STORAGE_PREFIX = "gstate:v1:";
-const memCache = new Map<string, { expiresAt: number; data: CachedRoomGameState | null }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: CachedRoomGameState | null }
+>();
 const pending = new Map<string, Promise<CachedRoomGameState | null>>();
 
 function keyFor(roomCode: string, seasonKey: string, gw: number) {
@@ -30,7 +33,10 @@ function getStorage(key: string): CachedRoomGameState | null | undefined {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: CachedRoomGameState | null };
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: number;
+      data?: CachedRoomGameState | null;
+    };
     if (!parsed?.expiresAt) return undefined;
     if (Date.now() > parsed.expiresAt) return undefined;
     return parsed.data ?? null;
@@ -64,7 +70,8 @@ export async function getRoomGameStateCached(
   const normalizedGw = Number(gw);
   const normalizedSeason = String(seasonKey || "");
   const normalizedRoom = String(roomCode || "").toUpperCase();
-  if (!normalizedRoom || !normalizedSeason || !Number.isFinite(normalizedGw)) return null;
+  if (!normalizedRoom || !normalizedSeason || !Number.isFinite(normalizedGw))
+    return null;
 
   const key = keyFor(normalizedRoom, normalizedSeason, normalizedGw);
   const now = Date.now();
@@ -89,7 +96,9 @@ export async function getRoomGameStateCached(
       `gw-${normalizedGw}`,
     );
     const snap = await getDoc(ref);
-    const data = snap.exists() ? ((snap.data() as CachedRoomGameState) ?? null) : null;
+    const data = snap.exists()
+      ? ((snap.data() as CachedRoomGameState) ?? null)
+      : null;
     setCached(key, data);
     return data;
   })().finally(() => pending.delete(key));
@@ -97,4 +106,3 @@ export async function getRoomGameStateCached(
   pending.set(key, req);
   return req;
 }
-

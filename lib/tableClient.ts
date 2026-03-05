@@ -1,6 +1,11 @@
 export type TableRow = {
   position: number;
-  team: { name: string; tla?: string | null; shortName?: string; badge?: string | null };
+  team: {
+    name: string;
+    tla?: string | null;
+    shortName?: string;
+    badge?: string | null;
+  };
   playedGames: number;
   won: number;
   draw: number;
@@ -33,7 +38,9 @@ function normalize(payload: unknown): TableData {
     standingsAway?: TableRow[];
   };
   return {
-    standingsTotal: Array.isArray(data.standingsTotal) ? data.standingsTotal : [],
+    standingsTotal: Array.isArray(data.standingsTotal)
+      ? data.standingsTotal
+      : [],
     standingsHome: Array.isArray(data.standingsHome) ? data.standingsHome : [],
     standingsAway: Array.isArray(data.standingsAway) ? data.standingsAway : [],
   };
@@ -88,7 +95,8 @@ export async function getTableCached(seasonKey: string): Promise<TableData> {
     const res = await fetch(`/api/table${seasonParam}`, { cache: "no-store" });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const error = (payload as { error?: string })?.error || `table ${res.status}`;
+      const error =
+        (payload as { error?: string })?.error || `table ${res.status}`;
       throw new Error(error);
     }
     const data = normalize(payload);
@@ -98,4 +106,3 @@ export async function getTableCached(seasonKey: string): Promise<TableData> {
   pending.set(key, req);
   return req;
 }
-

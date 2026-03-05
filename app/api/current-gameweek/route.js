@@ -7,7 +7,8 @@ const LEAGUE_TIME_ZONE = "Europe/London";
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
-  const startYear = now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
+  const startYear =
+    now.getUTCMonth() >= SEASON_START_MONTH_UTC ? year : year - 1;
   const yyStart = String(startYear % 100).padStart(2, "0");
   const yyEnd = String((startYear + 1) % 100).padStart(2, "0");
   return `${yyStart}${yyEnd}`;
@@ -119,7 +120,15 @@ function zonedDateTimeToUtc(parts, timeZone) {
 
 function nextLocalMidnightMs(baseMs, timeZone) {
   const local = zonedParts(baseMs, timeZone);
-  const nextDayProbe = Date.UTC(local.year, local.month - 1, local.day + 1, 12, 0, 0, 0);
+  const nextDayProbe = Date.UTC(
+    local.year,
+    local.month - 1,
+    local.day + 1,
+    12,
+    0,
+    0,
+    0,
+  );
   const nextLocal = zonedParts(nextDayProbe, timeZone);
   return zonedDateTimeToUtc(
     {
@@ -139,7 +148,10 @@ function selectCurrentGameweek(byMd, nowMs) {
 
   let nextOpen = null;
   const upcomingMds = matchdays
-    .filter((md) => (byMd.get(md)?.earliestKickoffMs ?? Number.POSITIVE_INFINITY) > nowMs)
+    .filter(
+      (md) =>
+        (byMd.get(md)?.earliestKickoffMs ?? Number.POSITIVE_INFINITY) > nowMs,
+    )
     .sort((a, b) => a - b);
 
   if (upcomingMds.length > 0) {
@@ -149,7 +161,10 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!prev) {
       nextOpen = nextUpcomingMd;
     } else {
-      const rolloverAtMs = nextLocalMidnightMs(prev.latestKickoffMs, LEAGUE_TIME_ZONE);
+      const rolloverAtMs = nextLocalMidnightMs(
+        prev.latestKickoffMs,
+        LEAGUE_TIME_ZONE,
+      );
       nextOpen = nowMs >= rolloverAtMs ? nextUpcomingMd : prevMd;
     }
   } else if (matchdays.length > 0) {
@@ -158,7 +173,10 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!latest) {
       nextOpen = latestMd;
     } else {
-      const rolloverAtMs = nextLocalMidnightMs(latest.latestKickoffMs, LEAGUE_TIME_ZONE);
+      const rolloverAtMs = nextLocalMidnightMs(
+        latest.latestKickoffMs,
+        LEAGUE_TIME_ZONE,
+      );
       nextOpen = nowMs >= rolloverAtMs ? latestMd + 1 : latestMd;
     }
   } else {
@@ -183,7 +201,9 @@ async function buildFotmobFallback(seasonKey, now) {
   if (!res.ok) return null;
 
   const data = await res.json().catch(() => null);
-  const matches = Array.isArray(data?.fixtures?.allMatches) ? data.fixtures.allMatches : [];
+  const matches = Array.isArray(data?.fixtures?.allMatches)
+    ? data.fixtures.allMatches
+    : [];
   const byMd = new Map();
   const nowMs = now.getTime();
 

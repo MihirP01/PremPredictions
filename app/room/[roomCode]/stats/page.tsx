@@ -17,7 +17,6 @@ import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
-import SpecialBreak from "../../../../components/SpecialBreak";
 import TopActionRow from "../../../../components/TopActionRow";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
@@ -125,7 +124,9 @@ function pct(part: number, total: number) {
 }
 
 function outcome(score: string) {
-  const m = String(score).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  const m = String(score)
+    .trim()
+    .match(/^(\d+)\s*-\s*(\d+)$/);
   if (!m) return null;
   const h = Number(m[1]);
   const a = Number(m[2]);
@@ -136,7 +137,9 @@ function outcome(score: string) {
 }
 
 function totalGoals(score: string) {
-  const m = String(score).trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  const m = String(score)
+    .trim()
+    .match(/^(\d+)\s*-\s*(\d+)$/);
   if (!m) return null;
   const h = Number(m[1]);
   const a = Number(m[2]);
@@ -252,9 +255,13 @@ function MetricTile({ label, value, note, rank = 0, icon }: MetricTileProps) {
         ) : null}
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="min-h-[1.25rem] text-xs text-muted">{note ?? "\u00a0"}</div>
+        <div className="min-h-[1.25rem] text-xs text-muted">
+          {note ?? "\u00a0"}
+        </div>
         {rank > 0 ? (
-          <div className={`rounded-full border px-2.5 py-1 font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${tone.badge}`}>
+          <div
+            className={`rounded-full border px-2.5 py-1 font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${tone.badge}`}
+          >
             #{rank}
           </div>
         ) : null}
@@ -265,7 +272,10 @@ function MetricTile({ label, value, note, rank = 0, icon }: MetricTileProps) {
 
 export default function RoomStatsPage() {
   const params = useParams<{ roomCode: string }>();
-  const roomCode = useMemo(() => String(params.roomCode).toUpperCase(), [params.roomCode]);
+  const roomCode = useMemo(
+    () => String(params.roomCode).toUpperCase(),
+    [params.roomCode],
+  );
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -277,7 +287,8 @@ export default function RoomStatsPage() {
   const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [seasonSnapshot, setSeasonSnapshot] = useState<SeasonScoresSnapshot | null>(null);
+  const [seasonSnapshot, setSeasonSnapshot] =
+    useState<SeasonScoresSnapshot | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const seasonGwSyncPrimedRef = useRef(false);
 
@@ -292,18 +303,14 @@ export default function RoomStatsPage() {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const n = Number(data.currentGameweek ?? 1);
-        const options = Array.isArray(data.seasonOptions) ? data.seasonOptions : [];
+        const options = Array.isArray(data.seasonOptions)
+          ? data.seasonOptions
+          : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
           setCurrentGw(Number.isFinite(n) ? n : 1);
           setSeasonKey(season);
-          setSeasonOptions(
-            options.length
-              ? options
-              : season
-                ? [season]
-                : [],
-          );
+          setSeasonOptions(options.length ? options : season ? [season] : []);
         }
       } catch {
         if (!cancelled) {
@@ -347,10 +354,13 @@ export default function RoomStatsPage() {
         const seeded: Player[] = cached
           .map((p) => ({
             uid: p.uid,
-            displayName: String(p.nickName || "").trim() || p.displayName || "Player",
+            displayName:
+              String(p.nickName || "").trim() || p.displayName || "Player",
           }))
           .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+            a.displayName.localeCompare(b.displayName, undefined, {
+              sensitivity: "base",
+            }),
           );
         setPlayers(seeded);
       } catch {
@@ -369,7 +379,9 @@ export default function RoomStatsPage() {
             } satisfies Player;
           })
           .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }),
+            a.displayName.localeCompare(b.displayName, undefined, {
+              sensitivity: "base",
+            }),
           );
         setPlayers(list);
       },
@@ -382,7 +394,8 @@ export default function RoomStatsPage() {
   }, [roomCode]);
 
   const effectiveSelectedUid = useMemo(() => {
-    if (selectedUid && players.some((p) => p.uid === selectedUid)) return selectedUid;
+    if (selectedUid && players.some((p) => p.uid === selectedUid))
+      return selectedUid;
     if (user && players.some((p) => p.uid === user.uid)) return user.uid;
     return players[0]?.uid ?? "";
   }, [players, selectedUid, user]);
@@ -413,13 +426,17 @@ export default function RoomStatsPage() {
 
       if (!cancelled) {
         setSeasonSnapshot(snapshot);
-        setLastUpdated(latestComputedAtMs != null ? new Date(latestComputedAtMs) : null);
+        setLastUpdated(
+          latestComputedAtMs != null ? new Date(latestComputedAtMs) : null,
+        );
         setError(null);
       }
     })()
       .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load player stats.");
+          setError(
+            e instanceof Error ? e.message : "Failed to load player stats.",
+          );
         }
       })
       .finally(() => {
@@ -543,7 +560,9 @@ export default function RoomStatsPage() {
           }
 
           const predOutcome = item.pred ? outcome(item.pred) : null;
-          const actualOutcome = item.actual ? outcome(String(item.actual)) : null;
+          const actualOutcome = item.actual
+            ? outcome(String(item.actual))
+            : null;
           if (predOutcome && actualOutcome) {
             s.outcomeAttempts[predOutcome] += 1;
             gwStats.outcomeAttempts[predOutcome] += 1;
@@ -554,7 +573,9 @@ export default function RoomStatsPage() {
           }
 
           const predGoals = item.pred ? totalGoals(item.pred) : null;
-          const actualGoals = item.actual ? totalGoals(String(item.actual)) : null;
+          const actualGoals = item.actual
+            ? totalGoals(String(item.actual))
+            : null;
           if (predGoals != null && actualGoals != null) {
             s.goalDisparity += predGoals - actualGoals;
             gwStats.goalDisparity += predGoals - actualGoals;
@@ -566,7 +587,8 @@ export default function RoomStatsPage() {
     return baseStats;
   }, [players, seasonSnapshot, currentGw]);
 
-  const selectedPlayer = players.find((p) => p.uid === effectiveSelectedUid) ?? null;
+  const selectedPlayer =
+    players.find((p) => p.uid === effectiveSelectedUid) ?? null;
   const stats = effectiveSelectedUid ? statsByUid[effectiveSelectedUid] : null;
   const allScoredGws = useMemo(() => {
     const set = new Set<number>();
@@ -579,7 +601,8 @@ export default function RoomStatsPage() {
     return [...set].sort((a, b) => b - a);
   }, [statsByUid]);
   const effectiveGwFilter =
-    selectedGwFilter === "all" || allScoredGws.includes(Number(selectedGwFilter))
+    selectedGwFilter === "all" ||
+    allScoredGws.includes(Number(selectedGwFilter))
       ? selectedGwFilter
       : "all";
   const selectedGwNumber =
@@ -604,7 +627,9 @@ export default function RoomStatsPage() {
         const av = metric(a.uid);
         const bv = metric(b.uid);
         if (av !== bv) return asc ? av - bv : bv - av;
-        return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" });
+        return a.displayName.localeCompare(b.displayName, undefined, {
+          sensitivity: "base",
+        });
       });
       const out: Record<string, number> = {};
       let prev: number | null = null;
@@ -618,178 +643,215 @@ export default function RoomStatsPage() {
       return out;
     };
     return {
-      totalPoints: competitionRank((uid) => displayByUid[uid]?.totalPoints ?? 0),
-      bestGwPoints: competitionRank((uid) => displayByUid[uid]?.bestGwPoints ?? 0),
+      totalPoints: competitionRank(
+        (uid) => displayByUid[uid]?.totalPoints ?? 0,
+      ),
+      bestGwPoints: competitionRank(
+        (uid) => displayByUid[uid]?.bestGwPoints ?? 0,
+      ),
       exactCount: competitionRank((uid) => displayByUid[uid]?.exactCount ?? 0),
       correctResults: competitionRank((uid) => {
         const s = displayByUid[uid];
         return (s?.exactCount ?? 0) + (s?.resultOnlyCount ?? 0);
       }),
-      goalDisparity: competitionRank((uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0), true),
-      goldenBonus: competitionRank((uid) => displayByUid[uid]?.goldenBonusPoints ?? 0),
-      powerupGain: competitionRank((uid) => displayByUid[uid]?.powerupPointsGained ?? 0),
-      powerupLoss: competitionRank((uid) => displayByUid[uid]?.powerupPointsLost ?? 0, true),
+      goalDisparity: competitionRank(
+        (uid) => Math.abs(displayByUid[uid]?.goalDisparity ?? 0),
+        true,
+      ),
+      goldenBonus: competitionRank(
+        (uid) => displayByUid[uid]?.goldenBonusPoints ?? 0,
+      ),
+      powerupGain: competitionRank(
+        (uid) => displayByUid[uid]?.powerupPointsGained ?? 0,
+      ),
+      powerupLoss: competitionRank(
+        (uid) => displayByUid[uid]?.powerupPointsLost ?? 0,
+        true,
+      ),
     };
   }, [players, statsByUid, selectedGwNumber]);
-  const recentGws =
-    Array.from({ length: Math.min(5, currentGw) }, (_, i) => currentGw - i);
+  const recentGws = Array.from(
+    { length: Math.min(5, currentGw) },
+    (_, i) => currentGw - i,
+  );
   if (loading || !user) return null;
 
   const scopedLabel =
-    selectedGwNumber == null ? "Season to date" : `Gameweek ${selectedGwNumber} snapshot`;
+    selectedGwNumber == null
+      ? "Season to date"
+      : `Gameweek ${selectedGwNumber} snapshot`;
   const correctResultsTotal =
     (displayStats?.exactCount ?? 0) + (displayStats?.resultOnlyCount ?? 0);
-  const exactRate = pct(displayStats?.exactCount ?? 0, displayStats?.totalGradedPicks ?? 0);
-  const correctRate = pct(correctResultsTotal, displayStats?.totalGradedPicks ?? 0);
-  const roomRank = rankMapByMetric.totalPoints[effectiveSelectedUid] ?? Math.max(players.length, 1);
+  const exactRate = pct(
+    displayStats?.exactCount ?? 0,
+    displayStats?.totalGradedPicks ?? 0,
+  );
+  const correctRate = pct(
+    correctResultsTotal,
+    displayStats?.totalGradedPicks ?? 0,
+  );
+  const roomRank =
+    rankMapByMetric.totalPoints[effectiveSelectedUid] ??
+    Math.max(players.length, 1);
   const bestGwRank = rankMapByMetric.bestGwPoints[effectiveSelectedUid] ?? 0;
   const exactRank = rankMapByMetric.exactCount[effectiveSelectedUid] ?? 0;
   const correctRank = rankMapByMetric.correctResults[effectiveSelectedUid] ?? 0;
   const goldenRank = rankMapByMetric.goldenBonus[effectiveSelectedUid] ?? 0;
   const gainRank = rankMapByMetric.powerupGain[effectiveSelectedUid] ?? 0;
   const lossRank = rankMapByMetric.powerupLoss[effectiveSelectedUid] ?? 0;
-  const disparityRank = rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0;
+  const disparityRank =
+    rankMapByMetric.goalDisparity[effectiveSelectedUid] ?? 0;
+  const standardSectionCardClass =
+    "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
 
   return (
-    <PageShell>
+    <PageShell
+      width="wide"
+      shellChrome={false}
+      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
+      contentClassName="relative z-[1] space-y-4"
+    >
       <div className="space-y-3">
         <TopActionRow
           title="Player Stats"
           subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-          actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
+          actions={
+            <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
+          }
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
-          <div className="space-y-4">
-            <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-              <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="space-y-1.5">
-                      <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                        Stats desk
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                          Viewing profile
-                        </span>
-                        <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                          {selectedPlayer?.displayName || "No player"}
-                        </span>
-                      </div>
+        <div className="space-y-4">
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1.5">
+                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                      Stats desk
                     </div>
-                    <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                        Scope
-                      </div>
-                      <div className="font-display text-lg font-semibold text-foreground">
-                        {selectedGwNumber == null ? "Season to date" : `GW ${selectedGwNumber}`}
-                      </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                        Viewing profile
+                      </span>
+                      <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                        {selectedPlayer?.displayName || "No player"}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                      Performance ledger
-                    </span>
-                    <span className="font-display text-sm font-semibold text-foreground">
-                      {seasonLabel(seasonKey || "----")}
-                    </span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                    Performance ledger
+                  </span>
+                  <span className="font-display text-sm font-semibold text-foreground">
+                    {seasonLabel(seasonKey || "----")}
+                  </span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                      Room Rank
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      #{roomRank}/{players.length || 1}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      Standing in the selected scope.
+                    </div>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                        Room Rank
-                      </div>
-                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                        #{roomRank}/{players.length || 1}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">Standing in the selected scope.</div>
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                      Total Points
                     </div>
-                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                        Total Points
-                      </div>
-                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                        {displayStats?.totalPoints ?? 0}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">Points banked in this ledger.</div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      {displayStats?.totalPoints ?? 0}
                     </div>
-                    <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                        Most Used
-                      </div>
-                      <div className="mt-1 font-display text-lg font-semibold text-foreground">
-                        {displayStats ? mostUsedPowerupLabel(displayStats.powerupUsage) : "None"}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">Preferred chip usage pattern.</div>
+                    <div className="mt-1 text-xs text-muted">
+                      Points banked in this ledger.
+                    </div>
+                  </div>
+                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                      Most Used
+                    </div>
+                    <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                      {displayStats
+                        ? mostUsedPowerupLabel(displayStats.powerupUsage)
+                        : "None"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      Preferred chip usage pattern.
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            <SpecialBreak />
-
-            <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5">
-              <div className="grid gap-3 md:grid-cols-3">
-                {!!seasonOptions.length && (
-                  <StatsSelectField
-                    id="stats-season-select"
-                    label="Season"
-                    value={seasonKey}
-                    onChange={setSeasonKey}
-                  >
-                    {seasonOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {seasonLabel(s)}
-                      </option>
-                    ))}
-                  </StatsSelectField>
-                )}
+          </SectionCard>
+          <SectionCard className={standardSectionCardClass}>
+            <div className="grid gap-3 md:grid-cols-3">
+              {!!seasonOptions.length && (
                 <StatsSelectField
-                  label="Player"
-                  value={effectiveSelectedUid}
-                  onChange={setSelectedUid}
+                  id="stats-season-select"
+                  label="Season"
+                  value={seasonKey}
+                  onChange={setSeasonKey}
                 >
-                  {players.map((p) => (
-                    <option className="font-display" key={p.uid} value={p.uid}>
-                      {p.displayName}
+                  {seasonOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {seasonLabel(s)}
                     </option>
                   ))}
                 </StatsSelectField>
-                <StatsSelectField
-                  id="stats-gw-filter-select"
-                  label="Scope"
-                  value={effectiveGwFilter}
-                  onChange={setSelectedGwFilter}
-                >
-                  <option value="all">All GWs</option>
-                  {allScoredGws.map((gw) => (
-                    <option key={`gw-filter-${gw}`} value={String(gw)}>
-                      GW {gw}
-                    </option>
-                  ))}
-                </StatsSelectField>
-              </div>
+              )}
+              <StatsSelectField
+                label="Player"
+                value={effectiveSelectedUid}
+                onChange={setSelectedUid}
+              >
+                {players.map((p) => (
+                  <option className="font-display" key={p.uid} value={p.uid}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </StatsSelectField>
+              <StatsSelectField
+                id="stats-gw-filter-select"
+                label="Scope"
+                value={effectiveGwFilter}
+                onChange={setSelectedGwFilter}
+              >
+                <option value="all">All GWs</option>
+                {allScoredGws.map((gw) => (
+                  <option key={`gw-filter-${gw}`} value={String(gw)}>
+                    GW {gw}
+                  </option>
+                ))}
+              </StatsSelectField>
             </div>
+          </SectionCard>
 
-            {error ? (
-              <div className="rounded-2xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {error}
-              </div>
-            ) : busy ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-4 text-sm text-muted inline-flex items-center gap-2">
+          {error ? (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-rose-300">{error}</div>
+            </SectionCard>
+          ) : busy ? (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="inline-flex items-center gap-2 text-sm text-muted">
                 <Loader2 size={14} className="animate-spin" />
                 <span>Loading stats…</span>
               </div>
-            ) : !selectedPlayer || !displayStats ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-4 text-sm text-muted">
+            </SectionCard>
+          ) : !selectedPlayer || !displayStats ? (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-muted">
                 No player stats available yet.
               </div>
-            ) : (
-              <>
-                <SpecialBreak />
+            </SectionCard>
+          ) : (
+            <>
+              <SectionCard className={standardSectionCardClass}>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <MetricTile
                     label="Total Points"
@@ -800,7 +862,9 @@ export default function RoomStatsPage() {
                   />
                   <MetricTile
                     label="Best Gameweek"
-                    value={displayStats.bestGw ? `GW${displayStats.bestGw}` : "-"}
+                    value={
+                      displayStats.bestGw ? `GW${displayStats.bestGw}` : "-"
+                    }
                     note={
                       displayStats.bestGw
                         ? `${displayStats.bestGwPoints} points in the strongest single week`
@@ -824,239 +888,283 @@ export default function RoomStatsPage() {
                     icon={<Crosshair size={16} />}
                   />
                 </div>
+              </SectionCard>
 
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                          Prediction Profile
-                        </div>
-                        <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                          Outcome accuracy by result type
-                        </div>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                <SectionCard className={standardSectionCardClass}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                        Prediction Profile
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-                        {displayStats.totalGradedPicks} graded
+                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                        Outcome accuracy by result type
                       </div>
                     </div>
-                    <div className="mt-5 space-y-3">
-                      {[
-                        {
-                          key: "H" as const,
-                          label: "Home Win",
-                          value: displayStats.outcomeHits.H,
-                          total: displayStats.outcomeAttempts.H,
-                        },
-                        {
-                          key: "D" as const,
-                          label: "Draw",
-                          value: displayStats.outcomeHits.D,
-                          total: displayStats.outcomeAttempts.D,
-                        },
-                        {
-                          key: "A" as const,
-                          label: "Away Win",
-                          value: displayStats.outcomeHits.A,
-                          total: displayStats.outcomeAttempts.A,
-                        },
-                      ].map((row) => {
-                        const ratio = row.total ? Math.max(0.08, row.value / row.total) : 0.08;
-                        return (
-                          <div key={row.key} className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-display text-sm font-semibold text-foreground">{row.label}</span>
-                              <span className="font-display text-sm font-semibold text-white/75">
-                                {row.value}/{row.total} ({pct(row.value, row.total)})
-                              </span>
-                            </div>
-                            <div className="mt-3 h-2.5 rounded-full bg-white/[0.04]">
-                              <div
-                                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.58),rgba(56,189,248,0.58))]"
-                                style={{ width: `${ratio * 100}%` }}
-                              />
-                            </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                      {displayStats.totalGradedPicks} graded
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {[
+                      {
+                        key: "H" as const,
+                        label: "Home Win",
+                        value: displayStats.outcomeHits.H,
+                        total: displayStats.outcomeAttempts.H,
+                      },
+                      {
+                        key: "D" as const,
+                        label: "Draw",
+                        value: displayStats.outcomeHits.D,
+                        total: displayStats.outcomeAttempts.D,
+                      },
+                      {
+                        key: "A" as const,
+                        label: "Away Win",
+                        value: displayStats.outcomeHits.A,
+                        total: displayStats.outcomeAttempts.A,
+                      },
+                    ].map((row) => {
+                      const ratio = row.total
+                        ? Math.max(0.08, row.value / row.total)
+                        : 0.08;
+                      return (
+                        <div
+                          key={row.key}
+                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-display text-sm font-semibold text-foreground">
+                              {row.label}
+                            </span>
+                            <span className="font-display text-sm font-semibold text-white/75">
+                              {row.value}/{row.total} (
+                              {pct(row.value, row.total)})
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </SectionCard>
-
-                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                      Recent Weeks
-                    </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">Latest scoring trend</div>
-                    <div className="mt-4 space-y-2">
-                      {recentGws.map((gw) => {
-                        const value = stats?.byGw[gw] ?? 0;
-                        const width = Math.min(100, Math.max(10, ((Math.abs(value) || 1) / Math.max(displayStats.bestGwPoints || 1, 1)) * 100));
-                        return (
-                          <div key={gw} className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-display text-sm font-semibold text-white/72">GW {gw}</span>
-                              <span className="font-display text-base font-semibold text-foreground">{value}</span>
-                            </div>
-                            <div className="mt-3 h-2 rounded-full bg-white/[0.04]">
-                              <div
-                                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.55),rgba(245,158,11,0.55))]"
-                                style={{ width: `${width}%` }}
-                              />
-                            </div>
+                          <div className="mt-3 h-2.5 rounded-full bg-white/[0.04]">
+                            <div
+                              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.58),rgba(56,189,248,0.58))]"
+                              style={{ width: `${ratio * 100}%` }}
+                            />
                           </div>
-                        );
-                      })}
-                    </div>
-                  </SectionCard>
-                </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </SectionCard>
 
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                          Power & Risk
+                <SectionCard className={standardSectionCardClass}>
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Recent Weeks
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    Latest scoring trend
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {recentGws.map((gw) => {
+                      const value = stats?.byGw[gw] ?? 0;
+                      const width = Math.min(
+                        100,
+                        Math.max(
+                          10,
+                          ((Math.abs(value) || 1) /
+                            Math.max(displayStats.bestGwPoints || 1, 1)) *
+                            100,
+                        ),
+                      );
+                      return (
+                        <div
+                          key={gw}
+                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-display text-sm font-semibold text-white/72">
+                              GW {gw}
+                            </span>
+                            <span className="font-display text-base font-semibold text-foreground">
+                              {value}
+                            </span>
+                          </div>
+                          <div className="mt-3 h-2 rounded-full bg-white/[0.04]">
+                            <div
+                              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.55),rgba(245,158,11,0.55))]"
+                              style={{ width: `${width}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                          Chips, golden edge, and swing
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-                        {displayStats.goldenPickCount} golden picks
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <MetricTile
-                        label="Golden Bonus"
-                        value={displayStats.goldenBonusPoints}
-                        note="Extra points earned from doubled golden hits"
-                        rank={goldenRank}
-                        icon={<Sparkles size={16} />}
-                      />
-                      <MetricTile
-                        label="Power-up Gain"
-                        value={signedValue(displayStats.powerupPointsGained)}
-                        note="Positive swing created by chips"
-                        rank={gainRank}
-                        icon={<ArrowUpRight size={16} />}
-                      />
-                      <MetricTile
-                        label="Power-up Loss"
-                        value={`-${displayStats.powerupPointsLost}`}
-                        note="Opportunity cost from aggressive chip use"
-                        rank={lossRank}
-                        icon={<ArrowDownRight size={16} />}
-                      />
-                      <MetricTile
-                        label="Goal Disparity"
-                        value={signedValue(displayStats.goalDisparity)}
-                        note="Difference between predicted and actual goals"
-                        rank={disparityRank}
-                        icon={<Swords size={16} />}
-                      />
-                    </div>
-                  </SectionCard>
+                      );
+                    })}
+                  </div>
+                </SectionCard>
+              </div>
 
-                  <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                      Breakdown
-                    </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">Snapshot summary</div>
-                    <div className="mt-4 space-y-3">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-muted">Golden picks played</span>
-                          <span className="font-display text-base font-semibold text-foreground">
-                            {displayStats.goldenPickCount}
-                          </span>
-                        </div>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+                <SectionCard className={standardSectionCardClass}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                        Power & Risk
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-muted">Power-up spread</span>
-                          <span className="font-display text-base font-semibold text-foreground">
-                            {displayStats.powerupUsage.ALL_IN} All-In • {displayStats.powerupUsage.SAFETY_NET} Safety Net
-                          </span>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-muted">Exact vs result-only</span>
-                          <span className="font-display text-base font-semibold text-foreground">
-                            {displayStats.exactCount} / {displayStats.resultOnlyCount}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-muted">Best weekly output</span>
-                          <span className="font-display text-base font-semibold text-foreground">
-                            {displayStats.bestGw ? `GW${displayStats.bestGw} • ${displayStats.bestGwPoints}` : "No score yet"}
-                          </span>
-                        </div>
+                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                        Chips, golden edge, and swing
                       </div>
                     </div>
-                  </SectionCard>
-                </div>
-              </>
-            )}
-          </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                      {displayStats.goldenPickCount} golden picks
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <MetricTile
+                      label="Golden Bonus"
+                      value={displayStats.goldenBonusPoints}
+                      note="Extra points earned from doubled golden hits"
+                      rank={goldenRank}
+                      icon={<Sparkles size={16} />}
+                    />
+                    <MetricTile
+                      label="Power-up Gain"
+                      value={signedValue(displayStats.powerupPointsGained)}
+                      note="Positive swing created by chips"
+                      rank={gainRank}
+                      icon={<ArrowUpRight size={16} />}
+                    />
+                    <MetricTile
+                      label="Power-up Loss"
+                      value={`-${displayStats.powerupPointsLost}`}
+                      note="Opportunity cost from aggressive chip use"
+                      rank={lossRank}
+                      icon={<ArrowDownRight size={16} />}
+                    />
+                    <MetricTile
+                      label="Goal Disparity"
+                      value={signedValue(displayStats.goalDisparity)}
+                      note="Difference between predicted and actual goals"
+                      rank={disparityRank}
+                      icon={<Swords size={16} />}
+                    />
+                  </div>
+                </SectionCard>
 
-          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Editorial Notes
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">What this scope says</div>
+                <SectionCard className={standardSectionCardClass}>
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Breakdown
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    Snapshot summary
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted">
+                          Golden picks played
+                        </span>
+                        <span className="font-display text-base font-semibold text-foreground">
+                          {displayStats.goldenPickCount}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted">
+                          Power-up spread
+                        </span>
+                        <span className="font-display text-base font-semibold text-foreground">
+                          {displayStats.powerupUsage.ALL_IN} All-In •{" "}
+                          {displayStats.powerupUsage.SAFETY_NET} Safety Net
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted">
+                          Exact vs result-only
+                        </span>
+                        <span className="font-display text-base font-semibold text-foreground">
+                          {displayStats.exactCount} /{" "}
+                          {displayStats.resultOnlyCount}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted">
+                          Best weekly output
+                        </span>
+                        <span className="font-display text-base font-semibold text-foreground">
+                          {displayStats.bestGw
+                            ? `GW${displayStats.bestGw} • ${displayStats.bestGwPoints}`
+                            : "No score yet"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </SectionCard>
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] text-white/70">
-                <Shield size={16} />
-              </div>
-            </div>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                  Accuracy Pulse
-                </div>
-                <div className="mt-2 text-sm text-muted">
-                  {busy || !displayStats
-                    ? "Loading current scoring profile."
-                    : `${selectedPlayer?.displayName || "This player"} converts ${correctRate} of graded picks into correct outcomes, with ${exactRate} landing as exact scores.`}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                  Risk Profile
-                </div>
-                <div className="mt-2 text-sm text-muted">
-                  {busy || !displayStats
-                    ? "Waiting for power-up data."
-                    : displayStats.powerupPointsLost > displayStats.powerupPointsGained
-                      ? "Aggressive chip use is costing more than it returns in this scope."
-                      : "Chip usage is adding net value or staying disciplined."}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                  Goal Forecasting
-                </div>
-                <div className="mt-2 text-sm text-muted">
-                  {busy || !displayStats
-                    ? "Waiting for scoring comparison."
-                    : displayStats.goalDisparity === 0
-                      ? "Predicted and actual goals are tracking almost perfectly."
-                      : displayStats.goalDisparity > 0
-                        ? "This player is generally forecasting more goals than actually arrive."
-                        : "This player is generally undercalling total goals."}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-xs text-muted">
-                Last updated: {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
-              </div>
-            </div>
-          </SectionCard>
+            </>
+          )}
         </div>
+
+        <SectionCard className={standardSectionCardClass}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Editorial Notes
+              </div>
+              <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                What this scope says
+              </div>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] text-white/70">
+              <Shield size={16} />
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                Accuracy Pulse
+              </div>
+              <div className="mt-2 text-sm text-muted">
+                {busy || !displayStats
+                  ? "Loading current scoring profile."
+                  : `${selectedPlayer?.displayName || "This player"} converts ${correctRate} of graded picks into correct outcomes, with ${exactRate} landing as exact scores.`}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                Risk Profile
+              </div>
+              <div className="mt-2 text-sm text-muted">
+                {busy || !displayStats
+                  ? "Waiting for power-up data."
+                  : displayStats.powerupPointsLost >
+                      displayStats.powerupPointsGained
+                    ? "Aggressive chip use is costing more than it returns in this scope."
+                    : "Chip usage is adding net value or staying disciplined."}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                Goal Forecasting
+              </div>
+              <div className="mt-2 text-sm text-muted">
+                {busy || !displayStats
+                  ? "Waiting for scoring comparison."
+                  : displayStats.goalDisparity === 0
+                    ? "Predicted and actual goals are tracking almost perfectly."
+                    : displayStats.goalDisparity > 0
+                      ? "This player is generally forecasting more goals than actually arrive."
+                      : "This player is generally undercalling total goals."}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-xs text-muted">
+              Last updated:{" "}
+              {lastUpdated ? fmtDateTime(lastUpdated) : "No score run yet"}
+            </div>
+          </div>
+        </SectionCard>
+      </div>
     </PageShell>
   );
 }

@@ -10,7 +10,10 @@ type CurrentGameweekData = {
 
 const TTL_MS = 90 * 1000;
 const STORAGE_PREFIX = "cgw:v2:";
-const memCache = new Map<string, { expiresAt: number; data: CurrentGameweekData }>();
+const memCache = new Map<
+  string,
+  { expiresAt: number; data: CurrentGameweekData }
+>();
 const pending = new Map<string, Promise<CurrentGameweekData>>();
 
 function keyFor(seasonKey?: string) {

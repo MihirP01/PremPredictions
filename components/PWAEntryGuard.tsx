@@ -8,7 +8,9 @@ function isStandalone() {
   if (typeof window === "undefined") return false;
   return (
     window.matchMedia?.("(display-mode: standalone)")?.matches ||
-    Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone)
+    Boolean(
+      (window.navigator as Navigator & { standalone?: boolean }).standalone,
+    )
   );
 }
 

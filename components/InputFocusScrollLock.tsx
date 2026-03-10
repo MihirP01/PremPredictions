@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-function isTextEntryElement(el: Element | null): boolean {
+function isTextEntryElement(el: Element | null): el is HTMLElement {
   if (!el) return false;
   if (el instanceof HTMLTextAreaElement) return !el.disabled && !el.readOnly;
   if (el instanceof HTMLInputElement) {
@@ -21,8 +21,28 @@ function isTextEntryElement(el: Element | null): boolean {
       "submit",
     ].includes(type);
   }
-  if (el instanceof HTMLElement) return el.isContentEditable;
-  return false;
+  return el instanceof HTMLElement && el.isContentEditable;
+}
+
+function isTextFocusProxyTarget(el: Element | null): el is HTMLElement {
+  if (!isTextEntryElement(el)) return false;
+  return !(el instanceof HTMLInputElement && el.type.toLowerCase() === "number");
+}
+
+function findTextFocusProxyTarget(target: EventTarget | null): HTMLElement | null {
+  if (!(target instanceof Element)) return null;
+  if (isTextFocusProxyTarget(target)) return target;
+  const candidate = target.closest(
+    "input, textarea, [contenteditable=''], [contenteditable='true'], [contenteditable='plaintext-only']",
+  );
+  return candidate instanceof HTMLElement && isTextFocusProxyTarget(candidate)
+    ? candidate
+    : null;
+}
+
+function isInsideModalPanel(el: Element | null): boolean {
+  if (!el || !(el instanceof Element)) return false;
+  return !!el.closest("[data-modal-panel='true']");
 }
 
 export default function InputFocusScrollLock() {
@@ -37,11 +57,50 @@ export default function InputFocusScrollLock() {
   } | null>(null);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined" || typeof window === "undefined") return;
 
     const root = document.documentElement;
     const body = document.body;
     const lockClass = "input-focus-scroll-lock";
+    const modalInputClass = "modal-input-active";
+    const textInputClass = "text-input-active";
+    const keyboardOpenClass = "keyboard-open";
+    const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
+    const preventKeyboardScroll = (event: TouchEvent | WheelEvent) => {
+      event.preventDefault();
+    };
+    let keyboardScrollLocked = false;
+
+    const setInputClasses = (active: boolean, inModal: boolean) => {
+      root.classList.toggle(textInputClass, active);
+      body.classList.toggle(textInputClass, active);
+      root.classList.toggle(modalInputClass, active && inModal);
+      body.classList.toggle(modalInputClass, active && inModal);
+    };
+
+    const keyboardInset = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) return 0;
+      return Math.max(0, window.innerHeight - (viewport.height + viewport.offsetTop));
+    };
+
+    const setKeyboardOpen = (active: boolean) => {
+      root.classList.toggle(keyboardOpenClass, active);
+      body.classList.toggle(keyboardOpenClass, active);
+      if (active === keyboardScrollLocked) return;
+      keyboardScrollLocked = active;
+      if (active) {
+        document.addEventListener("touchmove", preventKeyboardScroll, {
+          passive: false,
+        });
+        document.addEventListener("wheel", preventKeyboardScroll, {
+          passive: false,
+        });
+        return;
+      }
+      document.removeEventListener("touchmove", preventKeyboardScroll);
+      document.removeEventListener("wheel", preventKeyboardScroll);
+    };
 
     const lock = () => {
       if (lockedRef.current) return;
@@ -86,17 +145,66 @@ export default function InputFocusScrollLock() {
       prevRef.current = null;
     };
 
-    const syncLock = () => {
+    const syncState = () => {
       const active = document.activeElement;
-      const shouldLock = isTextEntryElement(active);
-      if (shouldLock) lock();
-      else unlock();
+      const shouldMark = isTextEntryElement(active);
+      const inModal = isInsideModalPanel(active);
+      setInputClasses(!!shouldMark, inModal);
+
+      if (isTouchDevice) {
+        unlock();
+        setKeyboardOpen(!!shouldMark || keyboardInset() > 120);
+        return;
+      }
+
+      setKeyboardOpen(false);
+      if (!shouldMark || inModal) {
+        unlock();
+        return;
+      }
+      lock();
     };
 
-    const onFocusIn = () => syncLock();
-    const onFocusOut = () => {
-      // Wait for next activeElement after blur/focus transition.
-      window.setTimeout(syncLock, 0);
+    const focusWithoutScroll = (target: HTMLElement) => {
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
+      if (
+        target instanceof HTMLInputElement &&
+        typeof target.setSelectionRange === "function"
+      ) {
+        const type = (target.type || "text").toLowerCase();
+        if (["text", "search", "url", "tel", "password", "email"].includes(type)) {
+          const len = target.value.length;
+          target.setSelectionRange(len, len);
+        }
+      }
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!isTouchDevice || event.pointerType === "mouse") return;
+      const target = findTextFocusProxyTarget(event.target);
+      if (!target) return;
+      if (document.activeElement !== target) {
+        event.preventDefault();
+        event.stopPropagation();
+        setInputClasses(true, isInsideModalPanel(target));
+        setKeyboardOpen(true);
+        focusWithoutScroll(target);
+      } else {
+        setInputClasses(true, isInsideModalPanel(target));
+        setKeyboardOpen(true);
+      }
+      window.setTimeout(syncState, 0);
+    };
+
+    const onFocusIn = () => syncState();
+    const onFocusOut = () => window.setTimeout(syncState, 0);
+    const onViewportChange = () => {
+      if (!isTouchDevice) return;
+      syncState();
     };
     const onTouchMove = (event: TouchEvent) => {
       if (!lockedRef.current) return;
@@ -107,17 +215,30 @@ export default function InputFocusScrollLock() {
       event.preventDefault();
     };
 
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("touchmove", onTouchMove, { passive: false });
     document.addEventListener("wheel", onWheel, { passive: false });
-    syncLock();
+    window.visualViewport?.addEventListener("resize", onViewportChange);
+    window.visualViewport?.addEventListener("scroll", onViewportChange);
+    syncState();
 
     return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("wheel", onWheel);
+      window.visualViewport?.removeEventListener("resize", onViewportChange);
+      window.visualViewport?.removeEventListener("scroll", onViewportChange);
+      setKeyboardOpen(false);
+      root.classList.remove(textInputClass);
+      body.classList.remove(textInputClass);
+      root.classList.remove(modalInputClass);
+      body.classList.remove(modalInputClass);
+      root.classList.remove(keyboardOpenClass);
+      body.classList.remove(keyboardOpenClass);
       unlock();
     };
   }, []);

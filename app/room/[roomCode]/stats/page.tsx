@@ -17,6 +17,8 @@ import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
+import SectionGrid from "../../../../components/SectionGrid";
+import SectionStack from "../../../../components/SectionStack";
 import TopActionRow from "../../../../components/TopActionRow";
 import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
@@ -708,403 +710,396 @@ export default function RoomStatsPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
           title="Player Stats"
           subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-          actions={
-            <PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />
-          }
+          actions={<PageBackButton onClick={() => router.push(`/room/${roomCode}`)} />}
         />
-      </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
-        <div className="space-y-4">
-          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="space-y-1.5">
-                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                      Stats desk
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                        Viewing profile
-                      </span>
-                      <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                        {selectedPlayer?.displayName || "No player"}
-                      </span>
-                    </div>
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Stats desk
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Viewing profile
+                    </span>
+                    <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                      {selectedPlayer?.displayName || "No player"}
+                    </span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                    Performance ledger
-                  </span>
-                  <span className="font-display text-sm font-semibold text-foreground">
-                    {seasonLabel(seasonKey || "----")}
-                  </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                  Performance ledger
+                </span>
+                <span className="font-display text-sm font-semibold text-foreground">
+                  {seasonLabel(seasonKey || "----")}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Room Rank
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    #{roomRank}/{players.length || 1}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Standing in the selected scope.
+                  </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                      Room Rank
-                    </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                      #{roomRank}/{players.length || 1}
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
-                      Standing in the selected scope.
-                    </div>
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Total Points
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                      Total Points
-                    </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                      {displayStats?.totalPoints ?? 0}
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
-                      Points banked in this ledger.
-                    </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    {displayStats?.totalPoints ?? 0}
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                      Most Used
-                    </div>
-                    <div className="mt-1 font-display text-lg font-semibold text-foreground">
-                      {displayStats
-                        ? mostUsedPowerupLabel(displayStats.powerupUsage)
-                        : "None"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
-                      Preferred chip usage pattern.
-                    </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Points banked in this ledger.
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Most Used
+                  </div>
+                  <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                    {displayStats
+                      ? mostUsedPowerupLabel(displayStats.powerupUsage)
+                      : "None"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Preferred chip usage pattern.
                   </div>
                 </div>
               </div>
             </div>
-          </SectionCard>
+          </div>
+        </SectionCard>
+
+        <SectionCard className={standardSectionCardClass}>
+          <div className="grid gap-3 md:grid-cols-3">
+            {!!seasonOptions.length && (
+              <StatsSelectField
+                id="stats-season-select"
+                label="Season"
+                value={seasonKey}
+                onChange={setSeasonKey}
+              >
+                {seasonOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {seasonLabel(s)}
+                  </option>
+                ))}
+              </StatsSelectField>
+            )}
+            <StatsSelectField
+              label="Player"
+              value={effectiveSelectedUid}
+              onChange={setSelectedUid}
+            >
+              {players.map((p) => (
+                <option className="font-display" key={p.uid} value={p.uid}>
+                  {p.displayName}
+                </option>
+              ))}
+            </StatsSelectField>
+            <StatsSelectField
+              id="stats-gw-filter-select"
+              label="Scope"
+              value={effectiveGwFilter}
+              onChange={setSelectedGwFilter}
+            >
+              <option value="all">All GWs</option>
+              {allScoredGws.map((gw) => (
+                <option key={`gw-filter-${gw}`} value={String(gw)}>
+                  GW {gw}
+                </option>
+              ))}
+            </StatsSelectField>
+          </div>
+        </SectionCard>
+
+        {error ? (
           <SectionCard className={standardSectionCardClass}>
-            <div className="grid gap-3 md:grid-cols-3">
-              {!!seasonOptions.length && (
-                <StatsSelectField
-                  id="stats-season-select"
-                  label="Season"
-                  value={seasonKey}
-                  onChange={setSeasonKey}
-                >
-                  {seasonOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {seasonLabel(s)}
-                    </option>
-                  ))}
-                </StatsSelectField>
-              )}
-              <StatsSelectField
-                label="Player"
-                value={effectiveSelectedUid}
-                onChange={setSelectedUid}
-              >
-                {players.map((p) => (
-                  <option className="font-display" key={p.uid} value={p.uid}>
-                    {p.displayName}
-                  </option>
-                ))}
-              </StatsSelectField>
-              <StatsSelectField
-                id="stats-gw-filter-select"
-                label="Scope"
-                value={effectiveGwFilter}
-                onChange={setSelectedGwFilter}
-              >
-                <option value="all">All GWs</option>
-                {allScoredGws.map((gw) => (
-                  <option key={`gw-filter-${gw}`} value={String(gw)}>
-                    GW {gw}
-                  </option>
-                ))}
-              </StatsSelectField>
+            <div className="text-sm text-rose-300">{error}</div>
+          </SectionCard>
+        ) : busy ? (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="inline-flex items-center gap-2 text-sm text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading stats…</span>
             </div>
           </SectionCard>
+        ) : !selectedPlayer || !displayStats ? (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-muted">
+              No player stats available yet.
+            </div>
+          </SectionCard>
+        ) : (
+          <>
+            <SectionCard className={standardSectionCardClass}>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MetricTile
+                  label="Total Points"
+                  value={displayStats.totalPoints}
+                  note={`${correctResultsTotal} correct outcomes from ${displayStats.totalGradedPicks} graded picks`}
+                  rank={roomRank}
+                  icon={<Trophy size={16} />}
+                />
+                <MetricTile
+                  label="Best Gameweek"
+                  value={displayStats.bestGw ? `GW${displayStats.bestGw}` : "-"}
+                  note={
+                    displayStats.bestGw
+                      ? `${displayStats.bestGwPoints} points in the strongest single week`
+                      : "No scored gameweek yet"
+                  }
+                  rank={bestGwRank}
+                  icon={<Sparkles size={16} />}
+                />
+                <MetricTile
+                  label="Exact Scores"
+                  value={`${displayStats.exactCount}`}
+                  note={`${exactRate} exact hit rate`}
+                  rank={exactRank}
+                  icon={<Target size={16} />}
+                />
+                <MetricTile
+                  label="Correct Results"
+                  value={`${correctResultsTotal}`}
+                  note={`${correctRate} overall result hit rate`}
+                  rank={correctRank}
+                  icon={<Crosshair size={16} />}
+                />
+              </div>
+            </SectionCard>
 
-          {error ? (
-            <SectionCard className={standardSectionCardClass}>
-              <div className="text-sm text-rose-300">{error}</div>
-            </SectionCard>
-          ) : busy ? (
-            <SectionCard className={standardSectionCardClass}>
-              <div className="inline-flex items-center gap-2 text-sm text-muted">
-                <Loader2 size={14} className="animate-spin" />
-                <span>Loading stats…</span>
-              </div>
-            </SectionCard>
-          ) : !selectedPlayer || !displayStats ? (
-            <SectionCard className={standardSectionCardClass}>
-              <div className="text-sm text-muted">
-                No player stats available yet.
-              </div>
-            </SectionCard>
-          ) : (
-            <>
+            <SectionGrid gap="page" className="xl:grid-cols-2">
               <SectionCard className={standardSectionCardClass}>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Prediction Profile
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      Outcome accuracy by result type
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                    {displayStats.totalGradedPicks} graded
+                  </div>
+                </div>
+                <div className="mt-5 space-y-3">
+                  {[
+                    {
+                      key: "H" as const,
+                      label: "Home Win",
+                      value: displayStats.outcomeHits.H,
+                      total: displayStats.outcomeAttempts.H,
+                    },
+                    {
+                      key: "D" as const,
+                      label: "Draw",
+                      value: displayStats.outcomeHits.D,
+                      total: displayStats.outcomeAttempts.D,
+                    },
+                    {
+                      key: "A" as const,
+                      label: "Away Win",
+                      value: displayStats.outcomeHits.A,
+                      total: displayStats.outcomeAttempts.A,
+                    },
+                  ].map((row) => {
+                    const ratio = row.total
+                      ? Math.max(0.08, row.value / row.total)
+                      : 0.08;
+                    return (
+                      <div
+                        key={row.key}
+                        className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-display text-sm font-semibold text-foreground">
+                            {row.label}
+                          </span>
+                          <span className="font-display text-sm font-semibold text-white/75">
+                            {row.value}/{row.total} ({pct(row.value, row.total)}
+                            )
+                          </span>
+                        </div>
+                        <div className="mt-3 h-2.5 rounded-full bg-white/[0.04]">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.58),rgba(56,189,248,0.58))]"
+                            style={{ width: `${ratio * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </SectionCard>
+
+              <SectionCard className={standardSectionCardClass}>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Recent Weeks
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Latest scoring trend
+                </div>
+                <div className="mt-4 space-y-2">
+                  {recentGws.map((gw) => {
+                    const value = stats?.byGw[gw] ?? 0;
+                    const width = Math.min(
+                      100,
+                      Math.max(
+                        10,
+                        ((Math.abs(value) || 1) /
+                          Math.max(displayStats.bestGwPoints || 1, 1)) *
+                          100,
+                      ),
+                    );
+                    return (
+                      <div
+                        key={gw}
+                        className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-display text-sm font-semibold text-white/72">
+                            GW {gw}
+                          </span>
+                          <span className="font-display text-base font-semibold text-foreground">
+                            {value}
+                          </span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-white/[0.04]">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.55),rgba(245,158,11,0.55))]"
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </SectionCard>
+            </SectionGrid>
+
+            <SectionGrid gap="page" className="xl:grid-cols-2">
+              <SectionCard className={standardSectionCardClass}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Power & Risk
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      Chips, golden edge, and swing
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                    {displayStats.goldenPickCount} golden picks
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <MetricTile
-                    label="Total Points"
-                    value={displayStats.totalPoints}
-                    note={`${correctResultsTotal} correct outcomes from ${displayStats.totalGradedPicks} graded picks`}
-                    rank={roomRank}
-                    icon={<Trophy size={16} />}
-                  />
-                  <MetricTile
-                    label="Best Gameweek"
-                    value={
-                      displayStats.bestGw ? `GW${displayStats.bestGw}` : "-"
-                    }
-                    note={
-                      displayStats.bestGw
-                        ? `${displayStats.bestGwPoints} points in the strongest single week`
-                        : "No scored gameweek yet"
-                    }
-                    rank={bestGwRank}
+                    label="Golden Bonus"
+                    value={displayStats.goldenBonusPoints}
+                    note="Extra points earned from doubled golden hits"
+                    rank={goldenRank}
                     icon={<Sparkles size={16} />}
                   />
                   <MetricTile
-                    label="Exact Scores"
-                    value={`${displayStats.exactCount}`}
-                    note={`${exactRate} exact hit rate`}
-                    rank={exactRank}
-                    icon={<Target size={16} />}
+                    label="Power-up Gain"
+                    value={signedValue(displayStats.powerupPointsGained)}
+                    note="Positive swing created by chips"
+                    rank={gainRank}
+                    icon={<ArrowUpRight size={16} />}
                   />
                   <MetricTile
-                    label="Correct Results"
-                    value={`${correctResultsTotal}`}
-                    note={`${correctRate} overall result hit rate`}
-                    rank={correctRank}
-                    icon={<Crosshair size={16} />}
+                    label="Power-up Loss"
+                    value={`-${displayStats.powerupPointsLost}`}
+                    note="Opportunity cost from aggressive chip use"
+                    rank={lossRank}
+                    icon={<ArrowDownRight size={16} />}
+                  />
+                  <MetricTile
+                    label="Goal Disparity"
+                    value={signedValue(displayStats.goalDisparity)}
+                    note="Difference between predicted and actual goals"
+                    rank={disparityRank}
+                    icon={<Swords size={16} />}
                   />
                 </div>
               </SectionCard>
 
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                <SectionCard className={standardSectionCardClass}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                        Prediction Profile
-                      </div>
-                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                        Outcome accuracy by result type
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-                      {displayStats.totalGradedPicks} graded
-                    </div>
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    {[
-                      {
-                        key: "H" as const,
-                        label: "Home Win",
-                        value: displayStats.outcomeHits.H,
-                        total: displayStats.outcomeAttempts.H,
-                      },
-                      {
-                        key: "D" as const,
-                        label: "Draw",
-                        value: displayStats.outcomeHits.D,
-                        total: displayStats.outcomeAttempts.D,
-                      },
-                      {
-                        key: "A" as const,
-                        label: "Away Win",
-                        value: displayStats.outcomeHits.A,
-                        total: displayStats.outcomeAttempts.A,
-                      },
-                    ].map((row) => {
-                      const ratio = row.total
-                        ? Math.max(0.08, row.value / row.total)
-                        : 0.08;
-                      return (
-                        <div
-                          key={row.key}
-                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-display text-sm font-semibold text-foreground">
-                              {row.label}
-                            </span>
-                            <span className="font-display text-sm font-semibold text-white/75">
-                              {row.value}/{row.total} (
-                              {pct(row.value, row.total)})
-                            </span>
-                          </div>
-                          <div className="mt-3 h-2.5 rounded-full bg-white/[0.04]">
-                            <div
-                              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,158,11,0.58),rgba(56,189,248,0.58))]"
-                              style={{ width: `${ratio * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </SectionCard>
-
-                <SectionCard className={standardSectionCardClass}>
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Recent Weeks
-                  </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                    Latest scoring trend
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    {recentGws.map((gw) => {
-                      const value = stats?.byGw[gw] ?? 0;
-                      const width = Math.min(
-                        100,
-                        Math.max(
-                          10,
-                          ((Math.abs(value) || 1) /
-                            Math.max(displayStats.bestGwPoints || 1, 1)) *
-                            100,
-                        ),
-                      );
-                      return (
-                        <div
-                          key={gw}
-                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-display text-sm font-semibold text-white/72">
-                              GW {gw}
-                            </span>
-                            <span className="font-display text-base font-semibold text-foreground">
-                              {value}
-                            </span>
-                          </div>
-                          <div className="mt-3 h-2 rounded-full bg-white/[0.04]">
-                            <div
-                              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.55),rgba(245,158,11,0.55))]"
-                              style={{ width: `${width}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </SectionCard>
-              </div>
-
-              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-                <SectionCard className={standardSectionCardClass}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                        Power & Risk
-                      </div>
-                      <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                        Chips, golden edge, and swing
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-                      {displayStats.goldenPickCount} golden picks
+              <SectionCard className={standardSectionCardClass}>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Breakdown
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Snapshot summary
+                </div>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted">
+                        Golden picks played
+                      </span>
+                      <span className="font-display text-base font-semibold text-foreground">
+                        {displayStats.goldenPickCount}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <MetricTile
-                      label="Golden Bonus"
-                      value={displayStats.goldenBonusPoints}
-                      note="Extra points earned from doubled golden hits"
-                      rank={goldenRank}
-                      icon={<Sparkles size={16} />}
-                    />
-                    <MetricTile
-                      label="Power-up Gain"
-                      value={signedValue(displayStats.powerupPointsGained)}
-                      note="Positive swing created by chips"
-                      rank={gainRank}
-                      icon={<ArrowUpRight size={16} />}
-                    />
-                    <MetricTile
-                      label="Power-up Loss"
-                      value={`-${displayStats.powerupPointsLost}`}
-                      note="Opportunity cost from aggressive chip use"
-                      rank={lossRank}
-                      icon={<ArrowDownRight size={16} />}
-                    />
-                    <MetricTile
-                      label="Goal Disparity"
-                      value={signedValue(displayStats.goalDisparity)}
-                      note="Difference between predicted and actual goals"
-                      rank={disparityRank}
-                      icon={<Swords size={16} />}
-                    />
-                  </div>
-                </SectionCard>
-
-                <SectionCard className={standardSectionCardClass}>
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Breakdown
-                  </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                    Snapshot summary
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-muted">
-                          Golden picks played
-                        </span>
-                        <span className="font-display text-base font-semibold text-foreground">
-                          {displayStats.goldenPickCount}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-muted">
-                          Power-up spread
-                        </span>
-                        <span className="font-display text-base font-semibold text-foreground">
-                          {displayStats.powerupUsage.ALL_IN} All-In •{" "}
-                          {displayStats.powerupUsage.SAFETY_NET} Safety Net
-                        </span>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-muted">
-                          Exact vs result-only
-                        </span>
-                        <span className="font-display text-base font-semibold text-foreground">
-                          {displayStats.exactCount} /{" "}
-                          {displayStats.resultOnlyCount}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-muted">
-                          Best weekly output
-                        </span>
-                        <span className="font-display text-base font-semibold text-foreground">
-                          {displayStats.bestGw
-                            ? `GW${displayStats.bestGw} • ${displayStats.bestGwPoints}`
-                            : "No score yet"}
-                        </span>
-                      </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted">
+                        Power-up spread
+                      </span>
+                      <span className="font-display text-base font-semibold text-foreground">
+                        {displayStats.powerupUsage.ALL_IN} All-In •{" "}
+                        {displayStats.powerupUsage.SAFETY_NET} Safety Net
+                      </span>
                     </div>
                   </div>
-                </SectionCard>
-              </div>
-            </>
-          )}
-        </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted">
+                        Exact vs result-only
+                      </span>
+                      <span className="font-display text-base font-semibold text-foreground">
+                        {displayStats.exactCount} /{" "}
+                        {displayStats.resultOnlyCount}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted">
+                        Best weekly output
+                      </span>
+                      <span className="font-display text-base font-semibold text-foreground">
+                        {displayStats.bestGw
+                          ? `GW${displayStats.bestGw} • ${displayStats.bestGwPoints}`
+                          : "No score yet"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            </SectionGrid>
+          </>
+        )}
 
         <SectionCard className={standardSectionCardClass}>
           <div className="flex items-center justify-between gap-3">
@@ -1120,7 +1115,7 @@ export default function RoomStatsPage() {
               <Shield size={16} />
             </div>
           </div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
               <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/48">
                 Accuracy Pulse
@@ -1164,7 +1159,7 @@ export default function RoomStatsPage() {
             </div>
           </div>
         </SectionCard>
-      </div>
+      </SectionStack>
     </PageShell>
   );
 }

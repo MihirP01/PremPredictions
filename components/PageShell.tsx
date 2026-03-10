@@ -18,9 +18,9 @@ type PageShellProps = {
 export default function PageShell({
   children,
   innerClassName = "",
-  outerClassName = "min-h-0 px-2 pb-2 pt-0 sm:px-5 sm:pb-5 sm:pt-3 bg-app",
+  outerClassName = "min-h-0 px-2 pb-1 pt-1 sm:px-5 sm:pb-1 sm:pt-2 bg-app",
   width = "wide",
-  contentClassName = "relative z-[1] space-y-4",
+  contentClassName = "relative z-[1] space-y-1",
   shellChrome = true,
 }: PageShellProps) {
   const pathname = usePathname();

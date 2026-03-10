@@ -13,6 +13,8 @@ import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
+import SectionGrid from "../../../../components/SectionGrid";
+import SectionStack from "../../../../components/SectionStack";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
@@ -657,485 +659,485 @@ export default function LeaderboardMatrixPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
           title="Leaderboard"
           subtitle={`${roomCode} • ${seasonLabel(seasonKey || "------")}`}
           className="flex items-start justify-between gap-3 sm:items-end"
           actions={headerActions}
         />
-      </div>
 
-      {error && (
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-sm text-rose-300">{error}</div>
+        {error && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-rose-300">{error}</div>
+          </SectionCard>
+        )}
+
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Leaderboard desk
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Viewing board
+                    </span>
+                    <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                      {topViewLabel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                  Table board
+                </span>
+                <span className="font-display text-sm font-semibold text-foreground">
+                  {topView === "overall"
+                    ? "Season ladder"
+                    : topView === "current"
+                      ? `Current GW ${currentGw}`
+                      : `Previous GW ${medalsGw}`}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Leader
+                  </div>
+                  <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                    {leadingPlayer ? leadingPlayer.displayName : "—"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {leadingPlayer
+                      ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
+                      : "No scored entries yet"}
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Current Week
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    GW{currentGw}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {scoredGameweeks.includes(currentGw)
+                      ? "Score docs saved for this round."
+                      : "Waiting on saved score docs."}
+                  </div>
+                </div>
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Last Scored
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    GW{medalsGw}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Used as the previous podium comparison.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </SectionCard>
-      )}
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1.5">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                  Leaderboard desk
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                    Viewing board
-                  </span>
-                  <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                    {topViewLabel}
-                  </span>
-                </div>
+        <SectionCard className={standardSectionCardClass}>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+            {!!seasonOptions.length && (
+              <LeaderboardSelectField
+                id="leaderboard-season-select"
+                label="Season"
+                value={seasonKey}
+                onChange={setSeasonKey}
+              >
+                {seasonOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {seasonLabel(s)}
+                  </option>
+                ))}
+              </LeaderboardSelectField>
+            )}
+            <div className="space-y-2">
+              <div className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                Focus
               </div>
-              <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                  Standings lens
-                </div>
-                <div className="font-display text-lg font-semibold text-foreground">
-                  {seasonLabel(seasonKey || "----")}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-              <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                Table board
-              </span>
-              <span className="font-display text-sm font-semibold text-foreground">
-                {topView === "overall"
-                  ? "Season ladder"
-                  : topView === "current"
-                    ? `Current GW ${currentGw}`
-                    : `Previous GW ${medalsGw}`}
-              </span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                  Leader
-                </div>
-                <div className="mt-1 font-display text-lg font-semibold text-foreground">
-                  {leadingPlayer ? leadingPlayer.displayName : "—"}
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  {leadingPlayer
-                    ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
-                    : "No scored entries yet"}
-                </div>
-              </div>
-              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                  Current Week
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  GW{currentGw}
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  {scoredGameweeks.includes(currentGw)
-                    ? "Score docs saved for this round."
-                    : "Waiting on saved score docs."}
-                </div>
-              </div>
-              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                  Last Scored
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  GW{medalsGw}
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  Used as the previous podium comparison.
-                </div>
-              </div>
+              <SliderSwitch
+                options={[
+                  { value: "current", label: "Current" },
+                  { value: "overall", label: "Overall" },
+                  { value: "previous", label: "Previous" },
+                ]}
+                value={topView}
+                onChange={setTopView}
+                className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+              />
             </div>
           </div>
-        </div>
-      </SectionCard>
+        </SectionCard>
 
-      <SectionCard className={standardSectionCardClass}>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
-          {!!seasonOptions.length && (
-            <LeaderboardSelectField
-              id="leaderboard-season-select"
-              label="Season"
-              value={seasonKey}
-              onChange={setSeasonKey}
+        <SectionGrid
+          gap="page"
+          className="xl:grid-cols-2 xl:items-start"
+        >
+          <SectionCard className={standardSectionCardClass}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Podium
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  {topViewLabel.toUpperCase()}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                {rankedByTopView.length} players
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-3 items-end gap-3">
+              {podiumSlots.map((slot, idx) => {
+                const points = slot.player
+                  ? scoreForTopView(slot.player.uid)
+                  : 0;
+                const hasPred = slot.player
+                  ? hasPredForTopView(slot.player.uid)
+                  : false;
+                const barHeight =
+                  slot.tier === "gold"
+                    ? "132px"
+                    : slot.tier === "silver"
+                      ? "108px"
+                      : "86px";
+                const toneShell =
+                  slot.tier === "gold"
+                    ? "border-yellow-400/55 bg-[linear-gradient(180deg,rgba(250,204,21,0.22),rgba(255,255,255,0.02))]"
+                    : slot.tier === "silver"
+                      ? "border-slate-300/45 bg-[linear-gradient(180deg,rgba(203,213,225,0.18),rgba(255,255,255,0.02))]"
+                      : "border-amber-500/50 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(255,255,255,0.02))]";
+                const toneBar =
+                  slot.tier === "gold"
+                    ? "metal-glow metal-glow-gold border-yellow-400/80 bg-[linear-gradient(180deg,rgba(250,204,21,0.36),rgba(250,204,21,0.14))]"
+                    : slot.tier === "silver"
+                      ? "metal-glow metal-glow-silver border-slate-200/80 bg-[linear-gradient(180deg,rgba(203,213,225,0.32),rgba(203,213,225,0.12))]"
+                      : "metal-glow metal-glow-bronze border-amber-500/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.34),rgba(245,158,11,0.12))]";
+                return (
+                  <div key={`podium-slot-${idx}`} className="space-y-2">
+                    <div className="min-h-[2.75rem] px-1 text-center">
+                      {slot.player ? (
+                        <div className="font-display text-sm font-semibold leading-tight text-foreground">
+                          {slot.player.displayName}
+                        </div>
+                      ) : (
+                        <div className="font-display text-sm text-muted">—</div>
+                      )}
+                    </div>
+                    <div className={`rounded-[22px] border p-3 ${toneShell}`}>
+                      <div
+                        className={[
+                          "flex w-full items-center justify-center rounded-[18px] border font-display text-base font-semibold text-foreground transition-all duration-500 ease-out",
+                          toneBar,
+                        ].join(" ")}
+                        style={{ height: barHeight }}
+                      >
+                        {podiumLabel(slot.position)}
+                      </div>
+                      <div className="mt-3 text-center font-display text-xl font-semibold text-foreground">
+                        {slot.player ? scoreLabel(points, hasPred) : "—"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard className={standardSectionCardClass}>
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Full standings
+            </div>
+            <div className="mt-1 font-display text-xl font-semibold text-foreground">
+              Room positions
+            </div>
+            <div className="mt-2 text-sm text-muted">
+              Expand the full ranking ladder for the active leaderboard lens.
+            </div>
+            <button
+              onClick={() => setFullPositionsExpanded((v) => !v)}
+              className="mt-4 inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
             >
-              {seasonOptions.map((s) => (
-                <option key={s} value={s}>
-                  {seasonLabel(s)}
-                </option>
-              ))}
-            </LeaderboardSelectField>
-          )}
-          <div className="space-y-2">
-            <div className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Focus
+              <span>
+                {fullPositionsExpanded
+                  ? "Collapse Full Room Positions"
+                  : "Show Full Room Positions"}
+              </span>
+              <span
+                className={[
+                  "text-xs text-white/60 transition-transform duration-300 ease-out",
+                  fullPositionsExpanded ? "rotate-180" : "",
+                ].join(" ")}
+              >
+                ▾
+              </span>
+            </button>
+            <div
+              className={[
+                "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
+                fullPositionsExpanded
+                  ? "mt-4 grid-rows-[1fr] opacity-100 translate-y-0"
+                  : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
+              ].join(" ")}
+            >
+              <div className="min-h-0">
+                <div
+                  className={[
+                    "space-y-2 transition-all duration-300 ease-out",
+                    fullPositionsExpanded
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-0 translate-y-1",
+                  ].join(" ")}
+                >
+                  {rankedByTopView.map((p, i) => (
+                    <div
+                      key={`${topView}-rank-${p.uid}`}
+                      className={[
+                        "flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm transition-all duration-300 ease-out",
+                        fullPositionsExpanded
+                          ? "opacity-100 translate-y-0"
+                          : "opacity-0 translate-y-1",
+                      ].join(" ")}
+                      style={{
+                        transitionDelay: fullPositionsExpanded
+                          ? `${Math.min(i, 8) * 32}ms`
+                          : "0ms",
+                      }}
+                    >
+                      <span className="font-display text-foreground">
+                        {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
+                        {user?.uid === p.uid ? (
+                          <span className={youPillClass()}>You</span>
+                        ) : null}
+                      </span>
+                      <span className="font-display font-semibold text-foreground">
+                        {scoreLabel(
+                          scoreForTopView(p.uid),
+                          hasPredForTopView(p.uid),
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <SliderSwitch
-              options={[
-                { value: "current", label: "Current" },
-                { value: "overall", label: "Overall" },
-                { value: "previous", label: "Previous" },
-              ]}
-              value={topView}
-              onChange={setTopView}
-              className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-              buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-            />
-          </div>
-        </div>
-      </SectionCard>
+          </SectionCard>
+        </SectionGrid>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <SectionCard className={standardSectionCardClass}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Podium
+                Gameweek matrix
               </div>
               <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                {topViewLabel.toUpperCase()}
+                Compare weekly scoring across the room
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-              {rankedByTopView.length} players
+            <div className="hidden rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62 md:flex">
+              Through GW{currentGw}
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-3 items-end gap-3">
-            {podiumSlots.map((slot, idx) => {
-              const points = slot.player ? scoreForTopView(slot.player.uid) : 0;
-              const hasPred = slot.player
-                ? hasPredForTopView(slot.player.uid)
-                : false;
-              const barHeight =
-                slot.tier === "gold"
-                  ? "132px"
-                  : slot.tier === "silver"
-                    ? "108px"
-                    : "86px";
-              const toneShell =
-                slot.tier === "gold"
-                  ? "border-yellow-400/55 bg-[linear-gradient(180deg,rgba(250,204,21,0.22),rgba(255,255,255,0.02))]"
-                  : slot.tier === "silver"
-                    ? "border-slate-300/45 bg-[linear-gradient(180deg,rgba(203,213,225,0.18),rgba(255,255,255,0.02))]"
-                    : "border-amber-500/50 bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(255,255,255,0.02))]";
-              const toneBar =
-                slot.tier === "gold"
-                  ? "metal-glow metal-glow-gold border-yellow-400/80 bg-[linear-gradient(180deg,rgba(250,204,21,0.36),rgba(250,204,21,0.14))]"
-                  : slot.tier === "silver"
-                    ? "metal-glow metal-glow-silver border-slate-200/80 bg-[linear-gradient(180deg,rgba(203,213,225,0.32),rgba(203,213,225,0.12))]"
-                    : "metal-glow metal-glow-bronze border-amber-500/80 bg-[linear-gradient(180deg,rgba(245,158,11,0.34),rgba(245,158,11,0.12))]";
-              return (
-                <div key={`podium-slot-${idx}`} className="space-y-2">
-                  <div className="min-h-[2.75rem] px-1 text-center">
-                    {slot.player ? (
-                      <div className="font-display text-sm font-semibold leading-tight text-foreground">
-                        {slot.player.displayName}
-                      </div>
-                    ) : (
-                      <div className="font-display text-sm text-muted">—</div>
-                    )}
-                  </div>
-                  <div className={`rounded-[22px] border p-3 ${toneShell}`}>
-                    <div
-                      className={[
-                        "flex w-full items-center justify-center rounded-[18px] border font-display text-base font-semibold text-foreground transition-all duration-500 ease-out",
-                        toneBar,
-                      ].join(" ")}
-                      style={{ height: barHeight }}
-                    >
-                      {podiumLabel(slot.position)}
-                    </div>
-                    <div className="mt-3 text-center font-display text-xl font-semibold text-foreground">
-                      {slot.player ? scoreLabel(points, hasPred) : "—"}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
 
-        <SectionCard className={standardSectionCardClass}>
-          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-            Full standings
-          </div>
-          <div className="mt-1 font-display text-xl font-semibold text-foreground">
-            Room positions
-          </div>
-          <div className="mt-2 text-sm text-muted">
-            Expand the full ranking ladder for the active leaderboard lens.
-          </div>
-          <button
-            onClick={() => setFullPositionsExpanded((v) => !v)}
-            className="mt-4 inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
-          >
-            <span>
-              {fullPositionsExpanded
-                ? "Collapse Full Room Positions"
-                : "Show Full Room Positions"}
-            </span>
-            <span
-              className={[
-                "text-xs text-white/60 transition-transform duration-300 ease-out",
-                fullPositionsExpanded ? "rotate-180" : "",
-              ].join(" ")}
-            >
-              ▾
-            </span>
-          </button>
-          <div
-            className={[
-              "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
-              fullPositionsExpanded
-                ? "mt-4 grid-rows-[1fr] opacity-100 translate-y-0"
-                : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
-            ].join(" ")}
-          >
-            <div className="min-h-0">
-              <div
-                className={[
-                  "space-y-2 transition-all duration-300 ease-out",
-                  fullPositionsExpanded
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-1",
-                ].join(" ")}
+          <div className="mt-5 rounded-[22px] border border-white/8 bg-white/[0.02] p-3 md:hidden">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => {
+                  if (!mobileGwOptions.length) return;
+                  const currentIndex =
+                    mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
+                  const nextIndex = Math.min(
+                    mobileGwOptions.length - 1,
+                    currentIndex + 1,
+                  );
+                  setSelectedTableGw(mobileGwOptions[nextIndex]);
+                }}
+                disabled={
+                  !mobileGwOptions.length ||
+                  mobileSelectedGwIndex < 0 ||
+                  mobileSelectedGwIndex >= mobileGwOptions.length - 1
+                }
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
               >
-                {rankedByTopView.map((p, i) => (
+                <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <LeaderboardSelectField
+                  id="mobile-gw-select"
+                  label=""
+                  value={String(selectedTableGw)}
+                  onChange={(value) => setSelectedTableGw(Number(value))}
+                >
+                  {mobileGwOptions.map((gw) => (
+                    <option key={gw} value={String(gw)}>
+                      GW {gw} Scores
+                    </option>
+                  ))}
+                </LeaderboardSelectField>
+              </div>
+              <button
+                onClick={() => {
+                  if (!mobileGwOptions.length) return;
+                  const currentIndex =
+                    mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
+                  const nextIndex = Math.max(0, currentIndex - 1);
+                  setSelectedTableGw(mobileGwOptions[nextIndex]);
+                }}
+                disabled={!mobileGwOptions.length || mobileSelectedGwIndex <= 0}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
+              >
+                <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {mobileGwSortedPlayers.map((p) => {
+                const pts = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
+                const hasPred = !!hasPredByUserByGw?.[p.uid]?.[selectedTableGw];
+                const rank = mobileGwRankByUid[p.uid] ?? 0;
+                const rankToHighlight = pts > 0 ? rank : 0;
+                return (
                   <div
-                    key={`${topView}-rank-${p.uid}`}
+                    key={`mobile-gw-${selectedTableGw}-${p.uid}`}
                     className={[
-                      "flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm transition-all duration-300 ease-out",
-                      fullPositionsExpanded
-                        ? "opacity-100 translate-y-0"
-                        : "opacity-0 translate-y-1",
+                      "flex items-center justify-between rounded-2xl border px-3 py-2.5",
+                      rankToHighlight === 1
+                        ? "metal-glow metal-glow-gold border-yellow-400/80 bg-yellow-400/15"
+                        : rankToHighlight === 2
+                          ? "metal-glow metal-glow-silver border-gray-300/80 bg-gray-300/15"
+                          : rankToHighlight === 3
+                            ? "metal-glow metal-glow-bronze border-amber-500/80 bg-amber-500/15"
+                            : "border-white/8 bg-white/[0.02]",
                     ].join(" ")}
-                    style={{
-                      transitionDelay: fullPositionsExpanded
-                        ? `${Math.min(i, 8) * 32}ms`
-                        : "0ms",
-                    }}
                   >
-                    <span className="font-display text-foreground">
-                      {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
+                    <div className="font-display text-sm text-foreground">
+                      {rankToHighlight > 0 && rankToHighlight <= 3
+                        ? `${rankLabel(rankToHighlight)} `
+                        : ""}
+                      {p.displayName}
                       {user?.uid === p.uid ? (
                         <span className={youPillClass()}>You</span>
                       ) : null}
-                    </span>
-                    <span className="font-display font-semibold text-foreground">
-                      {scoreLabel(
-                        scoreForTopView(p.uid),
-                        hasPredForTopView(p.uid),
-                      )}
-                    </span>
+                    </div>
+                    <div className="font-display text-sm font-semibold text-foreground">
+                      {scoreLabel(pts, hasPred)}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-      </div>
-
-      <SectionCard className={standardSectionCardClass}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Gameweek matrix
-            </div>
-            <div className="mt-1 font-display text-xl font-semibold text-foreground">
-              Compare weekly scoring across the room
-            </div>
-          </div>
-          <div className="hidden rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62 md:flex">
-            Through GW{currentGw}
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-[22px] border border-white/8 bg-white/[0.02] p-3 md:hidden">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => {
-                if (!mobileGwOptions.length) return;
-                const currentIndex =
-                  mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
-                const nextIndex = Math.min(
-                  mobileGwOptions.length - 1,
-                  currentIndex + 1,
                 );
-                setSelectedTableGw(mobileGwOptions[nextIndex]);
-              }}
-              disabled={
-                !mobileGwOptions.length ||
-                mobileSelectedGwIndex < 0 ||
-                mobileSelectedGwIndex >= mobileGwOptions.length - 1
-              }
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
-            >
-              <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-r-[9px] border-r-current" />
-            </button>
-            <div className="min-w-0 flex-1">
-              <LeaderboardSelectField
-                id="mobile-gw-select"
-                label=""
-                value={String(selectedTableGw)}
-                onChange={(value) => setSelectedTableGw(Number(value))}
-              >
-                {mobileGwOptions.map((gw) => (
-                  <option key={gw} value={String(gw)}>
-                    GW {gw} Scores
-                  </option>
-                ))}
-              </LeaderboardSelectField>
+              })}
             </div>
-            <button
-              onClick={() => {
-                if (!mobileGwOptions.length) return;
-                const currentIndex =
-                  mobileSelectedGwIndex >= 0 ? mobileSelectedGwIndex : 0;
-                const nextIndex = Math.max(0, currentIndex - 1);
-                setSelectedTableGw(mobileGwOptions[nextIndex]);
-              }}
-              disabled={!mobileGwOptions.length || mobileSelectedGwIndex <= 0}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.12)] disabled:opacity-40"
-            >
-              <span className="block h-0 w-0 border-y-[6px] border-y-transparent border-l-[9px] border-l-current" />
-            </button>
           </div>
-          <div className="mt-3 space-y-2">
-            {mobileGwSortedPlayers.map((p) => {
-              const pts = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
-              const hasPred = !!hasPredByUserByGw?.[p.uid]?.[selectedTableGw];
-              const rank = mobileGwRankByUid[p.uid] ?? 0;
-              const rankToHighlight = pts > 0 ? rank : 0;
-              return (
-                <div
-                  key={`mobile-gw-${selectedTableGw}-${p.uid}`}
-                  className={[
-                    "flex items-center justify-between rounded-2xl border px-3 py-2.5",
-                    rankToHighlight === 1
-                      ? "metal-glow metal-glow-gold border-yellow-400/80 bg-yellow-400/15"
-                      : rankToHighlight === 2
-                        ? "metal-glow metal-glow-silver border-gray-300/80 bg-gray-300/15"
-                        : rankToHighlight === 3
-                          ? "metal-glow metal-glow-bronze border-amber-500/80 bg-amber-500/15"
-                          : "border-white/8 bg-white/[0.02]",
-                  ].join(" ")}
-                >
-                  <div className="font-display text-sm text-foreground">
-                    {rankToHighlight > 0 && rankToHighlight <= 3
-                      ? `${rankLabel(rankToHighlight)} `
-                      : ""}
-                    {p.displayName}
-                    {user?.uid === p.uid ? (
-                      <span className={youPillClass()}>You</span>
-                    ) : null}
-                  </div>
-                  <div className="font-display text-sm font-semibold text-foreground">
-                    {scoreLabel(pts, hasPred)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
 
-        <div className="mt-5 hidden overflow-x-auto rounded-[22px] border border-white/8 bg-white/[0.02] md:block">
-          <table className="w-full table-fixed text-sm">
-            <thead className="bg-black/10">
-              <tr>
-                <th className="sticky left-0 z-10 w-[120px] border-b border-subtle bg-black/10 p-3 text-left text-foreground"></th>
-                {sortedPlayers.map((p) => (
-                  <th
-                    key={p.uid}
-                    className="w-[120px] border-b border-subtle p-3 text-center font-semibold"
-                  >
-                    <span className="font-display block truncate">
-                      {p.displayName}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {weeks.map((gw) => (
-                <tr
-                  key={gw}
-                  className={[
-                    "border-b border-subtle last:border-0",
-                    gw === currentGw ? "bg-sky-400/8" : "",
-                  ].join(" ")}
-                >
-                  <td
-                    className={[
-                      "sticky left-0 z-10 w-[120px] p-3 font-semibold",
-                      gw === currentGw
-                        ? "bg-sky-400/10 text-sky-200"
-                        : "bg-white/[0.02] text-foreground",
-                    ].join(" ")}
-                  >
-                    <span className="font-display">GW{gw}</span>
-                  </td>
+          <div className="mt-5 hidden overflow-x-auto rounded-[22px] border border-white/8 bg-white/[0.02] md:block">
+            <table className="w-full table-fixed text-sm">
+              <thead className="bg-black/10">
+                <tr>
+                  <th className="sticky left-0 z-10 w-[120px] border-b border-subtle bg-black/10 p-3 text-left text-foreground"></th>
                   {sortedPlayers.map((p) => (
-                    <td key={p.uid} className="p-3 text-center text-foreground">
-                      {(() => {
-                        const cellPts = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
-                        const rank = gwRankByUid?.[gw]?.[p.uid] ?? 0;
-                        const rankToHighlight = cellPts > 0 ? rank : 0;
-                        return (
-                          <span
-                            className={[
-                              "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
-                              rankToHighlight === 1
-                                ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
-                                : rankToHighlight === 2
-                                  ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
-                                  : rankToHighlight === 3
-                                    ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
-                                    : "",
-                            ].join(" ")}
-                          >
-                            {cellPts}
-                          </span>
-                        );
-                      })()}
-                    </td>
+                    <th
+                      key={p.uid}
+                      className="w-[120px] border-b border-subtle p-3 text-center font-semibold"
+                    >
+                      <span className="font-display block truncate">
+                        {p.displayName}
+                      </span>
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
+              </thead>
 
-      {(gwScoreComputedAt || leaderboardRefreshedAt) && (
-        <SectionCard
-          className={`${standardSectionCardClass} text-xs text-muted`}
-        >
-          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-            Audit trail
-          </div>
-          <div className="mt-3 space-y-1">
-            {gwScoreComputedAt && (
-              <div>
-                GW{currentGw} scores last calculated:{" "}
-                {fmtDateTime(gwScoreComputedAt)}
-              </div>
-            )}
-            {leaderboardRefreshedAt && (
-              <div>
-                Leaderboard last refreshed:{" "}
-                {fmtDateTime(leaderboardRefreshedAt)}
-              </div>
-            )}
+              <tbody>
+                {weeks.map((gw) => (
+                  <tr
+                    key={gw}
+                    className={[
+                      "border-b border-subtle last:border-0",
+                      gw === currentGw ? "bg-sky-400/8" : "",
+                    ].join(" ")}
+                  >
+                    <td
+                      className={[
+                        "sticky left-0 z-10 w-[120px] p-3 font-semibold",
+                        gw === currentGw
+                          ? "bg-sky-400/10 text-sky-200"
+                          : "bg-white/[0.02] text-foreground",
+                      ].join(" ")}
+                    >
+                      <span className="font-display">GW{gw}</span>
+                    </td>
+                    {sortedPlayers.map((p) => (
+                      <td
+                        key={p.uid}
+                        className="p-3 text-center text-foreground"
+                      >
+                        {(() => {
+                          const cellPts = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
+                          const rank = gwRankByUid?.[gw]?.[p.uid] ?? 0;
+                          const rankToHighlight = cellPts > 0 ? rank : 0;
+                          return (
+                            <span
+                              className={[
+                                "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
+                                rankToHighlight === 1
+                                  ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
+                                  : rankToHighlight === 2
+                                    ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
+                                    : rankToHighlight === 3
+                                      ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
+                                      : "",
+                              ].join(" ")}
+                            >
+                              {cellPts}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </SectionCard>
-      )}
+
+        {(gwScoreComputedAt || leaderboardRefreshedAt) && (
+          <SectionCard
+            className={`${standardSectionCardClass} text-xs text-muted`}
+          >
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Audit trail
+            </div>
+            <div className="mt-3 space-y-1">
+              {gwScoreComputedAt && (
+                <div>
+                  GW{currentGw} scores last calculated:{" "}
+                  {fmtDateTime(gwScoreComputedAt)}
+                </div>
+              )}
+              {leaderboardRefreshedAt && (
+                <div>
+                  Leaderboard last refreshed:{" "}
+                  {fmtDateTime(leaderboardRefreshedAt)}
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+      </SectionStack>
     </PageShell>
   );
 }

@@ -93,6 +93,8 @@ export default function RoomScopedLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const navDockRef = useRef<HTMLDivElement | null>(null);
   const params = useParams<{ roomCode: string }>();
   const pathname = usePathname();
   const router = useRouter();
@@ -348,8 +350,12 @@ export default function RoomScopedLayout({
       bg: root.style.getPropertyValue("--app-bg"),
       solid: root.style.getPropertyValue("--app-solid"),
     };
+    root.classList.add("room-shell-active");
+    document.body.classList.add("room-shell-active");
     return () => {
       const initial = initialVarsRef.current;
+      root.classList.remove("room-shell-active");
+      document.body.classList.remove("room-shell-active");
       if (!initial) return;
       if (initial.bg) root.style.setProperty("--app-bg", initial.bg);
       else root.style.removeProperty("--app-bg");
@@ -360,30 +366,39 @@ export default function RoomScopedLayout({
 
   useEffect(() => {
     const root = document.documentElement;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+    root.style.setProperty("--app-bg", accent.bgDark);
+    root.style.setProperty("--app-solid", accent.solidDark);
+  }, [accent.bgDark, accent.solidDark]);
 
-    const applyBg = () => {
-      root.style.setProperty(
-        "--app-bg",
-        prefersDark.matches ? accent.bgDark : accent.bgLight,
-      );
-      root.style.setProperty(
-        "--app-solid",
-        prefersDark.matches ? accent.solidDark : accent.solidLight,
-      );
+  useEffect(() => {
+    const shell = shellRef.current;
+    const navDock = navDockRef.current;
+    if (!shell || !navDock) return;
+
+    const applyOffset = () => {
+      shell.style.setProperty("--room-nav-offset", `${navDock.offsetHeight}px`);
     };
 
-    applyBg();
-    prefersDark.addEventListener("change", applyBg);
+    applyOffset();
+
+    const observer = new ResizeObserver(() => applyOffset());
+    observer.observe(navDock);
+    window.addEventListener("resize", applyOffset);
+
     return () => {
-      prefersDark.removeEventListener("change", applyBg);
+      observer.disconnect();
+      window.removeEventListener("resize", applyOffset);
+      shell.style.removeProperty("--room-nav-offset");
     };
-  }, [accent.bgDark, accent.bgLight, accent.solidDark, accent.solidLight]);
+  }, [hideBottomNav]);
 
   return (
     <div
+      ref={shellRef}
       className={
-        hideBottomNav ? "room-theme" : "room-theme room-has-bottom-nav"
+        hideBottomNav
+          ? "room-theme room-shell"
+          : "room-theme room-shell room-has-bottom-nav"
       }
       style={
         {
@@ -411,8 +426,20 @@ export default function RoomScopedLayout({
           </div>
         </div>
       ) : null}
-      {children}
-      <RoomBottomNav />
+      <div id="room-scroll-root" className="room-scroll-root min-h-0 flex-1 overflow-y-auto">
+        {children}
+      </div>
+      {!hideBottomNav ? (
+        <div
+          ref={navDockRef}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[80] flex justify-center px-3"
+          style={{
+            paddingBottom: "max(0.18rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          <RoomBottomNav />
+        </div>
+      ) : null}
       <ScrollToTopButton />
     </div>
   );

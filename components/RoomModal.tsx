@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import AnimatedModal from "./AnimatedModal";
 import ModalExitButton from "./ModalExitButton";
 
@@ -11,6 +11,16 @@ type ThemedModalProps = {
   maxWidthClassName?: string;
   panelClassName?: string;
 };
+
+type ThemedSheetModalProps = ThemedModalProps & {
+  bodyClassName?: string;
+  showHandle?: boolean;
+};
+
+const SHEET_COLLAPSED_RATIO = 2 / 5;
+const SHEET_EXPANDED_RATIO = 0.9;
+const SHEET_MIN_DRAG_HEIGHT = 72;
+const SHEET_CLOSE_FROM_EXPANDED_FACTOR = 0.55;
 
 export function ThemedModal({
   open,
@@ -42,13 +52,280 @@ export function ThemedModal({
   );
 }
 
+export function ThemedSheetModal({
+  open,
+  onClose,
+  children,
+  maxWidthClassName = "max-w-3xl",
+  panelClassName = "",
+  bodyClassName = "",
+  showHandle = true,
+}: ThemedSheetModalProps) {
+  const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">(
+    "collapsed",
+  );
+  const [isMobile, setIsMobile] = useState(false);
+  const [sheetHeightPx, setSheetHeightPx] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStartYRef = useRef<number | null>(null);
+  const dragStartHeightRef = useRef<number | null>(null);
+  const dragMovedRef = useRef(false);
+  const liveHeightRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      dragStartYRef.current = null;
+      dragStartHeightRef.current = null;
+      dragMovedRef.current = false;
+      const timer = window.setTimeout(() => {
+        setSheetSnap("collapsed");
+        setSheetHeightPx(null);
+        liveHeightRef.current = null;
+        setDragging(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(() => {
+      setSheetSnap("collapsed");
+      const nextHeight = Math.round(window.innerHeight * SHEET_COLLAPSED_RATIO);
+      setSheetHeightPx(nextHeight);
+      liveHeightRef.current = nextHeight;
+      setDragging(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 639px)");
+    const apply = () => setIsMobile(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isMobile) return;
+    const onResize = () => {
+      const ratio =
+        sheetSnap === "expanded"
+          ? SHEET_EXPANDED_RATIO
+          : SHEET_COLLAPSED_RATIO;
+      const nextHeight = Math.round(window.innerHeight * ratio);
+      setSheetHeightPx(nextHeight);
+      liveHeightRef.current = nextHeight;
+      if (panelRef.current) panelRef.current.style.height = `${nextHeight}px`;
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [open, isMobile, sheetSnap]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  function collapseHeightPx() {
+    return Math.round(window.innerHeight * SHEET_COLLAPSED_RATIO);
+  }
+
+  function expandedHeightPx() {
+    return Math.round(window.innerHeight * SHEET_EXPANDED_RATIO);
+  }
+
+  function beginDrag(clientY: number) {
+    dragStartYRef.current = clientY;
+    const startHeight =
+      sheetHeightPx ??
+      (sheetSnap === "expanded" ? expandedHeightPx() : collapseHeightPx());
+    dragStartHeightRef.current = startHeight;
+    liveHeightRef.current = startHeight;
+    dragMovedRef.current = false;
+    setDragging(true);
+    if (panelRef.current) {
+      panelRef.current.style.transition = "none";
+      panelRef.current.style.height = `${startHeight}px`;
+    }
+  }
+
+  function updateDrag(clientY: number) {
+    const startY = dragStartYRef.current;
+    const startHeight = dragStartHeightRef.current;
+    if (startY == null || startHeight == null) return;
+    const deltaY = clientY - startY;
+    if (Math.abs(deltaY) > 6) dragMovedRef.current = true;
+    const nextHeight = Math.round(
+      Math.max(SHEET_MIN_DRAG_HEIGHT, Math.min(expandedHeightPx(), startHeight - deltaY)),
+    );
+    liveHeightRef.current = nextHeight;
+    if (rafRef.current != null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      if (panelRef.current && liveHeightRef.current != null) {
+        panelRef.current.style.height = `${liveHeightRef.current}px`;
+      }
+    });
+  }
+
+  function endDrag() {
+    const startY = dragStartYRef.current;
+    const startHeight =
+      dragStartHeightRef.current ??
+      (sheetSnap === "expanded" ? expandedHeightPx() : collapseHeightPx());
+    dragStartYRef.current = null;
+    dragStartHeightRef.current = null;
+    if (startY == null) {
+      setDragging(false);
+      return;
+    }
+    if (panelRef.current) {
+      panelRef.current.style.transition = "";
+    }
+    const releasedHeight =
+      liveHeightRef.current ??
+      sheetHeightPx ??
+      (sheetSnap === "expanded" ? expandedHeightPx() : collapseHeightPx());
+    const movedEnough = dragMovedRef.current;
+    dragMovedRef.current = false;
+    setDragging(false);
+    if (!movedEnough) {
+      const nextSnap = sheetSnap === "expanded" ? "collapsed" : "expanded";
+      const nextHeight =
+        nextSnap === "expanded" ? expandedHeightPx() : collapseHeightPx();
+      setSheetSnap(nextSnap);
+      setSheetHeightPx(nextHeight);
+      liveHeightRef.current = nextHeight;
+      return;
+    }
+    const collapsedHeight = collapseHeightPx();
+    const expandedHeight = expandedHeightPx();
+
+    if (sheetSnap === "collapsed") {
+      if (releasedHeight > startHeight) {
+        setSheetSnap("expanded");
+        setSheetHeightPx(expandedHeight);
+        liveHeightRef.current = expandedHeight;
+      } else {
+        onClose();
+      }
+      return;
+    }
+
+    if (releasedHeight >= startHeight) {
+      setSheetSnap("expanded");
+      setSheetHeightPx(expandedHeight);
+      liveHeightRef.current = expandedHeight;
+      return;
+    }
+
+    if (releasedHeight <= collapsedHeight * SHEET_CLOSE_FROM_EXPANDED_FACTOR) {
+      onClose();
+      return;
+    }
+
+    setSheetSnap("collapsed");
+    setSheetHeightPx(collapsedHeight);
+    liveHeightRef.current = collapsedHeight;
+  }
+
+  return (
+    <AnimatedModal
+      open={open}
+      onClose={onClose}
+      portal
+      lockBackground
+      zIndexClassName="z-[90]"
+      overlayClassName="items-end px-0 pb-0 pt-4 sm:items-center sm:p-4"
+      overlayOpenClassName="backdrop-blur-md"
+      overlayClosedClassName="backdrop-blur-0"
+      panelOpenClassName="opacity-100 translate-y-0 scale-100"
+      panelClosedClassName="opacity-0 translate-y-full sm:translate-y-3 sm:scale-[0.985]"
+      panelRef={panelRef}
+      panelClassName={`flex ${maxWidthClassName} max-h-[92dvh] flex-col overflow-hidden overscroll-contain rounded-t-[28px] rounded-b-none border border-b-0 no-scrollbar sm:w-full sm:max-h-[88dvh] sm:rounded-[28px] sm:border-b ${panelClassName}`.trim()}
+      overlayStyle={{ background: "var(--editorial-modal-overlay)" }}
+      panelStyle={{
+        borderColor: "var(--editorial-modal-border)",
+        background: "var(--editorial-modal-bg)",
+        boxShadow: "0 28px 68px rgba(3,8,20,0.42)",
+        backdropFilter: "blur(22px)",
+        WebkitBackdropFilter: "blur(22px)",
+        transition: dragging
+          ? "none"
+          : "height 220ms cubic-bezier(0.22,1,0.36,1)",
+        width: isMobile ? "calc(100% - 0.75rem)" : undefined,
+        height: isMobile
+          ? `${sheetHeightPx ?? collapseHeightPx()}px`
+          : undefined,
+      }}
+    >
+      {showHandle ? (
+        <button
+          type="button"
+          aria-label={sheetSnap === "expanded" ? "Collapse sheet" : "Expand sheet"}
+          onPointerDown={(event) => {
+            if (!isMobile) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            beginDrag(event.clientY);
+          }}
+          onPointerMove={(event) => {
+            if (!isMobile || dragStartYRef.current == null) return;
+            event.preventDefault();
+            updateDrag(event.clientY);
+          }}
+          onPointerUp={(event) => {
+            if (!isMobile) return;
+            event.preventDefault();
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            endDrag();
+          }}
+          onPointerCancel={(event) => {
+            if (!isMobile) return;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            endDrag();
+          }}
+          className="flex justify-center px-4 pb-2 pt-3 sm:hidden"
+          style={{ touchAction: "none", WebkitTapHighlightColor: "transparent" }}
+        >
+          <div className="flex h-6 w-16 items-center justify-center rounded-full border border-white/8 bg-white/[0.03]">
+            <div className="h-1.5 w-11 rounded-full bg-white/14" />
+          </div>
+        </button>
+      ) : null}
+      <div
+        ref={bodyRef}
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2 sm:px-5 sm:pb-5 sm:pt-4 ${bodyClassName}`.trim()}
+        style={{
+          paddingBottom: isMobile ? "calc(env(safe-area-inset-bottom) + 1rem)" : undefined,
+        }}
+      >
+        <div className="flex flex-col gap-4 sm:gap-5">{children}</div>
+      </div>
+    </AnimatedModal>
+  );
+}
+
 type ModalHeaderProps = {
   title: string;
-  onClose: () => void;
+  onClose?: () => void;
   ariaLabel?: string;
+  showCloseButton?: boolean;
 };
 
-export function ModalHeader({ title, onClose, ariaLabel }: ModalHeaderProps) {
+export function ModalHeader({
+  title,
+  onClose,
+  ariaLabel,
+  showCloseButton = true,
+}: ModalHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
@@ -59,10 +336,12 @@ export function ModalHeader({ title, onClose, ariaLabel }: ModalHeaderProps) {
           {title}
         </div>
       </div>
-      <ModalExitButton
-        onClick={onClose}
-        ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`}
-      />
+      {showCloseButton && onClose ? (
+        <ModalExitButton
+          onClick={onClose}
+          ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`}
+        />
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { useAuth } from "../../../../../components/AuthProvider";
 import PageBackButton from "../../../../../components/PageBackButton";
 import PageShell from "../../../../../components/PageShell";
 import SectionCard from "../../../../../components/SectionCard";
+import SectionStack from "../../../../../components/SectionStack";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
 import TopActionRow from "../../../../../components/TopActionRow";
@@ -26,10 +27,7 @@ import {
   subscribeRoomPowerups,
   subscribeRoomPlayers,
 } from "@/lib/liveGameBus";
-import {
-  formatKickoffParts,
-  formatUnlockDateParts,
-} from "@/lib/dateDisplay";
+import { formatKickoffParts, formatUnlockDateParts } from "@/lib/dateDisplay";
 import { getCountdownParts } from "../lock-utils";
 
 type GameDoc = {
@@ -674,33 +672,33 @@ export default function RevealPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <div className="relative z-30 space-y-3">
+        <SectionStack gap="page">
           <TopActionRow
-            title={`GW ${gw ?? "—"} Reveal`}
-            subtitle={`${roomCode} • GW ${gw ?? "—"}`}
-            actions={
-              <PageBackButton
-                label="Exit"
-                className={BTN_3D}
-                onClick={() => router.push(`/room/${roomCode}`)}
-              />
-            }
-          />
-        </div>
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.08),transparent_40%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-              Reveal desk
+              title={`GW ${gw ?? "—"} Reveal`}
+              subtitle={`${roomCode} • GW ${gw ?? "—"}`}
+              actions={
+                <PageBackButton
+                  label="Exit"
+                  className={BTN_3D}
+                  onClick={() => router.push(`/room/${roomCode}`)}
+                />
+              }
+            />
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.08),transparent_40%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+              <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                Reveal desk
+              </div>
+              <div className="mt-2 text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading GW reveal data…</span>
+              </div>
             </div>
-            <div className="mt-2 text-sm text-muted inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading GW reveal data…</span>
-            </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -711,17 +709,19 @@ export default function RevealPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-xl font-semibold text-foreground">
-            Reveal not ready
-          </div>
-          <div className="text-sm text-muted">
-            Current state: {activeGame.state}
-          </div>
-        </SectionCard>
+        <SectionStack gap="page">
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-xl font-semibold text-foreground">
+              Reveal not ready
+            </div>
+            <div className="text-sm text-muted">
+              Current state: {activeGame.state}
+            </div>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -730,10 +730,10 @@ export default function RevealPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="relative z-30 space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
           title={`GW ${gw} Reveal`}
           subtitle={`${roomCode} • GW ${gw}`}
@@ -745,331 +745,320 @@ export default function RevealPage() {
             />
           }
         />
-      </div>
 
-      {error && (
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-sm text-danger">{error}</div>
-        </SectionCard>
-      )}
+        {error && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-danger">{error}</div>
+          </SectionCard>
+        )}
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1.5">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                  Reveal desk
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                    Next gameweek
-                  </span>
-                  <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
-                    GW {gw + 1}
-                  </span>
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Reveal desk
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Next gameweek
+                    </span>
+                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                      GW {gw + 1}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            {unlockAtMs != null && (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                    Unlocks
-                  </span>
-                  <span className="font-display text-sm font-semibold text-foreground">
-                    {(() => {
-                      const p = formatUnlockDateParts(unlockAtMs);
-                      return (
-                        <>
-                          {p.day}
-                          <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                            {p.suffix}
-                          </span>{" "}
-                          {p.monthYear} {p.time}
-                        </>
-                      );
-                    })()}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {unlockCountdownRings.map((unit) => (
-                    <div
-                      key={unit.label}
-                      className="relative overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
-                    >
-                      <span
-                        className="absolute inset-x-0 top-0 h-px"
-                        style={{
-                          backgroundImage:
-                            "linear-gradient(90deg, transparent, rgba(var(--room-accent-rgb), 0.52), transparent)",
-                        }}
-                        aria-hidden
-                      />
-                      <div className="font-display text-[1.45rem] font-semibold leading-none text-foreground sm:text-[1.75rem]">
-                        {unit.value}
+              {unlockAtMs != null && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                      Unlocks
+                    </span>
+                    <span className="font-display text-sm font-semibold text-foreground">
+                      {(() => {
+                        const p = formatUnlockDateParts(unlockAtMs);
+                        return (
+                          <>
+                            {p.day}
+                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                              {p.suffix}
+                            </span>{" "}
+                            {p.monthYear} {p.time}
+                          </>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {unlockCountdownRings.map((unit) => (
+                      <div
+                        key={unit.label}
+                        className="relative overflow-hidden rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                      >
+                        <span
+                          className="absolute inset-x-0 top-0 h-px"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(90deg, transparent, rgba(var(--room-accent-rgb), 0.52), transparent)",
+                          }}
+                          aria-hidden
+                        />
+                        <div className="font-display text-[1.45rem] font-semibold leading-none text-foreground sm:text-[1.75rem]">
+                          {unit.value}
+                        </div>
+                        <div className="mt-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+                          {unit.label}
+                        </div>
                       </div>
-                      <div className="mt-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/42">
-                        {unit.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </SectionCard>
-
-      {!allLocked && (
-        <SectionCard className={standardSectionCardClass}>
-          <div className="border border-yellow-300/65 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.04)_100%)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-semibold text-foreground">
-                  Reveal is syncing
-                </div>
-                <div className="text-sm text-muted mt-1 inline-flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Waiting for all locked picks to finish.</span>
-                </div>
-              </div>
-              <span className="font-display rounded-full border border-yellow-300/70 bg-yellow-400/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                {lockedCount}/{players.length || 0} locked
-              </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </SectionCard>
-      )}
-      <SectionCard className={standardSectionCardClass}>
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
-            <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
-              Reveal board
+
+        {!allLocked && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="border border-yellow-300/65 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none p-4 bg-[linear-gradient(180deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.04)_100%)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-foreground">
+                    Reveal is syncing
+                  </div>
+                  <div className="text-sm text-muted mt-1 inline-flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Waiting for all locked picks to finish.</span>
+                  </div>
+                </div>
+                <span className="font-display rounded-full border border-yellow-300/70 bg-yellow-400/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                  {lockedCount}/{players.length || 0} locked
+                </span>
+              </div>
             </div>
-            <div className="font-display text-sm font-semibold text-foreground sm:text-base">
-              Final picks overview
-            </div>
-          </div>
-          <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
-          <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
-            {fixtureIds.length}
-          </span>
-        </div>
-        <div className="mt-3 grid items-start gap-3 sm:mt-4 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {fixtureIds.map((fid, idx) => {
-          const f = fixtureMap.get(fid);
-          const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
-          const homeColor = colorForTeam(
-            f?.home.tla,
-            f?.home.shortName,
-            f?.home.name,
-          );
-          const awayColor = colorForTeam(
-            f?.away.tla,
-            f?.away.shortName,
-            f?.away.name,
-          );
-          const clashBgStyle: React.CSSProperties = {
-            backgroundImage: `
+          </SectionCard>
+        )}
+        <SectionCard className={standardSectionCardClass}>
+          <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {fixtureIds.map((fid, idx) => {
+              const f = fixtureMap.get(fid);
+              const kickoffParts = f ? formatKickoffParts(f.kickoff) : null;
+              const homeColor = colorForTeam(
+                f?.home.tla,
+                f?.home.shortName,
+                f?.home.name,
+              );
+              const awayColor = colorForTeam(
+                f?.away.tla,
+                f?.away.shortName,
+                f?.away.name,
+              );
+              const clashBgStyle: React.CSSProperties = {
+                backgroundImage: `
               radial-gradient(circle at 16% 14%, ${hexToRgba(homeColor, 0.16)} 0%, rgba(9,12,22,0) 46%),
               radial-gradient(circle at 84% 14%, ${hexToRgba(awayColor, 0.16)} 0%, rgba(9,12,22,0) 46%),
               linear-gradient(180deg, rgba(9,12,22,0.95) 0%, rgba(8,12,22,0.97) 55%, rgba(5,10,22,0.995) 100%)
             `,
-          };
+              };
 
-          return (
-            <div
-              key={fid}
-              className="fixture-card-enter space-y-2 w-full"
-              style={{
-                animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                animationDuration: "520ms",
-              }}
-            >
-              <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+              return (
                 <div
-                  className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
-                  style={clashBgStyle}
+                  key={fid}
+                  className="fixture-card-enter space-y-2 w-full"
+                  style={{
+                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                    animationDuration: "520ms",
+                  }}
                 >
-                  <div className="space-y-3">
-                    <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
-                      {kickoffParts ? (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-display font-semibold">
-                            {kickoffParts.dayNum}
-                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                              {kickoffParts.suffix}
-                            </span>{" "}
-                            {kickoffParts.monthYear}
-                          </span>
-                          <span className="font-display font-semibold tabular-nums">
-                            {kickoffParts.time}
-                          </span>
-                        </div>
-                      ) : (
-                        <span>Fixture {fid}</span>
-                      )}
-                    </div>
-
-                    {f && (
-                      <>
-                        <div className="sm:hidden">
-                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                            <div className="flex flex-col items-center text-center min-w-0">
-                              <TeamBadge
-                                name={f.home.name}
-                                shortName={f.home.shortName}
-                                badge={f.home.badge}
-                                tla={f.home.tla}
-                              />
-                              <TeamLabel
-                                name={f.home.name}
-                                tla={f.home.tla}
-                                shortName={f.home.shortName}
-                                wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                fullNameWindowPx={68}
-                              />
+                  <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                    <div
+                      className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                      style={clashBgStyle}
+                    >
+                      <div className="space-y-3">
+                        <div className="text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted mb-1">
+                          {kickoffParts ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-display font-semibold">
+                                {kickoffParts.dayNum}
+                                <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                                  {kickoffParts.suffix}
+                                </span>{" "}
+                                {kickoffParts.monthYear}
+                              </span>
+                              <span className="font-display font-semibold tabular-nums">
+                                {kickoffParts.time}
+                              </span>
                             </div>
-                            <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
-                              vs
-                            </span>
-                            <div className="flex flex-col items-center text-center min-w-0">
-                              <TeamBadge
-                                name={f.away.name}
-                                shortName={f.away.shortName}
-                                badge={f.away.badge}
-                                tla={f.away.tla}
-                              />
-                              <TeamLabel
-                                name={f.away.name}
-                                tla={f.away.tla}
-                                shortName={f.away.shortName}
-                                wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                fullNameWindowPx={68}
-                              />
-                            </div>
-                          </div>
+                          ) : (
+                            <span>Fixture {fid}</span>
+                          )}
                         </div>
 
-                        <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                          <div className="flex flex-col items-center text-center min-w-0">
-                            <TeamBadge
-                              name={f.home.name}
-                              shortName={f.home.shortName}
-                              badge={f.home.badge}
-                              tla={f.home.tla}
-                            />
-                            <TeamLabel
-                              name={f.home.name}
-                              tla={f.home.tla}
-                              shortName={f.home.shortName}
-                              wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
-                              fullNameWindowPx={88}
-                            />
-                          </div>
-                          <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
-                            vs
-                          </span>
-                          <div className="flex flex-col items-center text-center min-w-0">
-                            <TeamBadge
-                              name={f.away.name}
-                              shortName={f.away.shortName}
-                              badge={f.away.badge}
-                              tla={f.away.tla}
-                            />
-                            <TeamLabel
-                              name={f.away.name}
-                              tla={f.away.tla}
-                              shortName={f.away.shortName}
-                              wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                              abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                              fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
-                              fullNameWindowPx={88}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    <div className="overflow-hidden rounded-[22px] border border-white/7 bg-[rgb(5,10,22)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_24px_rgba(2,6,20,0.2)]">
-                      <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                          Prediction board
-                        </span>
-                        <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                          {playersSorted.length}{" "}
-                          {playersSorted.length === 1 ? "player" : "players"}
-                        </span>
-                      </div>
-                      <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
-                        {playersSorted.map((uid) => {
-                          const sc =
-                            picksByUserFixture.get(`${uid}|${fid}`) || "";
-                          const g = activeGoldensByUid[uid];
-                          const isGolden = g?.locked && g?.fixtureId === fid;
-                          const p = activePowerupsByUid[uid];
-                          const powerupType =
-                            p?.locked && p?.fixtureId === fid
-                              ? p.powerupType
-                              : null;
-                          const toneClass =
-                            "border-white/10 bg-[rgb(7,12,24)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_20px_rgba(2,6,20,0.16)]";
-                          const powerupTypeClass =
-                            powerupType === "ALL_IN"
-                              ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
-                              : powerupType === "SAFETY_NET"
-                                ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
-                                : "";
-                          const goldenBorderClass = isGolden
-                            ? "!border-yellow-300/75"
-                            : "";
-                          const goldenGlowClass = isGolden
-                            ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
-                            : "";
-                          return (
-                            <div
-                              key={`${fid}-${uid}`}
-                              className="relative min-w-0 overflow-hidden"
-                            >
-                              <div
-                                className={[
-                                  "relative overflow-hidden rounded-[20px] border px-3 py-2.5 text-left",
-                                  toneClass,
-                                  goldenBorderClass,
-                                  goldenGlowClass,
-                                  powerupTypeClass,
-                                ].join(" ")}
-                              >
-                                <div className="relative">
-                                  <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                    {activeDisplayNamesByUid[uid] ??
-                                      uid.slice(0, 6)}
-                                  </div>
-                                  <span className="font-display text-[0.92rem] font-semibold text-foreground truncate">
-                                    {fmtScore(sc)}
-                                  </span>
+                        {f && (
+                          <>
+                            <div className="sm:hidden">
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <div className="flex flex-col items-center text-center min-w-0">
+                                  <TeamBadge
+                                    name={f.home.name}
+                                    shortName={f.home.shortName}
+                                    badge={f.home.badge}
+                                    tla={f.home.tla}
+                                  />
+                                  <TeamLabel
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
+                                </div>
+                                <span className="font-display text-[10px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                                  vs
+                                </span>
+                                <div className="flex flex-col items-center text-center min-w-0">
+                                  <TeamBadge
+                                    name={f.away.name}
+                                    shortName={f.away.shortName}
+                                    badge={f.away.badge}
+                                    tla={f.away.tla}
+                                  />
+                                  <TeamLabel
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
                                 </div>
                               </div>
                             </div>
-                          );
-                        })}
+
+                            <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                              <div className="flex flex-col items-center text-center min-w-0">
+                                <TeamBadge
+                                  name={f.home.name}
+                                  shortName={f.home.shortName}
+                                  badge={f.home.badge}
+                                  tla={f.home.tla}
+                                />
+                                <TeamLabel
+                                  name={f.home.name}
+                                  tla={f.home.tla}
+                                  shortName={f.home.shortName}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
+                                />
+                              </div>
+                              <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
+                                vs
+                              </span>
+                              <div className="flex flex-col items-center text-center min-w-0">
+                                <TeamBadge
+                                  name={f.away.name}
+                                  shortName={f.away.shortName}
+                                  badge={f.away.badge}
+                                  tla={f.away.tla}
+                                />
+                                <TeamLabel
+                                  name={f.away.name}
+                                  tla={f.away.tla}
+                                  shortName={f.away.shortName}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] xl:text-[11px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="overflow-hidden rounded-[22px] border border-white/7 bg-[rgb(5,10,22)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_12px_24px_rgba(2,6,20,0.2)]">
+                          <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                              Prediction board
+                            </span>
+                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                              {playersSorted.length}{" "}
+                              {playersSorted.length === 1
+                                ? "player"
+                                : "players"}
+                            </span>
+                          </div>
+                          <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                            {playersSorted.map((uid) => {
+                              const sc =
+                                picksByUserFixture.get(`${uid}|${fid}`) || "";
+                              const g = activeGoldensByUid[uid];
+                              const isGolden =
+                                g?.locked && g?.fixtureId === fid;
+                              const p = activePowerupsByUid[uid];
+                              const powerupType =
+                                p?.locked && p?.fixtureId === fid
+                                  ? p.powerupType
+                                  : null;
+                              const toneClass =
+                                "border-white/10 bg-[rgb(7,12,24)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_10px_20px_rgba(2,6,20,0.16)]";
+                              const powerupTypeClass =
+                                powerupType === "ALL_IN"
+                                  ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
+                                  : powerupType === "SAFETY_NET"
+                                    ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
+                                    : "";
+                              const goldenBorderClass = isGolden
+                                ? "!border-yellow-300/75"
+                                : "";
+                              const goldenGlowClass = isGolden
+                                ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
+                                : "";
+                              return (
+                                <div
+                                  key={`${fid}-${uid}`}
+                                  className="relative min-w-0 overflow-hidden"
+                                >
+                                  <div
+                                    className={[
+                                      "relative overflow-hidden rounded-[20px] border px-3 py-2.5 text-left",
+                                      toneClass,
+                                      goldenBorderClass,
+                                      goldenGlowClass,
+                                      powerupTypeClass,
+                                    ].join(" ")}
+                                  >
+                                    <div className="relative">
+                                      <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                        {activeDisplayNamesByUid[uid] ??
+                                          uid.slice(0, 6)}
+                                      </div>
+                                      <span className="font-display text-[0.92rem] font-semibold text-foreground truncate">
+                                        {fmtScore(sc)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      </SectionCard>
+              );
+            })}
+          </div>
+        </SectionCard>
+      </SectionStack>
     </PageShell>
   );
 }

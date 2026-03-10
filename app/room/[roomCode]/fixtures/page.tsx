@@ -27,6 +27,7 @@ import PageBackButton from "../../../../components/PageBackButton";
 import GameweekNavigator from "../../../../components/GameweekNavigator";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
+import SectionStack from "../../../../components/SectionStack";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import TeamBadge from "../../../../components/TeamBadge";
@@ -1118,23 +1119,20 @@ export default function FixturesPage() {
             ? "Scheduled"
             : "Still to Play",
         items: buckets.upcoming,
-        suffix:
-          seasonCurrentGw != null &&
-          gw > seasonCurrentGw &&
-          buckets.upcoming.length
-            ? (() => {
-                const nextKickoffMs = buckets.upcoming
-                  .map((fixture) => Date.parse(String(fixture.kickoff || "")))
-                  .filter((kickoffMs) => Number.isFinite(kickoffMs))
-                  .sort((a, b) => a - b)[0];
-                if (!Number.isFinite(nextKickoffMs)) return null;
-                const daysUntil = Math.max(
-                  0,
-                  Math.ceil((nextKickoffMs - nowMs) / 86_400_000),
-                );
-                return `${daysUntil} ${daysUntil === 1 ? "Day" : "Days"}`;
-              })()
-            : null,
+        suffix: buckets.upcoming.length
+          ? (() => {
+              const nextKickoffMs = buckets.upcoming
+                .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+                .filter((kickoffMs) => Number.isFinite(kickoffMs))
+                .sort((a, b) => a - b)[0];
+              if (!Number.isFinite(nextKickoffMs)) return null;
+              const daysUntil = Math.max(
+                0,
+                Math.ceil((nextKickoffMs - nowMs) / 86_400_000),
+              );
+              return `${daysUntil} ${daysUntil === 1 ? "Day" : "Days"} Left`;
+            })()
+          : null,
       },
       { key: "completed", label: "Final Scores", items: buckets.completed },
     ].filter((section) => section.items.length > 0);
@@ -1787,245 +1785,243 @@ export default function FixturesPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="relative z-30 space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
-          title="Fixtures"
-          subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-          className="flex items-start justify-between gap-3 sm:items-end"
-          actions={
-            <div className="ml-auto flex gap-1">
-              <button
-                onClick={refreshFixtures}
-                disabled={refreshingFixtures || refreshLockSeconds > 0}
-                className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
-                aria-label="Refresh fixtures"
-                title={
-                  refreshLockSeconds > 0
-                    ? `Refresh locked (${refreshLockSeconds}s)`
-                    : "Refresh fixtures"
-                }
-              >
-                <RefreshCw
-                  size={16}
-                  className={refreshingFixtures ? "animate-spin" : ""}
+            title="Fixtures"
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            className="flex items-start justify-between gap-3 sm:items-end"
+            actions={
+              <div className="ml-auto flex gap-1">
+                <button
+                  onClick={refreshFixtures}
+                  disabled={refreshingFixtures || refreshLockSeconds > 0}
+                  className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
+                  aria-label="Refresh fixtures"
+                  title={
+                    refreshLockSeconds > 0
+                      ? `Refresh locked (${refreshLockSeconds}s)`
+                      : "Refresh fixtures"
+                  }
+                >
+                  <RefreshCw
+                    size={16}
+                    className={refreshingFixtures ? "animate-spin" : ""}
+                  />
+                </button>
+                <PageBackButton
+                  onClick={() => router.push(`/room/${roomCode}`)}
                 />
-              </button>
-              <PageBackButton
-                onClick={() => router.push(`/room/${roomCode}`)}
-              />
-            </div>
-          }
-        />
-      </div>
+              </div>
+            }
+          />
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-        <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="space-y-1.5">
-                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                  Matchday desk
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                    Viewing slate
-                  </span>
-                  <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
-                    GW {gw}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-              <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                Fixture ledger
-              </span>
-              <span className="font-display text-sm font-semibold text-foreground">
-                {gw === seasonCurrentGw
-                  ? "Current matchweek"
-                  : seasonCurrentGw != null && gw < seasonCurrentGw
-                    ? "Previous matchweek"
-                    : "Upcoming matchweek"}
-              </span>
-            </div>
-            <div className="grid gap-1 sm:grid-cols-1">
-              <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                  Completed
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  {finishedFixtureCount} / {fixtureList.length || 0}
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  Finalised scorelines on this slate.
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+            <SectionStack gap="tight">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-1.5">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Matchday desk
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                      Viewing slate
+                    </span>
+                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                      GW {gw}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                  Fixture ledger
+                </span>
+                <span className="font-display text-sm font-semibold text-foreground">
+                  {gw === seasonCurrentGw
+                    ? "Current matchweek"
+                    : seasonCurrentGw != null && gw < seasonCurrentGw
+                      ? "Previous matchweek"
+                      : "Upcoming matchweek"}
+                </span>
+              </div>
+              <div className="grid gap-1 sm:grid-cols-1">
+                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                    Completed
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    {finishedFixtureCount} / {fixtureList.length || 0}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Finalised scorelines on this slate.
+                  </div>
+                </div>
+              </div>
 
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Prediction key
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Prediction key
+                  </div>
+                  <div className="mt-1 text-sm text-muted">
+                    Quick legend for result tones and chip outlines.
+                  </div>
                 </div>
-                <div className="mt-1 text-sm text-muted">
-                  Quick legend for result tones and chip outlines.
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setPredictionKeyOpen((open) => !open)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72 transition hover:border-white/18 hover:text-foreground"
+                  aria-expanded={predictionKeyOpen}
+                  aria-label={
+                    predictionKeyOpen
+                      ? "Collapse prediction key"
+                      : "Expand prediction key"
+                  }
+                >
+                  <span>{predictionKeyOpen ? "Close" : "Open"}</span>
+                  <ChevronDown
+                    size={14}
+                    className={[
+                      "transition-transform duration-200 ease-out",
+                      predictionKeyOpen ? "rotate-180" : "",
+                    ].join(" ")}
+                  />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setPredictionKeyOpen((open) => !open)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72 transition hover:border-white/18 hover:text-foreground"
-                aria-expanded={predictionKeyOpen}
-                aria-label={
-                  predictionKeyOpen
-                    ? "Collapse prediction key"
-                    : "Expand prediction key"
-                }
-              >
-                <span>{predictionKeyOpen ? "Close" : "Open"}</span>
-                <ChevronDown
-                  size={14}
-                  className={[
-                    "transition-transform duration-200 ease-out",
-                    predictionKeyOpen ? "rotate-180" : "",
-                  ].join(" ")}
-                />
-              </button>
-            </div>
-            <div
-              className={[
-                "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
-                predictionKeyOpen
-                  ? "mt-2 grid-rows-[1fr] opacity-100 translate-y-0"
-                  : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
-              ].join(" ")}
-            >
               <div
                 className={[
-                  "min-h-0 overflow-hidden transition-all duration-300 ease-out",
+                  "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
                   predictionKeyOpen
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-1",
+                    ? "mt-2 grid-rows-[1fr] opacity-100 translate-y-0"
+                    : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
                 ].join(" ")}
               >
-                <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3">
-                  <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
-                      <div className="pl-3">
-                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                          Correct Result
-                        </div>
-                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                          Winner or draw called correctly.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
-                      <div className="pl-3">
-                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                          Exact Score
-                        </div>
-                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                          Full scoreline landed exactly.
+                <div
+                  className={[
+                    "min-h-0 overflow-hidden transition-all duration-300 ease-out",
+                    predictionKeyOpen
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-0 translate-y-1",
+                  ].join(" ")}
+                >
+                  <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3">
+                    <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
+                        <div className="pl-3">
+                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                            Correct Result
+                          </div>
+                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                            Winner or draw called correctly.
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
-                      <div className="pl-3">
-                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                          Powerup Hit
-                        </div>
-                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                          Chip override landed.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                    <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
-                      <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
-                      <div className="pl-3">
-                        <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                          Miss
-                        </div>
-                        <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                          No points landed on the fixture.
+                    <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
+                        <div className="pl-3">
+                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                            Exact Score
+                          </div>
+                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                            Full scoreline landed exactly.
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
-                    <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                      <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
-                        Chips
+                    <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
+                        <div className="pl-3">
+                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                            Powerup Hit
+                          </div>
+                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                            Chip override landed.
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
-                          Golden Pick
-                        </span>
-                        <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
-                          All-In
-                        </span>
-                        <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
-                          Safety Net
-                        </span>
+                    </div>
+                    <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
+                        <div className="pl-3">
+                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                            Miss
+                          </div>
+                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                            No points landed on the fixture.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
+                      <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                        <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
+                          Chips
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
+                            Golden Pick
+                          </span>
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
+                            All-In
+                          </span>
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
+                            Safety Net
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </SectionStack>
           </div>
-        </div>
-      </SectionCard>
-
-      {error && (
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-sm text-rose-300">{error}</div>
         </SectionCard>
-      )}
 
-      {/* Fixtures */}
+        {error && (
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-rose-300">{error}</div>
+          </SectionCard>
+        )}
 
-      <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
-        <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,230px)_minmax(0,1fr)] xl:items-start">
-            <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-              {!!seasonOptions.length ? (
-                <FixturesSelectField
-                  id="fixtures-season-select"
-                  label="Season"
-                  value={seasonKey}
-                  onChange={onSeasonChange}
-                >
-                  {seasonOptions.map((s) => (
-                    <option key={s} value={s}>
-                      {seasonLabel(s)}
-                    </option>
-                  ))}
-                </FixturesSelectField>
-              ) : (
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Season
+        {/* Fixtures */}
+
+        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
+          <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,220px)] xl:items-start">
+              <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+                {!!seasonOptions.length ? (
+                  <FixturesSelectField
+                    id="fixtures-season-select"
+                    label="Season"
+                    value={seasonKey}
+                    onChange={onSeasonChange}
+                  >
+                    {seasonOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {seasonLabel(s)}
+                      </option>
+                    ))}
+                  </FixturesSelectField>
+                ) : (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Season
+                    </div>
+                    <div className="mt-2 font-display text-sm font-semibold text-foreground">
+                      {seasonLabel(seasonKey || "----")}
+                    </div>
                   </div>
-                  <div className="mt-2 font-display text-sm font-semibold text-foreground">
-                    {seasonLabel(seasonKey || "----")}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+                )}
+              </div>
               <div className="min-w-0 rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
                 <div className="space-y-2">
                   <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -2044,140 +2040,136 @@ export default function FixturesPage() {
               </div>
               <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                      Display mode
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDisplayModeOpen((open) => !open)}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72 transition hover:border-white/18 hover:text-foreground"
-                      aria-expanded={displayModeOpen}
-                      aria-label={
-                        displayModeOpen
-                          ? "Collapse display mode"
-                          : "Expand display mode"
-                      }
-                    >
-                      <span>
-                        {displayModeOpen ? "Collapse mode" : "Expand mode"}
-                      </span>
-                      <ChevronDown
-                        size={14}
-                        className={[
-                          "transition-transform duration-200 ease-out",
-                          displayModeOpen ? "rotate-180" : "",
-                        ].join(" ")}
-                      />
-                    </button>
+                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Predictions
                   </div>
-                  <div
-                    className={[
-                      "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
-                      displayModeOpen
-                        ? "mt-1 grid-rows-[1fr] opacity-100 translate-y-0"
-                        : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
-                    ].join(" ")}
+                  <button
+                    type="button"
+                    onClick={() => setCompactModeValue(!compactMode)}
+                    className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70 transition hover:border-white/18 hover:text-foreground"
                   >
-                    <div
-                      className={[
-                        "min-h-0 transition-all duration-300 ease-out",
-                        displayModeOpen
-                          ? "opacity-100 translate-y-0"
-                          : "opacity-0 translate-y-1",
-                      ].join(" ")}
-                    >
-                      <SliderSwitch
-                        options={[
-                          { value: "full", label: "Full" },
-                          { value: "compact", label: "Compact" },
-                        ]}
-                        value={compactMode ? "compact" : "full"}
-                        onChange={(v) => setCompactModeValue(v === "compact")}
-                        className="relative grid w-full min-w-0 overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                        buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
-                      />
-                    </div>
-                  </div>
+                    {compactMode ? "View All" : "Hide All"}
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </SectionCard>
-      <div className="space-y-5 sm:space-y-6">
-        {isLoading && (
-          <SectionCard className={standardSectionCardClass}>
-            <div className="inline-flex w-full items-center justify-center gap-2 text-sm text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading fixtures…</span>
-            </div>
-          </SectionCard>
-        )}
+        </SectionCard>
+        <SectionStack gap="fixture">
+          {isLoading && (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="inline-flex w-full items-center justify-center gap-2 text-sm text-muted">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading fixtures…</span>
+              </div>
+            </SectionCard>
+          )}
 
-        {!isLoading && fixtures.length === 0 && (
-          <SectionCard className={standardSectionCardClass}>
-            <div className="text-center text-sm text-muted">
-              No fixtures available for this gameweek.
-            </div>
-          </SectionCard>
-        )}
+          {!isLoading && fixtures.length === 0 && (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-center text-sm text-muted">
+                No fixtures available for this gameweek.
+              </div>
+            </SectionCard>
+          )}
 
-        {!isLoading &&
-          displayFixtures.length > 0 &&
-          (() => {
-            const renderFixtureCard = (f: Fixture, idx: number) => {
-              const actual = f.result ?? null;
-              const fixtureStatusHeading = statusHeading(f.status);
-              const kickoffParts = formatKickoffParts(f.kickoff);
-              const isExpanded = expandedFixtures[f.fixtureId] ?? !compactMode;
-              const homeColor = colorForTeam(
-                f.home.tla,
-                f.home.shortName,
-                f.home.name,
-              );
-              const awayColor = colorForTeam(
-                f.away.tla,
-                f.away.shortName,
-                f.away.name,
-              );
-              const clashBgStyle: React.CSSProperties = {
-                backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
-              };
+          {!isLoading &&
+            displayFixtures.length > 0 &&
+            (() => {
+              const renderFixtureCard = (f: Fixture, idx: number) => {
+                const actual = f.result ?? null;
+                const fixtureStatusHeading = statusHeading(f.status);
+                const kickoffParts = formatKickoffParts(f.kickoff);
+                const isExpanded =
+                  expandedFixtures[f.fixtureId] ?? !compactMode;
+                const homeColor = colorForTeam(
+                  f.home.tla,
+                  f.home.shortName,
+                  f.home.name,
+                );
+                const awayColor = colorForTeam(
+                  f.away.tla,
+                  f.away.shortName,
+                  f.away.name,
+                );
+                const clashBgStyle: React.CSSProperties = {
+                  backgroundImage: `linear-gradient(125deg, ${hexToRgba(homeColor, 0.14)} 0%, rgba(8,12,24,0.92) 32%, rgba(8,12,24,0.94) 68%, ${hexToRgba(awayColor, 0.14)} 100%)`,
+                };
 
-              return (
-                <div
-                  key={f.fixtureId}
-                  className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
-                  style={{
-                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                    animationDuration: "520ms",
-                  }}
-                >
-                  <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
-                    <div
-                      className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
-                      style={clashBgStyle}
-                    >
-                      <div className="space-y-3">
-                        <div>
-                          <div className="mb-2 text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-display font-semibold">
-                                {kickoffParts.dayNum}
-                                <sup className="ml-[1px] text-[9px]">
-                                  {kickoffParts.suffix}
-                                </sup>{" "}
-                                {kickoffParts.monthYear}
-                              </span>
-                              <span className="font-display font-semibold">
-                                {kickoffParts.time}
-                              </span>
+                return (
+                  <div
+                    key={f.fixtureId}
+                    className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
+                    style={{
+                      animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                      animationDuration: "520ms",
+                    }}
+                  >
+                    <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
+                      <div
+                        className="fixture-clash-bg rounded-[22px] border border-white/6 bg-black/10 px-[clamp(0.75rem,1.1vw,1.25rem)] py-[clamp(0.72rem,1vw,1.08rem)] backdrop-blur-[10px]"
+                        style={clashBgStyle}
+                      >
+                        <div className="space-y-3">
+                          <div>
+                            <div className="mb-2 text-[clamp(0.72rem,0.95vw,0.9rem)] text-muted">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-display font-semibold">
+                                  {kickoffParts.dayNum}
+                                  <sup className="ml-[1px] text-[9px]">
+                                    {kickoffParts.suffix}
+                                  </sup>{" "}
+                                  {kickoffParts.monthYear}
+                                </span>
+                                <span className="font-display font-semibold">
+                                  {kickoffParts.time}
+                                </span>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="sm:hidden">
-                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                            <div className="sm:hidden">
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <div className="flex min-w-0 flex-col items-center text-center">
+                                  <TeamBadge
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    badge={f.home.badge}
+                                  />
+                                  <TeamLabel
+                                    name={f.home.name}
+                                    tla={f.home.tla}
+                                    shortName={f.home.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
+                                </div>
+                                <span className="inline-flex items-center justify-center font-display text-[10px] font-semibold uppercase text-muted">
+                                  vs
+                                </span>
+                                <div className="flex min-w-0 flex-col items-center text-center">
+                                  <TeamBadge
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    badge={f.away.badge}
+                                  />
+                                  <TeamLabel
+                                    name={f.away.name}
+                                    tla={f.away.tla}
+                                    shortName={f.away.shortName}
+                                    wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                    abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
+                                    fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
+                                    fullNameWindowPx={68}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 sm:grid">
                               <div className="flex min-w-0 flex-col items-center text-center">
                                 <TeamBadge
                                   name={f.home.name}
@@ -2189,13 +2181,13 @@ export default function FixturesPage() {
                                   name={f.home.name}
                                   tla={f.home.tla}
                                   shortName={f.home.shortName}
-                                  wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                  abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                                  fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                  fullNameWindowPx={68}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
                                 />
                               </div>
-                              <span className="inline-flex items-center justify-center font-display text-[10px] font-semibold uppercase text-muted">
+                              <span className="inline-flex h-full items-center justify-center self-center font-display text-xs font-semibold uppercase text-muted">
                                 vs
                               </span>
                               <div className="flex min-w-0 flex-col items-center text-center">
@@ -2209,360 +2201,339 @@ export default function FixturesPage() {
                                   name={f.away.name}
                                   tla={f.away.tla}
                                   shortName={f.away.shortName}
-                                  wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                  abbrClassName="font-display w-full text-[10px] text-foreground uppercase tracking-wide text-center"
-                                  fullNameClassName="font-display w-full text-[9px] text-muted leading-tight"
-                                  fullNameWindowPx={68}
+                                  wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                  abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                  fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
+                                  fullNameWindowPx={88}
                                 />
                               </div>
                             </div>
                           </div>
 
-                          <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 sm:grid">
-                            <div className="flex min-w-0 flex-col items-center text-center">
-                              <TeamBadge
-                                name={f.home.name}
-                                tla={f.home.tla}
-                                shortName={f.home.shortName}
-                                badge={f.home.badge}
-                              />
-                              <TeamLabel
-                                name={f.home.name}
-                                tla={f.home.tla}
-                                shortName={f.home.shortName}
-                                wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                                fullNameWindowPx={88}
-                              />
-                            </div>
-                            <span className="inline-flex h-full items-center justify-center self-center font-display text-xs font-semibold uppercase text-muted">
-                              vs
-                            </span>
-                            <div className="flex min-w-0 flex-col items-center text-center">
-                              <TeamBadge
-                                name={f.away.name}
-                                tla={f.away.tla}
-                                shortName={f.away.shortName}
-                                badge={f.away.badge}
-                              />
-                              <TeamLabel
-                                name={f.away.name}
-                                tla={f.away.tla}
-                                shortName={f.away.shortName}
-                                wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                fullNameClassName="font-display w-full text-[10px] text-muted leading-tight"
-                                fullNameWindowPx={88}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                          <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                              Fixture board
-                            </span>
-                            <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                              {fixtureStatusHeading}
-                            </span>
-                          </div>
-                          <div className="space-y-3">
-                            <div className="relative mx-auto flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
-                              {Number(f.redCards?.home || 0) > 0 ? (
-                                <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                                  <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                                  <span>{f.redCards?.home}</span>
-                                </span>
-                              ) : null}
-                              <span className="inline-block text-center">
-                                {displayResult(f.status, actual)}
+                          <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                            <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                                Fixture board
                               </span>
-                              {Number(f.redCards?.away || 0) > 0 ? (
-                                <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
-                                  <span>{f.redCards?.away}</span>
-                                  <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
-                                </span>
-                              ) : null}
-                            </div>
-
-                            {SHOW_MATCH_INFO ? (
-                              <div className="flex items-center justify-center text-xs text-muted">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openMatchInfo(f);
-                                  }}
-                                  className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
-                                >
-                                  <Info size={12} />
-                                  Match Info
-                                </button>
-                              </div>
-                            ) : null}
-
-                            <div
-                              className="flex cursor-pointer items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted transition-colors duration-200 hover:bg-white/[0.03]"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => toggleFixtureExpanded(f.fixtureId)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  toggleFixtureExpanded(f.fixtureId);
-                                }
-                              }}
-                            >
-                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
-                                {isExpanded ? "Hide" : "Show"} Predictions
+                              <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                                {fixtureStatusHeading}
                               </span>
-                              <ChevronDown
-                                size={14}
-                                className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
-                              />
                             </div>
-                          </div>
-                        </div>
-
-                        <div
-                          className={[
-                            "grid overflow-hidden transition-[grid-template-rows,opacity,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                            isExpanded
-                              ? "mt-3 grid-rows-[1fr] opacity-100"
-                              : "mt-0 grid-rows-[0fr] opacity-0 pointer-events-none",
-                          ].join(" ")}
-                        >
-                          <div className="min-h-0 overflow-hidden">
-                            <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
-                              <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
-                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                                  Prediction board
+                            <div className="space-y-3">
+                              <div className="relative mx-auto flex min-h-[28px] w-full max-w-[180px] items-center justify-center font-display text-[clamp(1rem,1.5vw,1.3rem)] font-semibold text-foreground tabular-nums">
+                                {Number(f.redCards?.home || 0) > 0 ? (
+                                  <span className="absolute left-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                    <span>{f.redCards?.home}</span>
+                                  </span>
+                                ) : null}
+                                <span className="inline-block text-center">
+                                  {displayResult(f.status, actual)}
                                 </span>
-                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
-                                  {players.length}{" "}
-                                  {players.length === 1 ? "player" : "players"}
-                                </span>
+                                {Number(f.redCards?.away || 0) > 0 ? (
+                                  <span className="absolute right-0 inline-flex items-center gap-1 rounded-full border border-red-300/70 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200">
+                                    <span>{f.redCards?.away}</span>
+                                    <span className="inline-block h-3 w-2 rounded-[2px] border border-red-300/70 bg-red-500/90" />
+                                  </span>
+                                ) : null}
                               </div>
-                              {players.length === 0 ? (
-                                <div className="text-sm text-muted">
-                                  No players found.
+
+                              {SHOW_MATCH_INFO ? (
+                                <div className="flex items-center justify-center text-xs text-muted">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openMatchInfo(f);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-1.5 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06]"
+                                  >
+                                    <Info size={12} />
+                                    Match Info
+                                  </button>
                                 </div>
-                              ) : (
-                                <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
-                                  {players.map((p) => {
-                                    const pred =
-                                      picksByFixture?.[f.fixtureId]?.[p.uid] ??
-                                      "";
-                                    const golden = goldenByUid[p.uid];
-                                    const isGolden =
-                                      !!golden &&
-                                      golden.fixtureId === f.fixtureId &&
-                                      golden.score === pred;
-                                    const powerup = powerupByUid[p.uid];
-                                    const powerupType =
-                                      powerup &&
-                                      powerup.locked &&
-                                      powerup.fixtureId === f.fixtureId
-                                        ? powerup.powerupType
-                                        : null;
-                                    const powerupTypeClass =
-                                      powerupType === "ALL_IN"
-                                        ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
-                                        : powerupType === "SAFETY_NET"
-                                          ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
-                                          : "";
-                                    const predNorm = String(pred || "").trim();
-                                    const actualNorm = String(
-                                      actual || "",
-                                    ).trim();
-                                    const hasScoredResult =
-                                      actualNorm.length > 0;
-                                    const predictionTier = hasScoredResult
-                                      ? classifyPredictionTier(
-                                          predNorm,
-                                          actualNorm,
-                                        )
-                                      : null;
-                                    const isExact = predictionTier === "exact";
-                                    const isOutcomeOnly =
-                                      predictionTier === "result";
-                                    const powerupVisualState = hasScoredResult
-                                      ? getPowerupVisualState({
-                                          powerupType,
-                                          predictionTier,
-                                        })
-                                      : null;
-                                    const powerupHitToneClass =
-                                      "key-chip border-cyan-300/75 bg-[linear-gradient(145deg,rgba(34,211,238,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(34,211,238,0.22)_inset,0_12px_22px_rgba(34,211,238,0.12)]";
-                                    const powerupMissToneClass =
-                                      "key-chip border-red-300/45 bg-[linear-gradient(145deg,rgba(248,113,113,0.16),rgba(9,12,26,0.92)_58%,rgba(9,12,26,0.9))] shadow-[0_0_0_1px_rgba(248,113,113,0.14)_inset,0_12px_22px_rgba(127,29,29,0.16)]";
-                                    const neutralToneClass =
-                                      "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
-                                    const toneClass = !hasScoredResult
-                                      ? neutralToneClass
-                                      : powerupType === "ALL_IN"
-                                        ? powerupVisualState === "powerup_hit"
-                                          ? powerupHitToneClass
-                                          : powerupMissToneClass
-                                        : powerupVisualState === "powerup_hit"
-                                          ? powerupHitToneClass
-                                          : isExact
-                                            ? "key-chip key-chip-exact border-purple-300/75 bg-[linear-gradient(145deg,rgba(168,85,247,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(216,180,254,0.2)_inset,0_12px_24px_rgba(168,85,247,0.15)]"
-                                            : isOutcomeOnly
-                                              ? "key-chip key-chip-result border-emerald-300/75 bg-[linear-gradient(145deg,rgba(16,185,129,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(110,231,183,0.2)_inset,0_12px_24px_rgba(16,185,129,0.15)]"
-                                              : powerupMissToneClass;
-                                    const accentBarClass =
-                                      powerupVisualState === "powerup_hit"
-                                        ? "from-cyan-200 via-cyan-300 to-cyan-500/20"
-                                        : powerupVisualState === "powerup_miss"
-                                          ? "from-red-200/80 via-red-300/60 to-red-500/12"
-                                          : isExact
-                                            ? "from-purple-200 via-purple-300 to-purple-500/20"
-                                            : isOutcomeOnly
-                                              ? "from-emerald-200 via-emerald-300 to-emerald-500/20"
-                                              : hasScoredResult &&
-                                                  predictionTier === "miss"
-                                                ? "from-red-200/80 via-red-300/60 to-red-500/12"
-                                                : powerupType === "ALL_IN"
-                                                  ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
-                                                  : powerupType === "SAFETY_NET"
-                                                    ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
-                                                    : isGolden
-                                                      ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
-                                                      : "from-white/24 via-white/10 to-transparent";
-                                    const scoreBadgeClass = !hasScoredResult
-                                      ? "text-foreground"
-                                      : powerupVisualState === "powerup_hit"
-                                        ? "text-cyan-100"
-                                        : powerupVisualState === "powerup_miss"
-                                          ? "text-red-100"
-                                          : isExact
-                                            ? "text-purple-100"
-                                            : isOutcomeOnly
-                                              ? "text-emerald-100"
-                                              : "text-foreground";
-                                    const isGoldenScored =
-                                      isGolden && (isExact || isOutcomeOnly);
-                                    const goldenBorderClass = isGolden
-                                      ? "!border-yellow-300/75"
-                                      : "";
-                                    const goldenGlowClass = isGolden
-                                      ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
-                                      : "";
-                                    const goldenIndicatorClass = isGoldenScored
-                                      ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
-                                      : "";
+                              ) : null}
 
-                                    return (
-                                      <div
-                                        key={p.uid}
-                                        className="relative min-w-0 !overflow-visible"
-                                      >
+                              <div
+                                className="flex cursor-pointer items-center justify-between gap-2 rounded-2xl border border-white/6 bg-black/16 px-3 py-2 text-[11px] text-muted transition-colors duration-200 hover:bg-white/[0.03]"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() =>
+                                  toggleFixtureExpanded(f.fixtureId)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    toggleFixtureExpanded(f.fixtureId);
+                                  }
+                                }}
+                              >
+                                <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/46">
+                                  {isExpanded ? "Hide" : "Show"} Predictions
+                                </span>
+                                <ChevronDown
+                                  size={14}
+                                  className={`shrink-0 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className={[
+                              "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                              isExpanded
+                                ? "mt-3 grid-rows-[1fr] opacity-100 translate-y-0"
+                                : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 pointer-events-none",
+                            ].join(" ")}
+                          >
+                            <div
+                              className={[
+                                "min-h-0 overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                isExpanded
+                                  ? "opacity-100 translate-y-0"
+                                  : "opacity-0 translate-y-1",
+                              ].join(" ")}
+                            >
+                              <div className="rounded-[22px] border border-white/6 bg-black/18 px-3 py-3 backdrop-blur-[10px]">
+                                <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/6 pb-2">
+                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                                    Prediction board
+                                  </span>
+                                  <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/34">
+                                    {players.length}{" "}
+                                    {players.length === 1
+                                      ? "player"
+                                      : "players"}
+                                  </span>
+                                </div>
+                                {players.length === 0 ? (
+                                  <div className="text-sm text-muted">
+                                    No players found.
+                                  </div>
+                                ) : (
+                                  <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
+                                    {players.map((p) => {
+                                      const pred =
+                                        picksByFixture?.[f.fixtureId]?.[
+                                          p.uid
+                                        ] ?? "";
+                                      const golden = goldenByUid[p.uid];
+                                      const isGolden =
+                                        !!golden &&
+                                        golden.fixtureId === f.fixtureId &&
+                                        golden.score === pred;
+                                      const powerup = powerupByUid[p.uid];
+                                      const powerupType =
+                                        powerup &&
+                                        powerup.locked &&
+                                        powerup.fixtureId === f.fixtureId
+                                          ? powerup.powerupType
+                                          : null;
+                                      const powerupTypeClass =
+                                        powerupType === "ALL_IN"
+                                          ? "!border-amber-500/70 shadow-[inset_0_0_0_1px_rgba(217,119,6,0.32),0_8px_18px_rgba(120,53,15,0.16)]"
+                                          : powerupType === "SAFETY_NET"
+                                            ? "!border-sky-600/75 shadow-[inset_0_0_0_1px_rgba(2,132,199,0.34),0_8px_18px_rgba(8,47,73,0.18)]"
+                                            : "";
+                                      const predNorm = String(
+                                        pred || "",
+                                      ).trim();
+                                      const actualNorm = String(
+                                        actual || "",
+                                      ).trim();
+                                      const hasScoredResult =
+                                        actualNorm.length > 0;
+                                      const predictionTier = hasScoredResult
+                                        ? classifyPredictionTier(
+                                            predNorm,
+                                            actualNorm,
+                                          )
+                                        : null;
+                                      const isExact =
+                                        predictionTier === "exact";
+                                      const isOutcomeOnly =
+                                        predictionTier === "result";
+                                      const powerupVisualState = hasScoredResult
+                                        ? getPowerupVisualState({
+                                            powerupType,
+                                            predictionTier,
+                                          })
+                                        : null;
+                                      const powerupHitToneClass =
+                                        "key-chip border-cyan-300/75 bg-[linear-gradient(145deg,rgba(34,211,238,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(34,211,238,0.22)_inset,0_12px_22px_rgba(34,211,238,0.12)]";
+                                      const powerupMissToneClass =
+                                        "key-chip border-red-300/45 bg-[linear-gradient(145deg,rgba(248,113,113,0.16),rgba(9,12,26,0.92)_58%,rgba(9,12,26,0.9))] shadow-[0_0_0_1px_rgba(248,113,113,0.14)_inset,0_12px_22px_rgba(127,29,29,0.16)]";
+                                      const neutralToneClass =
+                                        "border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.04),rgba(7,12,24,0.92)_58%,rgba(7,12,24,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_14px_28px_rgba(2,6,20,0.18)]";
+                                      const toneClass = !hasScoredResult
+                                        ? neutralToneClass
+                                        : powerupType === "ALL_IN"
+                                          ? powerupVisualState === "powerup_hit"
+                                            ? powerupHitToneClass
+                                            : powerupMissToneClass
+                                          : powerupVisualState === "powerup_hit"
+                                            ? powerupHitToneClass
+                                            : isExact
+                                              ? "key-chip key-chip-exact border-purple-300/75 bg-[linear-gradient(145deg,rgba(168,85,247,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(216,180,254,0.2)_inset,0_12px_24px_rgba(168,85,247,0.15)]"
+                                              : isOutcomeOnly
+                                                ? "key-chip key-chip-result border-emerald-300/75 bg-[linear-gradient(145deg,rgba(16,185,129,0.24),rgba(9,12,26,0.9)_58%,rgba(9,12,26,0.88))] shadow-[0_0_0_1px_rgba(110,231,183,0.2)_inset,0_12px_24px_rgba(16,185,129,0.15)]"
+                                                : powerupMissToneClass;
+                                      const accentBarClass =
+                                        powerupVisualState === "powerup_hit"
+                                          ? "from-cyan-200 via-cyan-300 to-cyan-500/20"
+                                          : powerupVisualState ===
+                                              "powerup_miss"
+                                            ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                            : isExact
+                                              ? "from-purple-200 via-purple-300 to-purple-500/20"
+                                              : isOutcomeOnly
+                                                ? "from-emerald-200 via-emerald-300 to-emerald-500/20"
+                                                : hasScoredResult &&
+                                                    predictionTier === "miss"
+                                                  ? "from-red-200/80 via-red-300/60 to-red-500/12"
+                                                  : powerupType === "ALL_IN"
+                                                    ? "from-amber-200/75 via-amber-400/45 to-amber-700/16"
+                                                    : powerupType ===
+                                                        "SAFETY_NET"
+                                                      ? "from-sky-300/70 via-sky-600/35 to-sky-900/18"
+                                                      : isGolden
+                                                        ? "from-yellow-200 via-yellow-300 to-yellow-500/18"
+                                                        : "from-white/24 via-white/10 to-transparent";
+                                      const scoreBadgeClass = !hasScoredResult
+                                        ? "text-foreground"
+                                        : powerupVisualState === "powerup_hit"
+                                          ? "text-cyan-100"
+                                          : powerupVisualState ===
+                                              "powerup_miss"
+                                            ? "text-red-100"
+                                            : isExact
+                                              ? "text-purple-100"
+                                              : isOutcomeOnly
+                                                ? "text-emerald-100"
+                                                : "text-foreground";
+                                      const isGoldenScored =
+                                        isGolden && (isExact || isOutcomeOnly);
+                                      const goldenBorderClass = isGolden
+                                        ? "!border-yellow-300/75"
+                                        : "";
+                                      const goldenGlowClass = isGolden
+                                        ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.55),0_0_14px_rgba(250,204,21,0.15)]"
+                                        : "";
+                                      const goldenIndicatorClass =
+                                        isGoldenScored
+                                          ? "ring-1 ring-yellow-300/65 shadow-[0_0_16px_rgba(250,204,21,0.2),inset_0_0_0_1px_rgba(250,204,21,0.32)]"
+                                          : "";
+
+                                      return (
                                         <div
-                                          className={[
-                                            "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
-                                            toneClass,
-                                            goldenBorderClass,
-                                            goldenGlowClass,
-                                            goldenIndicatorClass,
-                                            powerupTypeClass,
-                                          ].join(" ")}
+                                          key={p.uid}
+                                          className="relative min-w-0 !overflow-visible"
                                         >
                                           <div
                                             className={[
-                                              "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
-                                              accentBarClass,
+                                              "relative overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-3 py-2.5 text-left",
+                                              toneClass,
+                                              goldenBorderClass,
+                                              goldenGlowClass,
+                                              goldenIndicatorClass,
+                                              powerupTypeClass,
                                             ].join(" ")}
-                                          />
-                                          <div className="relative pl-3">
-                                            <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                              {p.displayName.length > 6
-                                                ? p.displayName.slice(0, 6)
-                                                : p.displayName}
-                                            </div>
-                                            <span
+                                          >
+                                            <div
                                               className={[
-                                                "font-display text-[0.92rem] font-semibold text-foreground truncate",
-                                                scoreBadgeClass,
+                                                "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                                                accentBarClass,
                                               ].join(" ")}
-                                            >
-                                              {fmtScore(pred)}
-                                            </span>
+                                            />
+                                            <div className="relative pl-3">
+                                              <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
+                                                {p.displayName.length > 6
+                                                  ? p.displayName.slice(0, 6)
+                                                  : p.displayName}
+                                              </div>
+                                              <span
+                                                className={[
+                                                  "font-display text-[0.92rem] font-semibold text-foreground truncate",
+                                                  scoreBadgeClass,
+                                                ].join(" ")}
+                                              >
+                                                {fmtScore(pred)}
+                                              </span>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            };
+                );
+              };
 
-            return fixtureSections.map((section, sectionIdx) => (
-              <div key={section.key} className="space-y-3 sm:space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
-                    <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
-                      Matchboard
-                    </div>
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <div className="font-display text-sm font-semibold text-foreground sm:text-base">
-                        {section.label}
+              return fixtureSections.map((section, sectionIdx) => (
+                <SectionStack key={section.key} gap="tight">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-2 shadow-[0_12px_28px_rgba(3,8,20,0.16)]">
+                      <div className="text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/38">
+                        Matchboard
                       </div>
-                      {"suffix" in section && section.suffix ? (
-                        <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-white/40">
-                          {section.suffix}
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <div className="font-display text-sm font-semibold text-foreground sm:text-base">
+                          {section.label}
                         </div>
-                      ) : null}
+                        {"suffix" in section && section.suffix ? (
+                          <div className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-white/40">
+                            {section.suffix}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
+                    <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
+                    <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
+                      {section.items.length}
+                    </span>
                   </div>
-                  <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
-                  <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
-                    {section.items.length}
-                  </span>
-                </div>
-                <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {section.items.map((fixture, idx) =>
-                    renderFixtureCard(fixture, sectionIdx * 20 + idx),
-                  )}
-                </div>
-              </div>
-            ));
-          })()}
-      </div>
+                  <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {section.items.map((fixture, idx) =>
+                      renderFixtureCard(fixture, sectionIdx * 20 + idx),
+                    )}
+                  </div>
+                </SectionStack>
+              ));
+            })()}
+        </SectionStack>
 
-      {(fixturesGeneratedAt || fixturesRefreshedAt) && (
-        <SectionCard
-          className={`${standardSectionCardClass} px-4 py-3 sm:py-4`}
-        >
-          <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-            Fixture ledger
-          </div>
-          <div className="mt-2 space-y-1 text-xs text-muted">
-            {fixturesGeneratedAt && (
-              <div>
-                Fixture snapshot time:{" "}
-                {formatDateTimeLabel(fixturesGeneratedAt)}
-              </div>
-            )}
-            {fixturesRefreshedAt && (
-              <div>
-                Fixtures page last refreshed:{" "}
-                {formatDateTimeLabel(fixturesRefreshedAt)}
-              </div>
-            )}
-          </div>
-        </SectionCard>
-      )}
+        {(fixturesGeneratedAt || fixturesRefreshedAt) && (
+          <SectionCard
+            className={`${standardSectionCardClass} px-4 py-3 sm:py-4`}
+          >
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Fixture ledger
+            </div>
+            <div className="mt-2 space-y-1 text-xs text-muted">
+              {fixturesGeneratedAt && (
+                <div>
+                  Fixture snapshot time:{" "}
+                  {formatDateTimeLabel(fixturesGeneratedAt)}
+                </div>
+              )}
+              {fixturesRefreshedAt && (
+                <div>
+                  Fixtures page last refreshed:{" "}
+                  {formatDateTimeLabel(fixturesRefreshedAt)}
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+      </SectionStack>
 
       <AnimatedModal
         open={matchInfoOpen}

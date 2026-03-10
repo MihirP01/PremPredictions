@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "../../../../../components/AuthProvider";
 import PageShell from "../../../../../components/PageShell";
 import SectionCard from "../../../../../components/SectionCard";
+import SectionStack from "../../../../../components/SectionStack";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
 import TopActionRow from "../../../../../components/TopActionRow";
@@ -650,15 +651,17 @@ export default function PowerupsPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <SectionCard className={PANEL_SHELL}>
-          <div className="text-sm text-muted inline-flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            <span>Loading power-ups…</span>
-          </div>
-        </SectionCard>
+        <SectionStack gap="page">
+          <SectionCard className={PANEL_SHELL}>
+            <div className="text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading power-ups…</span>
+            </div>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -668,17 +671,19 @@ export default function PowerupsPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <SectionCard className={PANEL_SHELL}>
-          <div className="text-lg font-semibold text-foreground">
-            Not in Power-Ups phase
-          </div>
-          <div className="text-sm text-muted mt-1">
-            Current state: {activeGame.state}
-          </div>
-        </SectionCard>
+        <SectionStack gap="page">
+          <SectionCard className={PANEL_SHELL}>
+            <div className="text-lg font-semibold text-foreground">
+              Not in Power-Ups phase
+            </div>
+            <div className="text-sm text-muted mt-1">
+              Current state: {activeGame.state}
+            </div>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -696,340 +701,384 @@ export default function PowerupsPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="relative z-30 space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
-          title="Power-Ups"
-          subtitle={`${roomCode} • GW ${gw}`}
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
-          frameActions={false}
-          actions={
-            <div className={HEADER_STATUS_CARD}>
-              <div className={MINI_LABEL}>Locked</div>
-              <div className="mt-1 font-display text-[1.55rem] font-semibold leading-none text-foreground tabular-nums">
-                {lockedCount}
-                <span className="ml-1 text-[0.9rem] font-medium text-muted">
-                  of {playersCount || 0}
-                </span>
+            title="Power-Ups"
+            subtitle={`${roomCode} • GW ${gw}`}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
+            frameActions={false}
+            actions={
+              <div className={HEADER_STATUS_CARD}>
+                <div className={MINI_LABEL}>Locked</div>
+                <div className="mt-1 font-display text-[1.55rem] font-semibold leading-none text-foreground tabular-nums">
+                  {lockedCount}
+                  <span className="ml-1 text-[0.9rem] font-medium text-muted">
+                    of {playersCount || 0}
+                  </span>
+                </div>
               </div>
-            </div>
-          }
-        />
-      </div>
+            }
+          />
 
-      {error && (
-        <SectionCard className="rounded-[22px] border border-rose-400/35 bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(127,29,29,0.08))] p-4 sm:p-4">
-          <div className="text-sm text-rose-100">{error}</div>
-        </SectionCard>
-      )}
+        {error && (
+          <SectionCard className="rounded-[22px] border border-rose-400/35 bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(127,29,29,0.08))] p-4 sm:p-4">
+            <div className="text-sm text-rose-100">{error}</div>
+          </SectionCard>
+        )}
 
-      {myPowerupLocked ? (
-        <SectionCard className={PANEL_SHELL}>
-          <div className={PANEL_INNER}>
-            <div className={MINI_LABEL}>Power-up lock</div>
+        {myPowerupLocked ? (
+          <SectionCard className={PANEL_SHELL}>
+            <div className={PANEL_INNER}>
+              <div className={MINI_LABEL}>Power-up lock</div>
 
-            <div
-              className="mt-4 rounded-[20px] border border-white/10 p-[clamp(0.75rem,1vw,1rem)] fixture-clash-bg bg-[linear-gradient(120deg,var(--locked-home,rgba(11,22,42,0.9))_0%,rgba(9,12,22,0.92)_42%,rgba(9,12,22,0.92)_58%,var(--locked-away,rgba(11,22,42,0.9))_100%)] shadow-[0_16px_30px_rgba(4,10,22,0.2)]"
-              style={
-                {
-                  "--locked-home": hexToRgba(lockedHomeColor, 0.26),
-                  "--locked-away": hexToRgba(lockedAwayColor, 0.26),
-                } as React.CSSProperties
-              }
-            >
               <div
-                className={[
-                  "relative rounded-[16px] border bg-[linear-gradient(180deg,rgba(6,10,18,0.95),rgba(8,12,20,0.93))] px-3 py-3",
-                  lockedTone.shell,
-                ].join(" ")}
+                className="mt-4 rounded-[20px] border border-white/10 p-[clamp(0.75rem,1vw,1rem)] fixture-clash-bg bg-[linear-gradient(120deg,var(--locked-home,rgba(11,22,42,0.9))_0%,rgba(9,12,22,0.92)_42%,rgba(9,12,22,0.92)_58%,var(--locked-away,rgba(11,22,42,0.9))_100%)] shadow-[0_16px_30px_rgba(4,10,22,0.2)]"
+                style={
+                  {
+                    "--locked-home": hexToRgba(lockedHomeColor, 0.26),
+                    "--locked-away": hexToRgba(lockedAwayColor, 0.26),
+                  } as React.CSSProperties
+                }
               >
-                <span
+                <div
                   className={[
-                    "pointer-events-none absolute inset-0 rounded-[16px]",
-                    lockedTone.overlay,
+                    "relative rounded-[16px] border bg-[linear-gradient(180deg,rgba(6,10,18,0.95),rgba(8,12,20,0.93))] px-3 py-3",
+                    lockedTone.shell,
                   ].join(" ")}
-                />
-                <span
-                  className={[
-                    "absolute inset-y-3 left-0 w-[3px] rounded-r-full",
-                    lockedTone.rail,
-                  ].join(" ")}
-                />
-                <div className="relative z-[1]">
-                  <div className="mb-2 flex justify-center sm:justify-end">
-                    <span
-                      className={[
-                        "inline-flex rounded-full border px-2 py-0.5 font-display text-[0.55rem] uppercase tracking-[0.15em]",
-                        lockedTone.pill,
-                      ].join(" ")}
-                    >
-                      {myPowerupLabel} locked
-                    </span>
-                  </div>
-                  {lockedPowerupFixture ? (
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <div className="flex flex-col items-center text-center min-w-0">
-                        <TeamBadge
-                          name={lockedPowerupFixture.home.name}
-                          tla={lockedPowerupFixture.home.tla}
-                          shortName={lockedPowerupFixture.home.shortName}
-                          badge={lockedPowerupFixture.home.badge}
-                        />
-                        <TeamLabel
-                          name={lockedPowerupFixture.home.name}
-                          tla={lockedPowerupFixture.home.tla}
-                          shortName={lockedPowerupFixture.home.shortName}
-                          showFullName={false}
-                          wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                          abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                          fullNameWindowPx={68}
-                        />
-                      </div>
-                      <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
-                        vs
-                      </span>
-                      <div className="flex flex-col items-center text-center min-w-0">
-                        <TeamBadge
-                          name={lockedPowerupFixture.away.name}
-                          tla={lockedPowerupFixture.away.tla}
-                          shortName={lockedPowerupFixture.away.shortName}
-                          badge={lockedPowerupFixture.away.badge}
-                        />
-                        <TeamLabel
-                          name={lockedPowerupFixture.away.name}
-                          tla={lockedPowerupFixture.away.tla}
-                          shortName={lockedPowerupFixture.away.shortName}
-                          showFullName={false}
-                          wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                          abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                          fullNameWindowPx={68}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center font-display text-sm font-semibold text-foreground">
-                      Fixture #{myPowerup?.fixtureId}
-                    </div>
-                  )}
-
-                  <div
+                >
+                  <span
                     className={[
-                      "mt-2 flex items-center justify-center rounded-xl border px-3 py-2",
-                      lockedTone.pick,
+                      "pointer-events-none absolute inset-0 rounded-[16px]",
+                      lockedTone.overlay,
                     ].join(" ")}
-                  >
-                    <span className="font-display text-xl font-semibold text-foreground tabular-nums">
-                      {String(
-                        activeMyPicksByFixture[myPowerup?.fixtureId ?? -1] ||
-                          "—",
-                      ).replace("-", " - ")}
-                    </span>
+                  />
+                  <span
+                    className={[
+                      "absolute inset-y-3 left-0 w-[3px] rounded-r-full",
+                      lockedTone.rail,
+                    ].join(" ")}
+                  />
+                  <div className="relative z-[1]">
+                    <div className="mb-2 flex justify-center sm:justify-end">
+                      <span
+                        className={[
+                          "inline-flex rounded-full border px-2 py-0.5 font-display text-[0.55rem] uppercase tracking-[0.15em]",
+                          lockedTone.pill,
+                        ].join(" ")}
+                      >
+                        {myPowerupLabel} locked
+                      </span>
+                    </div>
+                    {lockedPowerupFixture ? (
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={lockedPowerupFixture.home.name}
+                            tla={lockedPowerupFixture.home.tla}
+                            shortName={lockedPowerupFixture.home.shortName}
+                            badge={lockedPowerupFixture.home.badge}
+                          />
+                          <TeamLabel
+                            name={lockedPowerupFixture.home.name}
+                            tla={lockedPowerupFixture.home.tla}
+                            shortName={lockedPowerupFixture.home.shortName}
+                            showFullName={false}
+                            wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                            fullNameWindowPx={68}
+                          />
+                        </div>
+                        <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                          vs
+                        </span>
+                        <div className="flex flex-col items-center text-center min-w-0">
+                          <TeamBadge
+                            name={lockedPowerupFixture.away.name}
+                            tla={lockedPowerupFixture.away.tla}
+                            shortName={lockedPowerupFixture.away.shortName}
+                            badge={lockedPowerupFixture.away.badge}
+                          />
+                          <TeamLabel
+                            name={lockedPowerupFixture.away.name}
+                            tla={lockedPowerupFixture.away.tla}
+                            shortName={lockedPowerupFixture.away.shortName}
+                            showFullName={false}
+                            wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                            abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                            fullNameWindowPx={68}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center font-display text-sm font-semibold text-foreground">
+                        Fixture #{myPowerup?.fixtureId}
+                      </div>
+                    )}
+
+                    <div
+                      className={[
+                        "mt-2 flex items-center justify-center rounded-xl border px-3 py-2",
+                        lockedTone.pick,
+                      ].join(" ")}
+                    >
+                      <span className="font-display text-xl font-semibold text-foreground tabular-nums">
+                        {String(
+                          activeMyPicksByFixture[myPowerup?.fixtureId ?? -1] ||
+                            "—",
+                        ).replace("-", " - ")}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-3 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-3 py-2.5">
-              <div className="inline-flex items-center gap-2 text-sm text-muted">
-                <Loader2 size={14} className="animate-spin" />
-                <span>Waiting for others to lock in…</span>
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-      ) : (
-        <>
-          <SectionCard className={DESK_SHELL}>
-            <div className={DESK_INNER}>
-              <div className="space-y-2">
-                <div className={MINI_LABEL}>Power-up desk</div>
-                <div className="font-display text-[clamp(1.5rem,4vw,2.6rem)] font-semibold tracking-tight text-foreground">
-                  Power-up selection
+              <div className="mt-3 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-3 py-2.5">
+                <div className="inline-flex items-center gap-2 text-sm text-muted">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Waiting for others to lock in…</span>
                 </div>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {POWERUP_OPTIONS.map((opt) => {
-                  const tone =
-                    opt.type === "ALL_IN"
-                      ? {
-                          idle: "border-amber-300/22 bg-[linear-gradient(180deg,rgba(250,204,21,0.06),rgba(250,204,21,0.015))] hover:border-amber-300/35",
-                          active:
-                            "scale-[1.01] border-amber-300/42 ring-1 ring-inset ring-amber-300/24 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(251,191,36,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_14px_30px_rgba(64,35,10,0.24),0_0_0_1px_rgba(251,191,36,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
-                        }
-                      : {
-                          idle: "border-sky-300/22 bg-[linear-gradient(180deg,rgba(125,211,252,0.05),rgba(125,211,252,0.015))] hover:border-sky-300/35",
-                          active:
-                            "scale-[1.01] border-sky-300/42 ring-1 ring-inset ring-sky-300/24 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(96,165,250,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_14px_30px_rgba(8,47,73,0.24),0_0_0_1px_rgba(96,165,250,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
-                        };
-                  const isActive = selectedPowerupType === opt.type;
-                  return (
-                    <button
-                      key={opt.type}
-                      type="button"
-                      onClick={() => setSelectedPowerupType(opt.type)}
-                      className={[
-                        "rounded-[22px] border px-4 py-3 text-left transition-all duration-200",
-                        isActive ? tone.active : tone.idle,
-                      ].join(" ")}
-                    >
-                      <div className={MINI_LABEL}>Chip</div>
-                      <div className="mt-2 font-display text-xl font-semibold text-foreground">
-                        {opt.label}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">{opt.help}</div>
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </SectionCard>
-
-          <SectionCard className={PANEL_SHELL}>
-            <div className={PANEL_INNER}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className={MINI_LABEL}>Power-up draft board</div>
-                  <div className="font-display text-lg font-semibold text-foreground">
-                    Choose the fixture to upgrade
-                  </div>
-                  <div className="mt-2 text-sm text-muted">
-                    Select one fixture you already predicted, then lock your
-                    chip.
+        ) : (
+          <>
+            <SectionCard className={DESK_SHELL}>
+              <div className={DESK_INNER}>
+                <div className="space-y-2">
+                  <div className={MINI_LABEL}>Power-up desk</div>
+                  <div className="font-display text-[clamp(1.5rem,4vw,2.6rem)] font-semibold tracking-tight text-foreground">
+                    Power-up selection
                   </div>
                 </div>
-                {!allowIdenticalPicks ? (
-                  <button
-                    type="button"
-                    onClick={toggleCompactOtherPicks}
-                    className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70 transition hover:border-white/18 hover:text-foreground"
-                  >
-                    {compactOtherPicks ? "Expand Others" : "Collapse Others"}
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="mt-4 grid items-start gap-4 sm:gap-5 pt-2 grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {orderedFixtureIds.map((fid, idx) => {
-                  const f = fixtureMap.get(fid);
-                  const myScore = activeMyPicksByFixture[fid];
-                  const others = (picksByFixture.get(fid) ?? [])
-                    .filter((p) => p.uid !== user.uid)
-                    .map((p) => p.score);
-                  const isSelected = selectedFixtureId === fid;
-                  const isGoldenFixture =
-                    myGoldenFixtureId != null && fid === myGoldenFixtureId;
-                  const selectedTone =
-                    selectedPowerupType === "ALL_IN"
-                      ? {
-                          outer:
-                            "z-20 overflow-visible border-amber-300/55 ring-1 ring-inset ring-amber-300/16 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(251,191,36,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_16px_34px_rgba(64,35,10,0.32),0_0_0_1px_rgba(251,191,36,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
-                          inner:
-                            "border-amber-300/20 ring-1 ring-inset ring-amber-300/12",
-                          overlay:
-                            "bg-[linear-gradient(128deg,rgba(255,255,255,0.1)_0%,rgba(255,255,255,0.02)_34%,rgba(255,255,255,0)_62%,rgba(251,191,36,0.06)_100%)]",
-                          rail: "bg-[linear-gradient(180deg,rgba(251,191,36,0.95),rgba(245,158,11,0.42))]",
-                          bottom:
-                            "bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(251,191,36,0.24)_24%,rgba(251,191,36,0.24)_76%,rgba(255,255,255,0)_100%)]",
-                          pill: "border-amber-300/35 bg-[rgba(58,42,16,0.74)] text-amber-100/90",
-                        }
-                      : {
-                          outer:
-                            "z-20 overflow-visible border-sky-300/55 ring-1 ring-inset ring-sky-300/16 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(96,165,250,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_16px_34px_rgba(8,47,73,0.3),0_0_0_1px_rgba(96,165,250,0.18),inset_0_1px_0_rgba(255,255,255,0.06)]",
-                          inner:
-                            "border-sky-300/20 ring-1 ring-inset ring-sky-300/12",
-                          overlay:
-                            "bg-[linear-gradient(128deg,rgba(255,255,255,0.1)_0%,rgba(255,255,255,0.02)_34%,rgba(255,255,255,0)_62%,rgba(96,165,250,0.06)_100%)]",
-                          rail: "bg-[linear-gradient(180deg,rgba(125,211,252,0.95),rgba(59,130,246,0.42))]",
-                          bottom:
-                            "bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(125,211,252,0.24)_24%,rgba(125,211,252,0.24)_76%,rgba(255,255,255,0)_100%)]",
-                          pill: "border-sky-300/35 bg-[rgba(16,40,58,0.72)] text-sky-100/90",
-                        };
-                  const homeColor = colorForTeam(
-                    f?.home.tla,
-                    f?.home.shortName,
-                    f?.home.name,
-                  );
-                  const awayColor = colorForTeam(
-                    f?.away.tla,
-                    f?.away.shortName,
-                    f?.away.name,
-                  );
-                  const clashBgStyle: React.CSSProperties = {
-                    backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, isSelected ? 0.32 : 0.22)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, isSelected ? 0.32 : 0.22)} 100%)`,
-                  };
-
-                  return (
-                    <div
-                      key={fid}
-                      className="fixture-card-enter [contain:none] space-y-2 w-full"
-                      style={{
-                        animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                        animationDuration: "520ms",
-                      }}
-                    >
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {POWERUP_OPTIONS.map((opt) => {
+                    const tone =
+                      opt.type === "ALL_IN"
+                        ? {
+                            idle: "border-amber-300/22 bg-[linear-gradient(180deg,rgba(250,204,21,0.06),rgba(250,204,21,0.015))] hover:border-amber-300/35",
+                            active:
+                              "scale-[1.01] border-amber-300/42 ring-1 ring-inset ring-amber-300/24 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(251,191,36,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_14px_30px_rgba(64,35,10,0.24),0_0_0_1px_rgba(251,191,36,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                          }
+                        : {
+                            idle: "border-sky-300/22 bg-[linear-gradient(180deg,rgba(125,211,252,0.05),rgba(125,211,252,0.015))] hover:border-sky-300/35",
+                            active:
+                              "scale-[1.01] border-sky-300/42 ring-1 ring-inset ring-sky-300/24 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(96,165,250,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_14px_30px_rgba(8,47,73,0.24),0_0_0_1px_rgba(96,165,250,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                          };
+                    const isActive = selectedPowerupType === opt.type;
+                    return (
                       <button
+                        key={opt.type}
                         type="button"
-                        onClick={() => setSelectedFixtureId(fid)}
-                        disabled={!myScore || isGoldenFixture}
+                        onClick={() => setSelectedPowerupType(opt.type)}
                         className={[
-                          "fixture-clash-bg no-3d relative w-full text-left rounded-[20px] border p-[clamp(0.8rem,1.1vw,1.15rem)] transition-all duration-200 page-action-btn",
-                          isSelected
-                            ? selectedTone.outer
-                            : isGoldenFixture
-                              ? "overflow-hidden border-yellow-300/35 bg-[linear-gradient(135deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.03)_100%)]"
-                              : "overflow-hidden border-white/12 opacity-[0.86] hover:opacity-100 hover:border-white/18",
-                          !myScore || isGoldenFixture
-                            ? "opacity-60 cursor-not-allowed"
-                            : "",
+                          "rounded-[22px] border px-4 py-3 text-left transition-all duration-200",
+                          isActive ? tone.active : tone.idle,
                         ].join(" ")}
-                        style={isGoldenFixture ? undefined : clashBgStyle}
                       >
-                        <div
+                        <div className={MINI_LABEL}>Chip</div>
+                        <div className="mt-2 font-display text-xl font-semibold text-foreground">
+                          {opt.label}
+                        </div>
+                        <div className="mt-1 text-xs text-muted">
+                          {opt.help}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard className={PANEL_SHELL}>
+              <div className={PANEL_INNER}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className={MINI_LABEL}>Power-up draft board</div>
+                    <div className="font-display text-lg font-semibold text-foreground">
+                      Choose the fixture to upgrade
+                    </div>
+                    <div className="mt-2 text-sm text-muted">
+                      Select one fixture you already predicted, then lock your
+                      chip.
+                    </div>
+                  </div>
+                  {!allowIdenticalPicks ? (
+                    <button
+                      type="button"
+                      onClick={toggleCompactOtherPicks}
+                      className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70 transition hover:border-white/18 hover:text-foreground"
+                    >
+                      {compactOtherPicks ? "Expand Others" : "Collapse Others"}
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 grid items-start gap-4 sm:gap-5 pt-2 grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {orderedFixtureIds.map((fid, idx) => {
+                    const f = fixtureMap.get(fid);
+                    const myScore = activeMyPicksByFixture[fid];
+                    const others = (picksByFixture.get(fid) ?? [])
+                      .filter((p) => p.uid !== user.uid)
+                      .map((p) => p.score);
+                    const isSelected = selectedFixtureId === fid;
+                    const isGoldenFixture =
+                      myGoldenFixtureId != null && fid === myGoldenFixtureId;
+                    const selectedTone =
+                      selectedPowerupType === "ALL_IN"
+                        ? {
+                            outer:
+                              "z-20 overflow-visible border-amber-300/55 ring-1 ring-inset ring-amber-300/16 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(251,191,36,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_16px_34px_rgba(64,35,10,0.32),0_0_0_1px_rgba(251,191,36,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                            inner:
+                              "border-amber-300/20 ring-1 ring-inset ring-amber-300/12",
+                            overlay:
+                              "bg-[linear-gradient(128deg,rgba(255,255,255,0.1)_0%,rgba(255,255,255,0.02)_34%,rgba(255,255,255,0)_62%,rgba(251,191,36,0.06)_100%)]",
+                            rail: "bg-[linear-gradient(180deg,rgba(251,191,36,0.95),rgba(245,158,11,0.42))]",
+                            bottom:
+                              "bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(251,191,36,0.24)_24%,rgba(251,191,36,0.24)_76%,rgba(255,255,255,0)_100%)]",
+                            pill: "border-amber-300/35 bg-[rgba(58,42,16,0.74)] text-amber-100/90",
+                          }
+                        : {
+                            outer:
+                              "z-20 overflow-visible border-sky-300/55 ring-1 ring-inset ring-sky-300/16 bg-[linear-gradient(160deg,rgba(255,255,255,0.07)_0%,rgba(96,165,250,0.08)_28%,rgba(10,14,24,0)_60%)] shadow-[0_16px_34px_rgba(8,47,73,0.3),0_0_0_1px_rgba(96,165,250,0.18),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                            inner:
+                              "border-sky-300/20 ring-1 ring-inset ring-sky-300/12",
+                            overlay:
+                              "bg-[linear-gradient(128deg,rgba(255,255,255,0.1)_0%,rgba(255,255,255,0.02)_34%,rgba(255,255,255,0)_62%,rgba(96,165,250,0.06)_100%)]",
+                            rail: "bg-[linear-gradient(180deg,rgba(125,211,252,0.95),rgba(59,130,246,0.42))]",
+                            bottom:
+                              "bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(125,211,252,0.24)_24%,rgba(125,211,252,0.24)_76%,rgba(255,255,255,0)_100%)]",
+                            pill: "border-sky-300/35 bg-[rgba(16,40,58,0.72)] text-sky-100/90",
+                          };
+                    const homeColor = colorForTeam(
+                      f?.home.tla,
+                      f?.home.shortName,
+                      f?.home.name,
+                    );
+                    const awayColor = colorForTeam(
+                      f?.away.tla,
+                      f?.away.shortName,
+                      f?.away.name,
+                    );
+                    const clashBgStyle: React.CSSProperties = {
+                      backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, isSelected ? 0.32 : 0.22)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, isSelected ? 0.32 : 0.22)} 100%)`,
+                    };
+
+                    return (
+                      <div
+                        key={fid}
+                        className="fixture-card-enter [contain:none] space-y-2 w-full"
+                        style={{
+                          animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
+                          animationDuration: "520ms",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFixtureId(fid)}
+                          disabled={!myScore || isGoldenFixture}
                           className={[
-                            "relative z-[1] space-y-2.5 rounded-[16px] border bg-[linear-gradient(180deg,rgba(6,10,18,0.94),rgba(8,12,20,0.92))] px-2.5 py-2.5",
-                            isSelected ? selectedTone.inner : "border-white/6",
+                            "fixture-clash-bg no-3d relative w-full text-left rounded-[20px] border p-[clamp(0.8rem,1.1vw,1.15rem)] transition-all duration-200 page-action-btn",
+                            isSelected
+                              ? selectedTone.outer
+                              : isGoldenFixture
+                                ? "overflow-hidden border-yellow-300/35 bg-[linear-gradient(135deg,rgba(250,204,21,0.12)_0%,rgba(250,204,21,0.03)_100%)]"
+                                : "overflow-hidden border-white/12 opacity-[0.86] hover:opacity-100 hover:border-white/18",
+                            !myScore || isGoldenFixture
+                              ? "opacity-60 cursor-not-allowed"
+                              : "",
                           ].join(" ")}
+                          style={isGoldenFixture ? undefined : clashBgStyle}
                         >
-                          {isSelected ? (
-                            <>
-                              <span
-                                className={[
-                                  "pointer-events-none absolute inset-0 rounded-[16px]",
-                                  selectedTone.overlay,
-                                ].join(" ")}
-                              />
-                              <span
-                                className={[
-                                  "absolute inset-y-3 left-0 w-[3px] rounded-r-full",
-                                  selectedTone.rail,
-                                ].join(" ")}
-                              />
-                              <span
-                                className={[
-                                  "absolute left-4 right-4 bottom-0 h-px",
-                                  selectedTone.bottom,
-                                ].join(" ")}
-                              />
-                            </>
-                          ) : null}
-                          {isSelected ? (
-                            <div className="mb-1 flex justify-center sm:justify-end">
-                              <span
-                                className={[
-                                  "inline-flex rounded-full border px-2 py-0.5 font-display text-[0.55rem] uppercase tracking-[0.15em]",
-                                  selectedTone.pill,
-                                ].join(" ")}
-                              >
-                                Selected
-                              </span>
-                            </div>
-                          ) : null}
-                          <div>
-                            {f ? (
+                          <div
+                            className={[
+                              "relative z-[1] space-y-2.5 rounded-[16px] border bg-[linear-gradient(180deg,rgba(6,10,18,0.94),rgba(8,12,20,0.92))] px-2.5 py-2.5",
+                              isSelected
+                                ? selectedTone.inner
+                                : "border-white/6",
+                            ].join(" ")}
+                          >
+                            {isSelected ? (
                               <>
-                                <div className="sm:hidden">
-                                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <span
+                                  className={[
+                                    "pointer-events-none absolute inset-0 rounded-[16px]",
+                                    selectedTone.overlay,
+                                  ].join(" ")}
+                                />
+                                <span
+                                  className={[
+                                    "absolute inset-y-3 left-0 w-[3px] rounded-r-full",
+                                    selectedTone.rail,
+                                  ].join(" ")}
+                                />
+                                <span
+                                  className={[
+                                    "absolute left-4 right-4 bottom-0 h-px",
+                                    selectedTone.bottom,
+                                  ].join(" ")}
+                                />
+                              </>
+                            ) : null}
+                            {isSelected ? (
+                              <div className="mb-1 flex justify-center sm:justify-end">
+                                <span
+                                  className={[
+                                    "inline-flex rounded-full border px-2 py-0.5 font-display text-[0.55rem] uppercase tracking-[0.15em]",
+                                    selectedTone.pill,
+                                  ].join(" ")}
+                                >
+                                  Selected
+                                </span>
+                              </div>
+                            ) : null}
+                            <div>
+                              {f ? (
+                                <>
+                                  <div className="sm:hidden">
+                                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                      <div className="flex flex-col items-center text-center min-w-0">
+                                        <TeamBadge
+                                          name={f.home.name}
+                                          tla={f.home.tla}
+                                          shortName={f.home.shortName}
+                                          badge={f.home.badge}
+                                        />
+                                        <TeamLabel
+                                          name={f.home.name}
+                                          tla={f.home.tla}
+                                          shortName={f.home.shortName}
+                                          showFullName={false}
+                                          wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                          abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                          fullNameWindowPx={68}
+                                        />
+                                      </div>
+                                      <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                                        vs
+                                      </span>
+                                      <div className="flex flex-col items-center text-center min-w-0">
+                                        <TeamBadge
+                                          name={f.away.name}
+                                          tla={f.away.tla}
+                                          shortName={f.away.shortName}
+                                          badge={f.away.badge}
+                                        />
+                                        <TeamLabel
+                                          name={f.away.name}
+                                          tla={f.away.tla}
+                                          shortName={f.away.shortName}
+                                          showFullName={false}
+                                          wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
+                                          abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
+                                          fullNameWindowPx={68}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                                     <div className="flex flex-col items-center text-center min-w-0">
                                       <TeamBadge
                                         name={f.home.name}
@@ -1042,12 +1091,12 @@ export default function PowerupsPage() {
                                         tla={f.home.tla}
                                         shortName={f.home.shortName}
                                         showFullName={false}
-                                        wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                        abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                        fullNameWindowPx={68}
+                                        wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                        abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                        fullNameWindowPx={88}
                                       />
                                     </div>
-                                    <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                                    <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
                                       vs
                                     </span>
                                     <div className="flex flex-col items-center text-center min-w-0">
@@ -1062,237 +1111,200 @@ export default function PowerupsPage() {
                                         tla={f.away.tla}
                                         shortName={f.away.shortName}
                                         showFullName={false}
-                                        wrapperClassName="mt-1 flex w-[78px] flex-col items-center gap-1 text-center"
-                                        abbrClassName="font-display w-full text-[10px] sm:text-[11px] text-foreground uppercase tracking-wide text-center"
-                                        fullNameWindowPx={68}
+                                        wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
+                                        abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
+                                        fullNameWindowPx={88}
                                       />
                                     </div>
                                   </div>
+                                </>
+                              ) : (
+                                <div className="font-semibold text-foreground">
+                                  Fixture {fid}
                                 </div>
+                              )}
+                            </div>
 
-                                <div className="hidden sm:grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                                  <div className="flex flex-col items-center text-center min-w-0">
-                                    <TeamBadge
-                                      name={f.home.name}
-                                      tla={f.home.tla}
-                                      shortName={f.home.shortName}
-                                      badge={f.home.badge}
-                                    />
-                                    <TeamLabel
-                                      name={f.home.name}
-                                      tla={f.home.tla}
-                                      shortName={f.home.shortName}
-                                      showFullName={false}
-                                      wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                      abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                      fullNameWindowPx={88}
-                                    />
-                                  </div>
-                                  <span className="font-display text-xs xl:text-sm font-semibold text-muted uppercase inline-flex items-center justify-center self-center h-full">
-                                    vs
-                                  </span>
-                                  <div className="flex flex-col items-center text-center min-w-0">
-                                    <TeamBadge
-                                      name={f.away.name}
-                                      tla={f.away.tla}
-                                      shortName={f.away.shortName}
-                                      badge={f.away.badge}
-                                    />
-                                    <TeamLabel
-                                      name={f.away.name}
-                                      tla={f.away.tla}
-                                      shortName={f.away.shortName}
-                                      showFullName={false}
-                                      wrapperClassName="mt-1 flex w-[96px] xl:w-[110px] flex-col items-center gap-1 text-center"
-                                      abbrClassName="font-display w-full text-[clamp(0.76rem,0.95vw,0.92rem)] font-semibold text-foreground uppercase tracking-wide text-center"
-                                      fullNameWindowPx={88}
-                                    />
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="font-semibold text-foreground">
-                                Fixture {fid}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="my-1 h-px bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.08),rgba(255,255,255,0))]" />
-                          <div
-                            className={[
-                              "flex items-center justify-center gap-2 rounded-xl border px-3 py-2",
-                              isGoldenFixture
-                                ? "border-yellow-300/75 bg-yellow-400/10"
-                                : "border-white/8 bg-black/20",
-                            ].join(" ")}
-                          >
-                            {isGoldenFixture ? (
-                              <span className="font-display inline-flex items-center rounded-full border border-yellow-300/75 bg-yellow-400/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground">
-                                Golden
-                              </span>
-                            ) : (
-                              <span className="shrink-0 whitespace-nowrap font-display text-xl leading-none font-semibold tabular-nums text-foreground">
-                                {myScore ? myScore.replace("-", " - ") : "—"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {!allowIdenticalPicks && (
-                          <div className="mt-0">
+                            <div className="my-1 h-px bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.08),rgba(255,255,255,0))]" />
                             <div
                               className={[
-                                "text-[10px] uppercase tracking-[0.16em] text-muted/70 text-center transition-all duration-200 ease-out",
-                                compactOtherPicks
-                                  ? "opacity-0 -translate-y-1 max-h-0 overflow-hidden"
-                                  : "mt-2 opacity-100 translate-y-0 max-h-5",
+                                "flex items-center justify-center gap-2 rounded-xl border px-3 py-2",
+                                isGoldenFixture
+                                  ? "border-yellow-300/75 bg-yellow-400/10"
+                                  : "border-white/8 bg-black/20",
                               ].join(" ")}
                             >
-                              Other picks
+                              {isGoldenFixture ? (
+                                <span className="font-display inline-flex items-center rounded-full border border-yellow-300/75 bg-yellow-400/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground">
+                                  Golden
+                                </span>
+                              ) : (
+                                <span className="shrink-0 whitespace-nowrap font-display text-xl leading-none font-semibold tabular-nums text-foreground">
+                                  {myScore ? myScore.replace("-", " - ") : "—"}
+                                </span>
+                              )}
                             </div>
-                            <div
-                              className={[
-                                "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
-                                compactOtherPicks
-                                  ? "grid-rows-[0fr] opacity-0 -translate-y-1 mt-0 pointer-events-none"
-                                  : "grid-rows-[1fr] opacity-100 translate-y-0 mt-1.5",
-                              ].join(" ")}
-                            >
-                              <div className="min-h-0">
-                                {others.length === 0 ? (
-                                  <div className="text-xs text-muted text-center">
-                                    None
-                                  </div>
-                                ) : (
-                                  <div
-                                    className={[
-                                      "flex flex-wrap items-center justify-center gap-1.5 transition-all duration-300",
-                                      compactOtherPicks
-                                        ? "opacity-0 translate-y-1"
-                                        : "opacity-100 translate-y-0",
-                                    ].join(" ")}
-                                  >
-                                    {others.slice(0, 10).map((score, index) => (
-                                      <span
-                                        key={`${fid}-${index}-${score}`}
-                                        className="font-display rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-foreground tabular-nums whitespace-nowrap"
-                                      >
-                                        {String(score).replace("-", " - ")}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
+                          </div>
+
+                          {!allowIdenticalPicks && (
+                            <div className="mt-0">
+                              <div
+                                className={[
+                                  "text-[10px] uppercase tracking-[0.16em] text-muted/70 text-center transition-all duration-200 ease-out",
+                                  compactOtherPicks
+                                    ? "opacity-0 -translate-y-1 max-h-0 overflow-hidden"
+                                    : "mt-2 opacity-100 translate-y-0 max-h-5",
+                                ].join(" ")}
+                              >
+                                Other picks
+                              </div>
+                              <div
+                                className={[
+                                  "grid overflow-hidden transition-[grid-template-rows,opacity,transform,margin] duration-300 ease-out",
+                                  compactOtherPicks
+                                    ? "grid-rows-[0fr] opacity-0 -translate-y-1 mt-0 pointer-events-none"
+                                    : "grid-rows-[1fr] opacity-100 translate-y-0 mt-1.5",
+                                ].join(" ")}
+                              >
+                                <div className="min-h-0">
+                                  {others.length === 0 ? (
+                                    <div className="text-xs text-muted text-center">
+                                      None
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className={[
+                                        "flex flex-wrap items-center justify-center gap-1.5 transition-all duration-300",
+                                        compactOtherPicks
+                                          ? "opacity-0 translate-y-1"
+                                          : "opacity-100 translate-y-0",
+                                      ].join(" ")}
+                                    >
+                                      {others
+                                        .slice(0, 10)
+                                        .map((score, index) => (
+                                          <span
+                                            key={`${fid}-${index}-${score}`}
+                                            className="font-display rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-foreground tabular-nums whitespace-nowrap"
+                                          >
+                                            {String(score).replace("-", " - ")}
+                                          </span>
+                                        ))}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
-                        {!myScore && (
-                          <div className="mt-2 text-xs text-danger">
-                            You didn’t pick this fixture (can’t apply power-up).
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard className={PANEL_SHELL}>
-            <div className={PANEL_INNER}>
-              <div className="grid gap-4">
-                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className={MINI_LABEL}>Selection control</div>
-                      <div className="font-display text-lg font-semibold text-foreground">
-                        {selectedFixture
-                          ? "Fixture selected"
-                          : "Select a fixture"}
+                          )}
+                          {!myScore && (
+                            <div className="mt-2 text-xs text-danger">
+                              You didn’t pick this fixture (can’t apply
+                              power-up).
+                            </div>
+                          )}
+                        </button>
                       </div>
-                      <div className="text-sm text-muted">
-                        {selectedFixture && selectedFixtureScore
-                          ? "Lock this fixture to promote the saved score below."
-                          : "Pick one of your saved fixtures to continue."}
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedFixture ? (
-                    <div className="mt-3 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-3 py-3">
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={selectedFixture.home.name}
-                            tla={selectedFixture.home.tla}
-                            shortName={selectedFixture.home.shortName}
-                            badge={selectedFixture.home.badge}
-                          />
-                          <div className="mt-1 font-display text-xs font-semibold uppercase tracking-wide text-foreground">
-                            {selectedFixture.home.tla ||
-                              selectedFixture.home.shortName ||
-                              selectedFixture.home.name}
-                          </div>
-                        </div>
-                        <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
-                          vs
-                        </span>
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={selectedFixture.away.name}
-                            tla={selectedFixture.away.tla}
-                            shortName={selectedFixture.away.shortName}
-                            badge={selectedFixture.away.badge}
-                          />
-                          <div className="mt-1 font-display text-xs font-semibold uppercase tracking-wide text-foreground">
-                            {selectedFixture.away.tla ||
-                              selectedFixture.away.shortName ||
-                              selectedFixture.away.name}
-                          </div>
-                        </div>
-                      </div>
-                      {selectedFixtureScore ? (
-                        <div
-                          className={[
-                            "mt-3 flex items-center justify-center rounded-xl border px-3 py-2",
-                            selectedPowerupType === "ALL_IN"
-                              ? "border-amber-300/35 bg-[linear-gradient(135deg,rgba(251,191,36,0.1),rgba(180,83,9,0.06))]"
-                              : "border-sky-300/35 bg-[linear-gradient(135deg,rgba(125,211,252,0.11),rgba(3,105,161,0.06))]",
-                          ].join(" ")}
-                        >
-                          <span className="font-display text-xl font-semibold text-foreground tabular-nums">
-                            {selectedFixtureScore.replace("-", " - ")}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <button
-                    onClick={lockPowerup}
-                    disabled={
-                      submitting ||
-                      selectedFixtureId == null ||
-                      !activeMyPicksByFixture[selectedFixtureId] ||
-                      (myGoldenFixtureId != null &&
-                        selectedFixtureId === myGoldenFixtureId)
-                    }
-                    className={[
-                      "mt-4",
-                      ACTION_BTN_BASE,
-                      selectedPowerupType === "ALL_IN"
-                        ? "border-amber-300/45 bg-[linear-gradient(135deg,rgba(177,144,86,0.28),rgba(116,92,58,0.16))] hover:border-amber-200/55 hover:bg-[linear-gradient(135deg,rgba(196,160,98,0.34),rgba(128,102,62,0.2))]"
-                        : "border-sky-300/45 bg-[linear-gradient(135deg,rgba(96,165,250,0.22),rgba(30,64,175,0.14))] hover:border-sky-200/55 hover:bg-[linear-gradient(135deg,rgba(125,211,252,0.3),rgba(37,99,235,0.2))]",
-                    ].join(" ")}
-                  >
-                    {submitting ? "Locking…" : "Lock-In"}
-                  </button>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-          </SectionCard>
-        </>
-      )}
+            </SectionCard>
+
+            <SectionCard className={PANEL_SHELL}>
+              <div className={PANEL_INNER}>
+                <div className="grid gap-4">
+                  <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className={MINI_LABEL}>Selection control</div>
+                        <div className="font-display text-lg font-semibold text-foreground">
+                          {selectedFixture
+                            ? "Fixture selected"
+                            : "Select a fixture"}
+                        </div>
+                        <div className="text-sm text-muted">
+                          {selectedFixture && selectedFixtureScore
+                            ? "Lock this fixture to promote the saved score below."
+                            : "Pick one of your saved fixtures to continue."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedFixture ? (
+                      <div className="mt-3 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.008))] px-3 py-3">
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={selectedFixture.home.name}
+                              tla={selectedFixture.home.tla}
+                              shortName={selectedFixture.home.shortName}
+                              badge={selectedFixture.home.badge}
+                            />
+                            <div className="mt-1 font-display text-xs font-semibold uppercase tracking-wide text-foreground">
+                              {selectedFixture.home.tla ||
+                                selectedFixture.home.shortName ||
+                                selectedFixture.home.name}
+                            </div>
+                          </div>
+                          <span className="font-display text-[10px] sm:text-[11px] font-semibold text-muted uppercase inline-flex items-center justify-center">
+                            vs
+                          </span>
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={selectedFixture.away.name}
+                              tla={selectedFixture.away.tla}
+                              shortName={selectedFixture.away.shortName}
+                              badge={selectedFixture.away.badge}
+                            />
+                            <div className="mt-1 font-display text-xs font-semibold uppercase tracking-wide text-foreground">
+                              {selectedFixture.away.tla ||
+                                selectedFixture.away.shortName ||
+                                selectedFixture.away.name}
+                            </div>
+                          </div>
+                        </div>
+                        {selectedFixtureScore ? (
+                          <div
+                            className={[
+                              "mt-3 flex items-center justify-center rounded-xl border px-3 py-2",
+                              selectedPowerupType === "ALL_IN"
+                                ? "border-amber-300/35 bg-[linear-gradient(135deg,rgba(251,191,36,0.1),rgba(180,83,9,0.06))]"
+                                : "border-sky-300/35 bg-[linear-gradient(135deg,rgba(125,211,252,0.11),rgba(3,105,161,0.06))]",
+                            ].join(" ")}
+                          >
+                            <span className="font-display text-xl font-semibold text-foreground tabular-nums">
+                              {selectedFixtureScore.replace("-", " - ")}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <button
+                      onClick={lockPowerup}
+                      disabled={
+                        submitting ||
+                        selectedFixtureId == null ||
+                        !activeMyPicksByFixture[selectedFixtureId] ||
+                        (myGoldenFixtureId != null &&
+                          selectedFixtureId === myGoldenFixtureId)
+                      }
+                      className={[
+                        "mt-4",
+                        ACTION_BTN_BASE,
+                        selectedPowerupType === "ALL_IN"
+                          ? "border-amber-300/45 bg-[linear-gradient(135deg,rgba(177,144,86,0.28),rgba(116,92,58,0.16))] hover:border-amber-200/55 hover:bg-[linear-gradient(135deg,rgba(196,160,98,0.34),rgba(128,102,62,0.2))]"
+                          : "border-sky-300/45 bg-[linear-gradient(135deg,rgba(96,165,250,0.22),rgba(30,64,175,0.14))] hover:border-sky-200/55 hover:bg-[linear-gradient(135deg,rgba(125,211,252,0.3),rgba(37,99,235,0.2))]",
+                      ].join(" ")}
+                    >
+                      {submitting ? "Locking…" : "Lock-In"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          </>
+        )}
+      </SectionStack>
     </PageShell>
   );
 }

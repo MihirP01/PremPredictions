@@ -145,18 +145,17 @@ body {
   overscroll-behavior-y: none;
 }
 
-html.input-focus-scroll-lock,
-body.input-focus-scroll-lock {
-  overflow: hidden !important;
-  touch-action: none;
-}
-
 /* Next.js App Router root wrapper(s) */
 body > div {
   min-height: 100dvh;
   background: transparent;
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top);
+}
+
+html.room-shell-active body > div,
+body.room-shell-active > div {
+  padding-top: 0 !important;
 }
 
 /* Keep iOS browser and standalone consistent */
@@ -196,6 +195,14 @@ html,
 body,
 body > div {
   min-height: 100vh;
+}
+
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 @supports (height: 100dvh) {
@@ -1439,24 +1446,65 @@ select:-webkit-autofill:focus {
   }
 }
 
-.no-scrollbar {
+html,
+body,
+* {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
 }
 
-/* Keep room content clear of the mobile bottom nav. */
-.room-has-bottom-nav {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 4.75rem);
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-.room-has-bottom-nav .scroll-top-fab {
-  bottom: calc(env(safe-area-inset-bottom) + 5.5rem) !important;
+/* Keep room content clear of the mobile bottom nav. */
+.room-shell {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.page-shell-safe-top {
+  padding-top: calc(constant(safe-area-inset-top) + 0rem);
+  padding-top: calc(env(safe-area-inset-top) + 0rem);
+}
+
+.room-scroll-root {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.room-has-bottom-nav {
+  padding-bottom: 0;
+}
+
+.room-has-bottom-nav #room-scroll-root {
+  padding-bottom: calc(var(--room-nav-offset, 5.5rem) + 0.6rem);
+}
+
+.room-shell .scroll-top-fab {
+  bottom: calc(var(--room-nav-offset, 5.5rem) + 0.65rem) !important;
+}
+
+html.modal-open .scroll-top-fab,
+body.modal-open .scroll-top-fab {
+  display: none !important;
 }
 
 .boot-liquid-fill {
@@ -1515,11 +1563,19 @@ select:-webkit-autofill:focus {
 }
 
 @media (min-width: 640px) {
+  .page-shell-safe-top {
+    padding-top: 0;
+  }
+
+  .room-shell {
+    padding-top: 0;
+  }
+
   .room-has-bottom-nav {
     padding-bottom: 0;
   }
 
-  .room-has-bottom-nav .scroll-top-fab {
+  .room-shell .scroll-top-fab {
     bottom: calc(env(safe-area-inset-bottom) + 1rem) !important;
   }
 }

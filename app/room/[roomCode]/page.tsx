@@ -19,6 +19,7 @@ import {
   ConfirmDialog,
   ModalHeader,
   ThemedModal,
+  ThemedSheetModal,
 } from "../../../components/RoomModal";
 import TopActionRow from "../../../components/TopActionRow";
 import { useAuth } from "../../../components/AuthProvider";
@@ -27,6 +28,8 @@ import {
   SettingsTriggerButton,
 } from "../../../components/RoomSettingsMenu";
 import SpecialBreak from "../../../components/SpecialBreak";
+import SectionGrid from "../../../components/SectionGrid";
+import SectionStack from "../../../components/SectionStack";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
   getRoomBootstrapCached,
@@ -186,6 +189,7 @@ export default function RoomPage() {
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
+  const settingsModalTimerRef = useRef<number | null>(null);
   const activePhaseRedirectedRef = useRef(false);
 
   useEffect(() => {
@@ -365,8 +369,15 @@ export default function RoomPage() {
   useEffect(() => {
     if (settingsOpen) return;
     setNicknameExpanded(false);
-    setRoomRulesOpen(false);
   }, [settingsOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (settingsModalTimerRef.current != null) {
+        window.clearTimeout(settingsModalTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     return subscribeRoomMeta(
@@ -396,6 +407,17 @@ export default function RoomPage() {
   useEffect(() => {
     setNickNameDraft(myNickName);
   }, [myNickName]);
+
+  function openSettingsModalWithDelay(openModal: () => void, delayMs = 180) {
+    setSettingsOpen(false);
+    if (settingsModalTimerRef.current != null) {
+      window.clearTimeout(settingsModalTimerRef.current);
+    }
+    settingsModalTimerRef.current = window.setTimeout(() => {
+      settingsModalTimerRef.current = null;
+      openModal();
+    }, delayMs);
+  }
 
   async function loadMemberRooms() {
     if (!user) return;
@@ -698,35 +720,6 @@ export default function RoomPage() {
     }
   }
 
-  async function updateGameModeStyle(
-    nextStyle: "round_robin" | "sprint" | "captain",
-  ) {
-    if (!user || !isLeader || roomSettingsBusy) return;
-    setRoomSettingsBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/room/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomCode,
-          leaderUid: user.uid,
-          gameModeStyle: nextStyle,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to update settings.");
-      setGameModeStyle(nextStyle);
-      setAllowIdenticalPicks(
-        nextStyle === "sprint" ? true : !(data?.sameResultLock !== false),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update settings.");
-    } finally {
-      setRoomSettingsBusy(false);
-    }
-  }
-
   async function updateThemeAccent(nextAccent: string) {
     if (!user || !isLeader || roomSettingsBusy) return;
     setRoomSettingsBusy(true);
@@ -792,9 +785,12 @@ export default function RoomPage() {
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Failed to recalculate scores.");
+      if (!res.ok)
+        throw new Error(data.error || "Failed to recalculate scores.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to recalculate scores.");
+      setError(
+        e instanceof Error ? e.message : "Failed to recalculate scores.",
+      );
     } finally {
       setRecalcBusy(false);
     }
@@ -856,404 +852,424 @@ export default function RoomPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <div className="relative z-30">
+        <SectionStack gap="page">
           <TopActionRow
-            title="Hub"
-            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-            className="flex items-start justify-between gap-3 sm:items-end"
-            actions={
-              <div ref={settingsWrapRef} className="relative z-[220] ml-auto">
-                <SettingsTriggerButton
-                  onClick={() => setSettingsOpen((v) => !v)}
-                />
-                <SettingsDropdownPanel
-                  open={settingsOpen}
-                  className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0 w-[min(22rem,calc(100vw-1.5rem))] !z-[340]"
-                >
-                  <div className="font-display font-semibold text-foreground">
-                    Settings
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                        Nickname
-                      </div>
-                      <button
-                        type="button"
-                        onClick={toggleNicknameSection}
-                        className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
-                      >
-                        {nicknameExpanded ? "Collapse" : "Expand"}
-                        {nicknameExpanded ? (
-                          <ChevronUp size={14} />
-                        ) : (
-                          <ChevronDown size={14} />
-                        )}
-                      </button>
-                    </div>
-                    {nicknameExpanded && (
-                      <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
-                        <input
-                          value={nickNameDraft}
-                          onChange={(e) => setNickNameDraft(e.target.value)}
-                          maxLength={20}
-                          placeholder="Nickname"
-                          className={sharedInputClass}
-                        />
-                        <button
-                          onClick={saveNickName}
-                          disabled={nickNameBusy}
-                          className={sharedButtonClass}
-                        >
-                          {nickNameBusy ? "Saving..." : "Save"}
-                        </button>
-                        <div className="text-xs text-muted">
-                          Nickname shows across the room. Leave blank to use
-                          your name.
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <SpecialBreak className="mt-2"/>
-                    <button
-                      onClick={async () => {
-                        setSettingsOpen(false);
-                        setRoomSwitcherOpen(true);
-                        await loadMemberRooms();
-                      }}
-                      className={sharedButtonClass}
-                    >
-                      Switch Rooms
-                    </button>
-                    <LogoutButton />
-                    {isLeader && (
-                      <div className="space-y-2">
-                        <SpecialBreak />
-                        <button
-                          onClick={() => setRoomRulesOpen(true)}
-                          className={sharedButtonClass}
-                        >
-                          Room Settings
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </SettingsDropdownPanel>
-              </div>
-            }
-          />
-        </div>
-
-        {error && (
-          <SectionCard className={standardSectionCardClass}>
-            <div className="text-sm text-rose-300">{error}</div>
-          </SectionCard>
-        )}
-
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-          <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                    Room desk
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                      Active room
-                    </span>
-                    <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
-                      {roomCode}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                  Control centre
-                </span>
-                <span className="font-display text-sm font-semibold text-foreground">
-                  Welcome, Lets GO!
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Players
-                  </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                    {players.length}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Registered in this room right now.
-                  </div>
-                </div>
-                <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Mode
-                  </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                    {gameModeStyle === "round_robin"
-                      ? "Round-Robin"
-                      : gameModeStyle === "captain"
-                        ? "Captain"
-                        : "Sprint"}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {resultLockSubtext}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard className={`hidden lg:block ${standardSectionCardClass}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Quick routes
-              </div>
-              <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                Core room navigation
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
-              Desktop rail
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 xl:grid-cols-4">
-            <HubNavTile
-              label="Fixtures"
-              hint="Games, scores, and room picks"
-              icon={CalendarDays}
-              onClick={() => router.push(`/room/${roomCode}/fixtures`)}
-            />
-            <HubNavTile
-              label="Predictions"
-              hint="Current mini-game flow"
-              icon={Gamepad2}
-              onClick={() => {
-                void openPredictionsTarget();
-              }}
-            />
-            <HubNavTile
-              label="Leaderboard"
-              hint="Room ranking and gameweek matrix"
-              icon={Trophy}
-              onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
-            />
-            <HubNavTile
-              label="Stats"
-              hint="Player profile and scoring trends"
-              icon={BarChart3}
-              onClick={() => router.push(`/room/${roomCode}/stats`)}
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard className={standardSectionCardClass}>
-          <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-            Your seat
-          </div>
-          <div className="mt-1 font-display text-xl font-semibold text-foreground">
-            Room identity
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                Display
-              </div>
-              <div className="mt-2 font-display text-lg font-semibold text-foreground">
-                {myNickName
-                  ? `${myNickName} • ${myDisplayName}`
-                  : myDisplayName}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                Role
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <StatusPill
-                  label={isLeader ? "Leader" : "Member"}
-                  tone="neutral"
-                />
-                {user?.uid ? (
-                  <StatusPill
-                    label="You"
-                    tone="you"
-                    className="text-[10px] py-0.5"
+              title="Hub"
+              subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+              className="flex items-start justify-between gap-3 sm:items-end"
+              actions={
+                <div ref={settingsWrapRef} className="relative z-[220] ml-auto">
+                  <SettingsTriggerButton
+                    onClick={() => setSettingsOpen((v) => !v)}
                   />
-                ) : null}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-              <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                Security
-              </div>
-              <div className="mt-2 font-display text-sm font-semibold text-foreground">
-                {hasPassword ? "Private room" : "Open room"}
-              </div>
-              <div className="mt-1 text-xs text-muted">
-                {hasPassword
-                  ? "Password is enabled for new joins."
-                  : "Members can join without a password."}
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className={standardSectionCardClass}>
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div>
-                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Premier League table
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  Live standings
-                </div>
-                <div className="mt-1 text-xs text-muted">
-                  {seasonKey ? seasonLabel(seasonKey) : "Current season"}
-                </div>
-              </div>
-              {tableLoading ? (
-                <span className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-muted">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>Loading…</span>
-                </span>
-              ) : null}
-            </div>
-            {tableError ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
-                {tableError}
-              </div>
-            ) : !tableLoading && tableRows.length === 0 ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
-                No table rows available yet.
-              </div>
-            ) : (
-              <div className="max-h-[460px] overflow-auto no-scrollbar rounded-[22px] border border-white/8 bg-white/[0.02]">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-black/10 text-muted">
-                    <tr className="border-b border-white/8">
-                      <th className="px-3 py-2 text-left">#</th>
-                      <th className="px-3 py-2 text-left">Club</th>
-                      <th className="px-3 py-2 text-center">P</th>
-                      <th className="px-3 py-2 text-center">GD</th>
-                      <th className="px-3 py-2 text-center">Pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableRows.map((row) => (
-                      <tr
-                        key={`${row.position}-${row.team.name}`}
-                        className="border-b border-white/8 last:border-0"
-                      >
-                        <td className="px-3 py-2 font-display text-foreground">
-                          {row.position}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/[0.03]">
-                              {row.team.badge ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={row.team.badge}
-                                  alt={row.team.name}
-                                  className="h-5 w-5 object-contain"
-                                />
-                              ) : null}
-                            </div>
-                            <span className="font-display text-foreground">
-                              {row.team.tla ||
-                                row.team.shortName ||
-                                row.team.name}
-                            </span>
+                  <SettingsDropdownPanel
+                    open={settingsOpen}
+                    className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0 w-[min(22rem,calc(100vw-1.5rem))] !z-[340]"
+                  >
+                    <div className="font-display font-semibold text-foreground">
+                      Settings
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                          Nickname
+                        </div>
+                        <button
+                          type="button"
+                          onClick={toggleNicknameSection}
+                          className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+                        >
+                          {nicknameExpanded ? "Collapse" : "Expand"}
+                          {nicknameExpanded ? (
+                            <ChevronUp size={14} />
+                          ) : (
+                            <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </div>
+                      {nicknameExpanded && (
+                        <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
+                          <input
+                            value={nickNameDraft}
+                            onChange={(e) => setNickNameDraft(e.target.value)}
+                            maxLength={20}
+                            placeholder="Nickname"
+                            className={sharedInputClass}
+                          />
+                          <button
+                            onClick={saveNickName}
+                            disabled={nickNameBusy}
+                            className={sharedButtonClass}
+                          >
+                            {nickNameBusy ? "Saving..." : "Save"}
+                          </button>
+                          <div className="text-xs text-muted">
+                            Nickname shows across the room. Leave blank to use
+                            your name.
                           </div>
-                        </td>
-                        <td className="px-3 py-2 text-center text-foreground">
-                          {row.playedGames}
-                        </td>
-                        <td className="px-3 py-2 text-center text-foreground">
-                          {row.goalDifference}
-                        </td>
-                        <td className="px-3 py-2 text-center font-display font-semibold text-foreground">
-                          {row.points}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </SectionCard>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <SpecialBreak className="mt-2" />
+                      <button
+                        onClick={() => {
+                          openSettingsModalWithDelay(() => {
+                            setRoomSwitcherOpen(true);
+                          });
+                          void loadMemberRooms();
+                        }}
+                        className={sharedButtonClass}
+                      >
+                        Switch Rooms
+                      </button>
+                      <LogoutButton />
+                      {isLeader && (
+                        <div className="space-y-2">
+                          <SpecialBreak />
+                          <button
+                            onClick={() => {
+                              openSettingsModalWithDelay(() => {
+                                setRoomRulesOpen(true);
+                              });
+                            }}
+                            className={sharedButtonClass}
+                          >
+                            Room Settings
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </SettingsDropdownPanel>
+                </div>
+              }
+            />
 
-          <SectionCard className={standardSectionCardClass}>
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div>
-                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Squad
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  Room players
-                </div>
-              </div>
-              {isLeader && (
-                <button
-                  onClick={() => setShowKickControls((v) => !v)}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.12em] text-foreground transition hover:bg-white/[0.06]"
-                >
-                  {showKickControls ? "Hide Kick" : "Show Kick"}
-                </button>
-              )}
-            </div>
-            <div className="space-y-2">
-              {sortedPlayers.map((p) => (
-                <div
-                  key={p.uid}
-                  className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-display text-sm font-semibold text-foreground">
-                      <span className="block truncate">
-                        {p.nickName
-                          ? `(${p.nickName}) ${p.displayName}`
-                          : p.displayName}
+          {error && (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-rose-300">{error}</div>
+            </SectionCard>
+          )}
+
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+              <SectionStack gap="tight">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="space-y-1.5">
+                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                      Room desk
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                        Active room
+                      </span>
+                      <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
+                        {roomCode}
                       </span>
                     </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      {p.uid === user?.uid ? (
-                        <StatusPill
-                          label="You"
-                          tone="you"
-                          className="shrink-0 text-[10px] py-0.5"
-                        />
-                      ) : null}
-                      {p.role === "leader" ? (
-                        <StatusPill label="Leader" tone="neutral" />
-                      ) : null}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                    Control centre
+                  </span>
+                  <span className="font-display text-sm font-semibold text-foreground">
+                    Welcome, Lets GO!
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                      Players
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      {players.length}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      Registered in this room right now.
                     </div>
                   </div>
-                  <div className="ml-2 flex h-8 items-center justify-end">
-                    {isLeader && showKickControls && p.uid !== user?.uid ? (
+                  <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                      Mode
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      {gameModeStyle === "round_robin"
+                        ? "Round-Robin"
+                        : gameModeStyle === "captain"
+                          ? "Captain"
+                          : "Sprint"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      {resultLockSubtext}
+                    </div>
+                  </div>
+                </div>
+              </SectionStack>
+            </div>
+          </SectionCard>
+
+          <div className="hidden lg:block">
+            <SectionCard className={standardSectionCardClass}>
+              <SectionStack gap="tight">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Quick routes
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      Core room navigation
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 font-display text-xs font-semibold uppercase tracking-[0.12em] text-white/62">
+                    Desktop rail
+                  </div>
+                </div>
+                <SectionGrid gap="tight" className="xl:grid-cols-4">
+                  <HubNavTile
+                    label="Fixtures"
+                    hint="Games, scores, and room picks"
+                    icon={CalendarDays}
+                    onClick={() => router.push(`/room/${roomCode}/fixtures`)}
+                  />
+                  <HubNavTile
+                    label="Predictions"
+                    hint="Current mini-game flow"
+                    icon={Gamepad2}
+                    onClick={() => {
+                      void openPredictionsTarget();
+                    }}
+                  />
+                  <HubNavTile
+                    label="Leaderboard"
+                    hint="Room ranking and gameweek matrix"
+                    icon={Trophy}
+                    onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
+                  />
+                  <HubNavTile
+                    label="Stats"
+                    hint="Player profile and scoring trends"
+                    icon={BarChart3}
+                    onClick={() => router.push(`/room/${roomCode}/stats`)}
+                  />
+                </SectionGrid>
+              </SectionStack>
+            </SectionCard>
+          </div>
+
+          <SectionCard className={standardSectionCardClass}>
+            <SectionStack gap="tight">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  Your seat
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  Room identity
+                </div>
+              </div>
+              <SectionGrid gap="tight" className="sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                    Display
+                  </div>
+                  <div className="mt-2 font-display text-lg font-semibold text-foreground">
+                    {myNickName
+                      ? `${myNickName} • ${myDisplayName}`
+                      : myDisplayName}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                    Role
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <StatusPill
+                      label={isLeader ? "Leader" : "Member"}
+                      tone="neutral"
+                    />
+                    {user?.uid ? (
                       <StatusPill
-                        label="Kick"
-                        tone="danger"
-                        onClick={() => setKickTarget(p)}
+                        label="You"
+                        tone="you"
+                        className="text-[10px] py-0.5"
                       />
                     ) : null}
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
+                    Security
+                  </div>
+                  <div className="mt-2 font-display text-sm font-semibold text-foreground">
+                    {hasPassword ? "Private room" : "Open room"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {hasPassword
+                      ? "Password is enabled for new joins."
+                      : "Members can join without a password."}
+                  </div>
+                </div>
+              </SectionGrid>
+            </SectionStack>
           </SectionCard>
-        </div>
+
+          <SectionGrid
+            gap="page"
+            className="xl:grid-cols-2 xl:items-start"
+          >
+            <SectionCard className={standardSectionCardClass}>
+              <SectionStack gap="tight">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Premier League table
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      Live standings
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      {seasonKey ? seasonLabel(seasonKey) : "Current season"}
+                    </div>
+                  </div>
+                  {tableLoading ? (
+                    <span className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-muted">
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>Loading…</span>
+                    </span>
+                  ) : null}
+                </div>
+                {tableError ? (
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
+                    {tableError}
+                  </div>
+                ) : !tableLoading && tableRows.length === 0 ? (
+                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+                    No table rows available yet.
+                  </div>
+                ) : (
+                  <div className="max-h-[460px] overflow-auto no-scrollbar rounded-[22px] border border-white/8 bg-white/[0.02]">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-black/10 text-muted">
+                        <tr className="border-b border-white/8">
+                          <th className="px-3 py-2 text-left">#</th>
+                          <th className="px-3 py-2 text-left">Club</th>
+                          <th className="px-3 py-2 text-center">P</th>
+                          <th className="px-3 py-2 text-center">GD</th>
+                          <th className="px-3 py-2 text-center">Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableRows.map((row) => (
+                          <tr
+                            key={`${row.position}-${row.team.name}`}
+                            className="border-b border-white/8 last:border-0"
+                          >
+                            <td className="px-3 py-2 font-display text-foreground">
+                              {row.position}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/8 bg-white/[0.03]">
+                                  {row.team.badge ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={row.team.badge}
+                                      alt={row.team.name}
+                                      className="h-5 w-5 object-contain"
+                                    />
+                                  ) : null}
+                                </div>
+                                <span className="font-display text-foreground">
+                                  {row.team.tla ||
+                                    row.team.shortName ||
+                                    row.team.name}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center text-foreground">
+                              {row.playedGames}
+                            </td>
+                            <td className="px-3 py-2 text-center text-foreground">
+                              {row.goalDifference}
+                            </td>
+                            <td className="px-3 py-2 text-center font-display font-semibold text-foreground">
+                              {row.points}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </SectionStack>
+            </SectionCard>
+
+            <SectionCard className={standardSectionCardClass}>
+              <SectionStack gap="tight">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Squad
+                    </div>
+                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                      Room players
+                    </div>
+                  </div>
+                  {isLeader && (
+                    <button
+                      onClick={() => setShowKickControls((v) => !v)}
+                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.12em] text-foreground transition hover:bg-white/[0.06]"
+                    >
+                      {showKickControls ? "Hide Kick" : "Show Kick"}
+                    </button>
+                  )}
+                </div>
+                <SectionStack gap="tight">
+                  {sortedPlayers.map((p) => (
+                    <div
+                      key={p.uid}
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-sm font-semibold text-foreground">
+                          <span className="block truncate">
+                            {p.nickName
+                              ? `(${p.nickName}) ${p.displayName}`
+                              : p.displayName}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-2">
+                          {p.uid === user?.uid ? (
+                            <StatusPill
+                              label="You"
+                              tone="you"
+                              className="shrink-0 text-[10px] py-0.5"
+                            />
+                          ) : null}
+                          {p.role === "leader" ? (
+                            <StatusPill label="Leader" tone="neutral" />
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="ml-2 flex h-8 items-center justify-end">
+                        {isLeader && showKickControls && p.uid !== user?.uid ? (
+                          <StatusPill
+                            label="Kick"
+                            tone="danger"
+                            onClick={() => setKickTarget(p)}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </SectionStack>
+              </SectionStack>
+            </SectionCard>
+          </SectionGrid>
+        </SectionStack>
       </PageShell>
       <ConfirmDialog
         open={!!kickTarget}
@@ -1276,15 +1292,12 @@ export default function RoomPage() {
         confirming={kickBusy}
         danger
       />
-      <ThemedModal
+      <ThemedSheetModal
         open={roomSwitcherOpen}
         onClose={() => setRoomSwitcherOpen(false)}
-        maxWidthClassName="max-w-2xl"
+        maxWidthClassName="max-w-4xl"
       >
-        <ModalHeader
-          title="Switch Rooms"
-          onClose={() => setRoomSwitcherOpen(false)}
-        />
+        <ModalHeader title="Switch Rooms" showCloseButton={false} />
 
         {switcherError && (
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
@@ -1320,7 +1333,7 @@ export default function RoomPage() {
             )}
           </div>
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <SectionGrid gap="page" className="lg:grid-cols-2">
           <div className={modalSectionClass}>
             <div className={modalSectionTitleClass}>Join New Room</div>
             <div className="mt-1 text-sm text-muted">
@@ -1331,7 +1344,7 @@ export default function RoomPage() {
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="AB12"
-                className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
               />
               <button
@@ -1354,7 +1367,7 @@ export default function RoomPage() {
                 value={createCode}
                 onChange={(e) => setCreateCode(e.target.value)}
                 placeholder="NEW25"
-                className={`${sharedInputClass} min-w-0 uppercase font-display text-sm tracking-[0.08em]`}
+                className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
               />
               <button
@@ -1366,7 +1379,7 @@ export default function RoomPage() {
               </button>
             </div>
           </div>
-        </div>
+        </SectionGrid>
 
         <div
           className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}
@@ -1385,7 +1398,7 @@ export default function RoomPage() {
             Leave Current Room
           </button>
         </div>
-      </ThemedModal>
+      </ThemedSheetModal>
       <ConfirmDialog
         open={leaveConfirmOpen}
         onClose={() => setLeaveConfirmOpen(false)}
@@ -1417,18 +1430,17 @@ export default function RoomPage() {
         confirming={deleteBusy}
         danger
       />
-      <ThemedModal
+      <ThemedSheetModal
         open={roomRulesOpen}
         onClose={() => setRoomRulesOpen(false)}
-        maxWidthClassName="max-w-3xl"
+        maxWidthClassName="max-w-4xl"
       >
-        <ModalHeader
-          title="Room Settings"
-          onClose={() => setRoomRulesOpen(false)}
-          ariaLabel="Exit room settings"
-        />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="space-y-4">
+        <ModalHeader title="Room Settings" showCloseButton={false} />
+        <SectionGrid
+          gap="page"
+          className="lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+        >
+          <SectionStack gap="page">
             <div className={modalSectionClass}>
               <div className={modalSectionTitleClass}>Access</div>
               <div className="mt-1 text-sm text-muted">
@@ -1446,11 +1458,10 @@ export default function RoomPage() {
                 disabled={recalcBusy || !seasonKey}
                 className={`${sharedButtonClass} mt-2`}
               >
-                {recalcBusy ? `Recalculating GW${currentGw}...` : "Recalculate Scores"}
+                {recalcBusy
+                  ? `Recalculating GW${currentGw}...`
+                  : "Recalculate Scores"}
               </button>
-              <div className="mt-2 text-xs text-muted text-center">
-                Rebuilds score docs for GW{currentGw}.
-              </div>
             </div>
 
             <div className={modalSectionClass}>
@@ -1463,7 +1474,7 @@ export default function RoomPage() {
                   value={themeAccent}
                   onChange={(e) => updateThemeAccent(e.target.value)}
                   disabled={roomSettingsBusy}
-                  className="h-11 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-8 text-center font-display text-sm font-semibold text-foreground outline-none [text-align-last:center] disabled:opacity-60"
+                  className="h-11 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-8 text-center font-display text-base font-semibold text-foreground outline-none [text-align-last:center] disabled:opacity-60 sm:text-sm"
                 >
                   {THEME_ACCENT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -1476,106 +1487,9 @@ export default function RoomPage() {
                 </span>
               </div>
             </div>
-          </div>
+          </SectionStack>
 
-          <div className="space-y-4">
-            <div className={modalSectionClass}>
-              <div className={modalSectionTitleClass}>Game Mode</div>
-              <div className="mt-1 text-sm text-muted">
-                Choose the draft format used when the mini-game starts.
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => updateGameModeStyle("round_robin")}
-                  disabled={roomSettingsBusy}
-                  className={[
-                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                    gameModeStyle === "round_robin"
-                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  Round-Robin
-                </button>
-                <button
-                  onClick={() => updateGameModeStyle("captain")}
-                  disabled={roomSettingsBusy}
-                  className={[
-                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                    gameModeStyle === "captain"
-                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  Captain
-                </button>
-                <button
-                  onClick={() => updateGameModeStyle("sprint")}
-                  disabled={roomSettingsBusy}
-                  className={[
-                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                    gameModeStyle === "sprint"
-                      ? "bg-[color:rgba(var(--room-accent-rgb),0.16)] border-[color:rgba(var(--room-accent-rgb),0.72)] text-foreground shadow-[inset_0_0_0_1px_rgba(var(--room-accent-rgb),0.28)]"
-                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  Sprint
-                </button>
-              </div>
-              <div className="mt-3 text-xs text-muted text-center">
-                {gameModeStyle === "sprint"
-                  ? "Sprint is the quickest mode for larger rooms."
-                  : "Recommended for 5 or fewer players."}
-              </div>
-            </div>
-
-            <div className={modalSectionClass}>
-              <div className={modalSectionTitleClass}>Scoring Rules</div>
-              <div className="mt-1 text-sm text-muted">
-                Tune duplicate pick rules and optional power-up rounds.
-              </div>
-              <div className="mt-4 space-y-3">
-                <button
-                  onClick={toggleSameResultLock}
-                  disabled={roomSettingsBusy || gameModeStyle === "sprint"}
-                  className={[
-                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                    gameModeStyle === "sprint"
-                      ? "bg-surface-2 border-subtle text-muted cursor-not-allowed"
-                      : "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  {roomSettingsBusy
-                    ? "Saving..."
-                    : gameModeStyle === "sprint"
-                      ? "Allow Identical Picks: ON (Sprint)"
-                      : allowIdenticalPicks
-                        ? "Allow Identical Picks: ON"
-                        : "Allow Identical Picks: OFF"}
-                </button>
-                <div className="text-xs text-muted text-center">
-                  {resultLockSubtext}
-                </div>
-                <button
-                  onClick={togglePowerups}
-                  disabled={roomSettingsBusy}
-                  className={[
-                    "w-full rounded-2xl px-4 py-2.5 text-sm font-display font-semibold border disabled:opacity-60",
-                    "border-white/10 bg-white/[0.04] text-foreground hover:bg-white/[0.06]",
-                  ].join(" ")}
-                >
-                  {roomSettingsBusy
-                    ? "Saving..."
-                    : powerupsEnabled
-                      ? "Power-Ups: ON"
-                      : "Power-Ups: OFF"}
-                </button>
-                <div className="text-xs text-muted text-center">
-                  Adds a Power-Ups phase after Golden for this week.
-                </div>
-              </div>
-            </div>
-
+          <SectionStack gap="page">
             <div
               className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}
             >
@@ -1591,9 +1505,9 @@ export default function RoomPage() {
                 {deleteBusy ? "Deleting room…" : "Delete Room"}
               </button>
             </div>
-          </div>
-        </div>
-      </ThemedModal>
+          </SectionStack>
+        </SectionGrid>
+      </ThemedSheetModal>
       <ThemedModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}

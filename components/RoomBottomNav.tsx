@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
 import {
@@ -9,6 +15,7 @@ import {
   peekRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
+import useRoomScrollAffordance from "./useRoomScrollAffordance";
 
 type NavItem = {
   key: "fixtures" | "predictions" | "home" | "leaderboard" | "stats";
@@ -24,21 +31,25 @@ export default function RoomBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
-  const [mounted, setMounted] = useState(false);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
+  const [activeBubble, setActiveBubble] = useState<{
+    left: number;
+    width: number;
+    visible: boolean;
+  }>({ left: 0, width: 0, visible: false });
   const lastTouchHandledAtRef = useRef(0);
-  const [navFxTick, setNavFxTick] = useState<Record<NavItem["key"], number>>({
-    fixtures: 0,
-    predictions: 0,
-    home: 0,
-    leaderboard: 0,
-    stats: 0,
-  });
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const navRef = useRef<HTMLDivElement | null>(null);
+  const buttonRefs = useRef<
+    Partial<Record<NavItem["key"], HTMLButtonElement | null>>
+  >({});
+  const expandResetTimerRef = useRef<number | null>(null);
+  const bubbleHoldTimerRef = useRef<number | null>(null);
+  const previousCollapsedRef = useRef(false);
+  const bubblePinnedToTrackRef = useRef(false);
+  const collapsedBubbleRectRef = useRef<{ left: number; width: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!roomCode) return;
@@ -163,15 +174,146 @@ export default function RoomBottomNav() {
     ],
     [pathname, roomCode, predictionsDisabled, predictionsHref],
   );
+  const activeItem = items.find((item) => item.active) || items[2];
+  const {
+    visible: showScrollAffordance,
+    cycle: affordanceCycle,
+  } = useRoomScrollAffordance(pathname);
+  const [expandedCycle, setExpandedCycle] = useState<number | null>(null);
+  const collapsed = showScrollAffordance && expandedCycle !== affordanceCycle;
 
   const hideForActiveGamePhase =
     pathname === `/room/${roomCode}/minigame/play` ||
     pathname === `/room/${roomCode}/minigame/golden` ||
     pathname === `/room/${roomCode}/minigame/powerups`;
 
+  const syncActiveBubble = useCallback(() => {
+    const nav = navRef.current;
+    const activeButton = activeItem ? buttonRefs.current[activeItem.key] : null;
+    if (!nav || !activeButton) {
+      setActiveBubble((current) =>
+        current.visible ? { ...current, visible: false } : current,
+      );
+      return;
+    }
+
+    const navRect = nav.getBoundingClientRect();
+    const liveButtonRect = activeButton.getBoundingClientRect();
+    if (collapsed) {
+      collapsedBubbleRectRef.current = {
+        left: liveButtonRect.left - navRect.left,
+        width: liveButtonRect.width,
+      };
+    }
+
+    const storedRect = collapsedBubbleRectRef.current;
+    const nextLeft =
+      bubblePinnedToTrackRef.current && storedRect
+        ? storedRect.left
+        : liveButtonRect.left - navRect.left;
+    const nextWidth =
+      bubblePinnedToTrackRef.current && storedRect
+        ? storedRect.width
+        : liveButtonRect.width;
+
+    setActiveBubble({
+      left: nextLeft,
+      width: nextWidth,
+      visible: true,
+    });
+  }, [activeItem, collapsed]);
+
+  useEffect(() => {
+    const wasCollapsed = previousCollapsedRef.current;
+    previousCollapsedRef.current = collapsed;
+
+    if (bubbleHoldTimerRef.current) {
+      window.clearTimeout(bubbleHoldTimerRef.current);
+      bubbleHoldTimerRef.current = null;
+    }
+
+    if (collapsed) {
+      bubblePinnedToTrackRef.current = true;
+      window.requestAnimationFrame(syncActiveBubble);
+      return;
+    }
+
+    if (wasCollapsed) {
+      bubblePinnedToTrackRef.current = true;
+      window.requestAnimationFrame(syncActiveBubble);
+      bubbleHoldTimerRef.current = window.setTimeout(() => {
+        bubblePinnedToTrackRef.current = false;
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(syncActiveBubble);
+        });
+        bubbleHoldTimerRef.current = null;
+      }, 240);
+      return;
+    }
+
+    bubblePinnedToTrackRef.current = false;
+  }, [collapsed, syncActiveBubble]);
+
+  useEffect(() => {
+    if (collapsed || !showScrollAffordance) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (navRef.current?.contains(event.target as Node)) return;
+      setExpandedCycle(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [collapsed, showScrollAffordance]);
+
+  useEffect(() => {
+    if (showScrollAffordance || !expandResetTimerRef.current) return;
+    window.clearTimeout(expandResetTimerRef.current);
+    expandResetTimerRef.current = null;
+  }, [showScrollAffordance]);
+
+  useEffect(() => {
+    return () => {
+      if (expandResetTimerRef.current) {
+        window.clearTimeout(expandResetTimerRef.current);
+      }
+      if (bubbleHoldTimerRef.current) {
+        window.clearTimeout(bubbleHoldTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     items.forEach((item) => router.prefetch(item.href));
   }, [items, router]);
+
+  useLayoutEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(syncActiveBubble);
+    });
+    const onResize = () => {
+      window.requestAnimationFrame(syncActiveBubble);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [syncActiveBubble]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const activeButton = activeItem ? buttonRefs.current[activeItem.key] : null;
+    if (!nav || !activeButton || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      window.requestAnimationFrame(syncActiveBubble);
+    });
+
+    observer.observe(nav);
+    observer.observe(activeButton);
+    return () => observer.disconnect();
+  }, [activeItem, collapsed, syncActiveBubble]);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -202,24 +344,39 @@ export default function RoomBottomNav() {
       .catch(() => {});
   };
 
+  const collapseNavSoon = () => {
+    if (expandResetTimerRef.current) {
+      window.clearTimeout(expandResetTimerRef.current);
+    }
+    expandResetTimerRef.current = window.setTimeout(() => {
+      setExpandedCycle(null);
+      expandResetTimerRef.current = null;
+    }, 180);
+  };
+
   const onNavClick = (
-    key: NavItem["key"],
+    _key: NavItem["key"],
     href: string,
     active: boolean,
     disabled?: boolean,
   ) => {
-    setNavFxTick((prev) => ({ ...prev, [key]: prev[key] + 1 }));
+    if (collapsed) {
+      setExpandedCycle(affordanceCycle);
+      return;
+    }
     if (active || disabled) return;
-    if (key === "predictions") {
+    if (_key === "predictions") {
       const cachedBootstrap = peekRoomBootstrapCached(roomCode);
       const immediateHref =
         predictionsHref ||
         predictionsRouteForState(cachedBootstrap?.gameState || "");
       router.push(immediateHref);
       if (!cachedBootstrap) syncPredictionsRoute(immediateHref);
+      if (showScrollAffordance) collapseNavSoon();
       return;
     }
     router.push(href);
+    if (showScrollAffordance) collapseNavSoon();
   };
 
   const onNavPointerDown = (
@@ -227,200 +384,173 @@ export default function RoomBottomNav() {
     item: NavItem,
   ) => {
     if (event.pointerType === "mouse") return;
-    lastTouchHandledAtRef.current = Date.now();
+    lastTouchHandledAtRef.current = event.timeStamp;
     event.preventDefault();
     event.stopPropagation();
     onNavClick(item.key, item.href, item.active, item.disabled);
   };
 
-  if (
-    !mounted ||
-    !roomCode ||
-    hideForActiveGamePhase ||
-    typeof document === "undefined"
-  ) {
+  if (!roomCode || hideForActiveGamePhase) {
     return null;
   }
 
-  const navNode = (
+  return (
     <nav
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden bottom-nav-enter fixed inset-x-0 mx-auto z-[80] w-[min(94vw,520px)] rounded-[24px] border p-2 pointer-events-auto"
+      className="room-bottom-nav sm:hidden mx-auto w-[min(94vw,520px)] pointer-events-auto"
       style={{
-        position: "fixed",
-        bottom: "0",
-        paddingBottom: "calc(0.35rem + env(safe-area-inset-bottom))",
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
         transform: "translateZ(0)",
-        borderColor: "var(--editorial-nav-border)",
-        background: "var(--editorial-nav-bg)",
-        boxShadow: "0 22px 52px rgba(3,8,20,0.34)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
+        overscrollBehavior: "none",
       }}
     >
       <div
-        className="grid grid-cols-5 gap-1 rounded-[18px] border p-1.5"
+        ref={navRef}
+        className="relative overflow-hidden rounded-[30px] px-2 py-2 transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         style={{
-          borderColor: "var(--editorial-nav-border)",
-          background: "var(--editorial-nav-inner)",
+          isolation: "isolate",
+          width: collapsed ? "7.25rem" : "100%",
+          marginLeft: "auto",
+          transformOrigin: "right center",
         }}
       >
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onPointerDown={(event) => onNavPointerDown(event, item)}
-              onClick={() => {
-                if (Date.now() - lastTouchHandledAtRef.current < 450) return;
-                onNavClick(item.key, item.href, item.active, item.disabled);
-              }}
-              disabled={item.disabled}
-              aria-disabled={item.disabled ? "true" : undefined}
-              className={[
-                "flex min-w-0 min-h-[58px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 transition-all duration-150 pointer-events-auto",
-                item.active
-                  ? "border text-foreground"
-                  : item.disabled
-                    ? "border border-transparent bg-transparent text-muted opacity-55 cursor-not-allowed"
-                    : "border border-transparent bg-transparent text-muted",
-              ].join(" ")}
-              style={
-                item.active
-                  ? {
-                      borderColor: "var(--editorial-nav-active-border)",
-                      background: "var(--editorial-nav-active)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07)",
-                    }
-                  : !item.disabled
-                    ? { background: "transparent" }
-                    : undefined
-              }
-            >
-              <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
-                <Icon
-                  size={16}
-                  className={[
-                    item.active ? "text-foreground" : "text-muted",
-                    item.key === "fixtures" ? "nav-icon-fixtures-fix" : "",
-                    item.key === "predictions"
-                      ? "nav-icon-predictions-fix"
-                      : "",
-                    item.key === "home" ? "nav-icon-home-fix" : "",
-                    item.key === "home" && item.active
-                      ? "hub-icon-active-theme"
-                      : "",
-                    item.key === "stats" ? "nav-icon-stats-fix" : "",
-                    item.key === "home" && item.active
-                      ? "home-icon--active"
-                      : "",
-                    item.key === "stats" && item.active
-                      ? "stats-icon--active"
-                      : "",
-                    item.key === "leaderboard" &&
-                    (item.active || navFxTick.leaderboard > 0)
-                      ? "leaderboard-icon-pop"
-                      : "",
-                    item.key === "fixtures" &&
-                    (item.active || navFxTick.fixtures > 0)
-                      ? "fixtures-icon-pop"
-                      : "",
-                    item.key === "predictions" &&
-                    (item.active || navFxTick.predictions > 0)
-                      ? "predictions-icon-pop"
-                      : "",
-                    item.key === "home" && (item.active || navFxTick.home > 0)
-                      ? "home-icon-pop"
-                      : "",
-                    item.key === "stats" && (item.active || navFxTick.stats > 0)
-                      ? "stats-icon-pop"
-                      : "",
-                  ].join(" ")}
-                />
-                {item.key === "leaderboard" &&
-                (item.active || navFxTick.leaderboard > 0) ? (
-                  <>
-                    <span
-                      key={`lb-ring-${navFxTick.leaderboard}`}
-                      className="leaderboard-burst-once"
-                    />
-                    {[
-                      { x: -14, y: -10, d: "0ms" },
-                      { x: 13, y: -12, d: "60ms" },
-                      { x: 16, y: 2, d: "100ms" },
-                      { x: -15, y: 4, d: "140ms" },
-                      { x: 0, y: -16, d: "40ms" },
-                    ].map((spark, idx) => (
-                      <span
-                        key={`lb-spark-${navFxTick.leaderboard}-${idx}`}
-                        className="leaderboard-firework-once"
-                        style={
-                          {
-                            "--sx": `${spark.x}px`,
-                            "--sy": `${spark.y}px`,
-                            animationDelay: spark.d,
-                          } as React.CSSProperties
+        <div
+          className="absolute inset-0 rounded-[31px] border"
+          style={{
+            borderColor: "rgba(255,255,255,0.08)",
+            background:
+              "linear-gradient(180deg, rgba(9,14,26,0.78) 0%, rgba(8,12,22,0.82) 100%)",
+            boxShadow:
+              "0 18px 36px rgba(2,7,18,0.24), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.03)",
+            backdropFilter: "blur(24px) saturate(175%)",
+            WebkitBackdropFilter: "blur(24px) saturate(175%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-x-10 top-0 h-px"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-x-8 bottom-0 h-px"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-2 rounded-[24px] transition-[left,width,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{
+            left: `${activeBubble.left}px`,
+            width: `${activeBubble.width}px`,
+            opacity: activeBubble.visible ? 1 : 0,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(var(--room-accent-rgb),0.14) 100%)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            boxShadow:
+              "0 8px 18px rgba(2,7,18,0.14), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 0 1px rgba(var(--room-accent-rgb),0.08)",
+            backdropFilter: "blur(18px) saturate(150%)",
+            WebkitBackdropFilter: "blur(18px) saturate(150%)",
+          }}
+        >
+          <div
+            className="absolute inset-[1px] rounded-[23px]"
+            style={{
+              background:
+                "radial-gradient(circle at top center, rgba(255,255,255,0.12), transparent 52%), linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01))",
+            }}
+          />
+          <div
+            className="absolute left-[22%] right-[22%] top-0 h-px"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)",
+            }}
+          />
+        </div>
+        <div
+          className={[
+            "relative z-[1]",
+            collapsed ? "flex items-stretch gap-0" : "flex items-stretch gap-1",
+          ].join(" ")}
+        >
+          {items.map((item) => {
+            const Icon = item.icon;
+            const itemCollapsed = collapsed && !item.active;
+
+            return (
+              <div
+                key={item.key}
+                className="relative min-w-0 overflow-hidden transition-[flex,width,opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={
+                  itemCollapsed
+                    ? {
+                        flex: "0 0 0px",
+                        width: 0,
+                        opacity: 0,
+                        transform: "scale(0.92)",
+                        pointerEvents: "none",
+                      }
+                    : collapsed
+                      ? {
+                          flex: "1 1 auto",
+                          width: "100%",
+                          opacity: 1,
+                          transform: "scale(1)",
                         }
-                      />
-                    ))}
-                  </>
-                ) : null}
-                {item.key === "fixtures" &&
-                (item.active || navFxTick.fixtures > 0) ? (
+                      : {
+                          flex: "1 1 0%",
+                          width: 0,
+                          opacity: 1,
+                          transform: "scale(1)",
+                        }
+                }
+              >
+                <button
+                  ref={(node) => {
+                    buttonRefs.current[item.key] = node;
+                  }}
+                  type="button"
+                  onPointerDown={(event) => onNavPointerDown(event, item)}
+                  onClick={() => {
+                    if (performance.now() - lastTouchHandledAtRef.current < 450) return;
+                    onNavClick(item.key, item.href, item.active, item.disabled);
+                  }}
+                  disabled={item.disabled}
+                  aria-disabled={item.disabled ? "true" : undefined}
+                  className={[
+                    "relative flex w-full min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5 transition-colors duration-250 ease-out pointer-events-auto",
+                    item.active
+                      ? "text-foreground"
+                      : item.disabled
+                        ? "text-muted opacity-50 cursor-not-allowed"
+                        : "text-muted",
+                  ].join(" ")}
+                >
+                  <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
+                    <Icon
+                      size={16}
+                      className={[item.active ? "text-white" : "text-white/64"].join(" ")}
+                    />
+                  </span>
                   <span
-                    key={`fx-wave-${navFxTick.fixtures}`}
-                    className="fixtures-wave-once"
-                  />
-                ) : null}
-                {item.key === "predictions" &&
-                (item.active || navFxTick.predictions > 0) ? (
-                  <>
-                    <span
-                      key={`pr-dot-l-${navFxTick.predictions}`}
-                      className="predictions-dot-once predictions-dot-once--left"
-                    />
-                    <span
-                      key={`pr-dot-r-${navFxTick.predictions}`}
-                      className="predictions-dot-once predictions-dot-once--right"
-                    />
-                  </>
-                ) : null}
-                {item.key === "home" && (item.active || navFxTick.home > 0) ? (
-                  <span
-                    key={`home-ring-${navFxTick.home}`}
-                    className="home-ring-once"
-                  />
-                ) : null}
-                {item.key === "stats" &&
-                (item.active || navFxTick.stats > 0) ? (
-                  <>
-                    <span
-                      key={`st-bar-1-${navFxTick.stats}`}
-                      className="stats-bar-once stats-bar-once--1"
-                    />
-                    <span
-                      key={`st-bar-2-${navFxTick.stats}`}
-                      className="stats-bar-once stats-bar-once--2"
-                    />
-                    <span
-                      key={`st-bar-3-${navFxTick.stats}`}
-                      className="stats-bar-once stats-bar-once--3"
-                    />
-                  </>
-                ) : null}
-              </span>
-              <span className="truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]">
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
+                    className={[
+                      "truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em] transition-colors duration-250 ease-out",
+                      item.active ? "text-white" : "text-white/68",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
-
-  return createPortal(navNode, document.body);
 }

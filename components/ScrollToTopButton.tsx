@@ -1,50 +1,21 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { usePathname } from "next/navigation";
 import { triggerTapHaptic } from "@/lib/haptics";
-
-const SHOW_AFTER_PX = 220;
-const HIDE_BELOW_PX = 160;
+import useRoomScrollAffordance from "./useRoomScrollAffordance";
 
 export default function ScrollToTopButton() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    let raf = 0;
-    const updateVisibility = () => {
-      raf = 0;
-      const scrollTop =
-        window.scrollY || document.documentElement.scrollTop || 0;
-      const canScroll =
-        document.documentElement.scrollHeight > window.innerHeight + 32;
-      setVisible((prev) => {
-        if (!canScroll) return false;
-        if (!prev && scrollTop > SHOW_AFTER_PX) return true;
-        if (prev && scrollTop < HIDE_BELOW_PX) return false;
-        return prev;
-      });
-    };
-
-    const onScroll = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(updateVisibility);
-    };
-
-    updateVisibility();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-
-    return () => {
-      if (raf) window.cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [pathname]);
+  const { visible } = useRoomScrollAffordance(pathname);
 
   const scrollToTop = () => {
     triggerTapHaptic();
+    const scrollRoot = document.getElementById("room-scroll-root");
+    if (scrollRoot instanceof HTMLElement) {
+      scrollRoot.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -54,14 +25,39 @@ export default function ScrollToTopButton() {
       onClick={scrollToTop}
       aria-label="Return to top"
       className={[
-        "scroll-top-fab fixed right-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_14px_30px_rgba(3,8,20,0.26)] backdrop-blur-xl",
-        "transition-all duration-200 will-change-transform",
+        "scroll-top-fab no-3d fixed right-4 z-[86] inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-[22px] border text-foreground transform-gpu",
         visible
-          ? "pointer-events-auto translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-2 opacity-0",
+          ? "scroll-top-fab--visible pointer-events-auto"
+          : "scroll-top-fab--hidden pointer-events-none",
       ].join(" ")}
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.2rem)" }}
+      style={{
+        borderColor: "rgba(255,255,255,0.1)",
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.025) 100%)",
+        boxShadow:
+          "0 16px 34px rgba(3,8,20,0.28), inset 0 1px 0 rgba(255,255,255,0.08)",
+        backdropFilter: "blur(20px) saturate(170%)",
+        WebkitBackdropFilter: "blur(20px) saturate(170%)",
+        willChange: "opacity, transform",
+        contain: "paint",
+      }}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-3 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)",
+        }}
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-4 bottom-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)",
+        }}
+      />
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"

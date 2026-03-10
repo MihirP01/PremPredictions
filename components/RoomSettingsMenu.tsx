@@ -47,7 +47,7 @@ export function SettingsDropdownPanel({
       className={[
         "absolute right-0 top-full mt-2",
         "z-[300] w-[min(18rem,calc(100vw-2rem))] rounded-[22px] border p-3 shadow-[0_20px_44px_rgba(3,8,20,0.35)] backdrop-blur-xl",
-        "origin-top-right transition-all duration-150 ease-out",
+        "origin-top-right transition-all duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform",
         open
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
           : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0",

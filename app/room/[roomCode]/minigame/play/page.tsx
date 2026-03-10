@@ -7,6 +7,7 @@ import { useAuth } from "../../../../../components/AuthProvider";
 import AnimatedModal from "../../../../../components/AnimatedModal";
 import PageShell from "../../../../../components/PageShell";
 import SectionCard from "../../../../../components/SectionCard";
+import SectionStack from "../../../../../components/SectionStack";
 import SpecialBreak from "../../../../../components/SpecialBreak";
 import TeamBadge from "../../../../../components/TeamBadge";
 import TeamLabel from "../../../../../components/TeamLabel";
@@ -503,15 +504,17 @@ export default function MiniGamePlayPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-sm text-muted inline-flex items-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            <span>Loading…</span>
-          </div>
-        </SectionCard>
+        <SectionStack gap="page">
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-muted inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Loading…</span>
+            </div>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -537,15 +540,17 @@ export default function MiniGamePlayPage() {
         <PageShell
           width="wide"
           shellChrome={false}
-          outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-          contentClassName="relative z-[1] space-y-4"
+          outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+          contentClassName="relative z-[1]"
         >
-          <SectionCard className={standardSectionCardClass}>
-            <div className="text-sm text-muted inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading…</span>
-            </div>
-          </SectionCard>
+          <SectionStack gap="page">
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading…</span>
+              </div>
+            </SectionCard>
+          </SectionStack>
         </PageShell>
       );
     }
@@ -553,12 +558,14 @@ export default function MiniGamePlayPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <SectionCard className={standardSectionCardClass}>
-          <div className="text-sm text-muted">Game not started yet.</div>
-        </SectionCard>
+        <SectionStack gap="page">
+          <SectionCard className={standardSectionCardClass}>
+            <div className="text-sm text-muted">Game not started yet.</div>
+          </SectionCard>
+        </SectionStack>
       </PageShell>
     );
   }
@@ -737,325 +744,331 @@ export default function MiniGamePlayPage() {
     <PageShell
       width="wide"
       shellChrome={false}
-      outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-      contentClassName="relative z-[1] space-y-4"
+      outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+      contentClassName="relative z-[1]"
     >
-      <div className="relative z-30 space-y-3">
+      <SectionStack gap="page">
         <TopActionRow
-          title={
-            <span
-              className={
-                modeTitle === "Round-Robin"
-                  ? "inline-block text-[clamp(1.75rem,7.1vw,2.7rem)] tracking-[-0.012em]"
-                  : undefined
-              }
-            >
-              {modeTitle}
-            </span>
-          }
-          subtitle={`${roomCode} • GW ${gw}`}
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
-          frameActions={false}
-          actions={
-            <div className="text-right">
-              {isCaptainMode ? (
-                <CaptainTurnIndicator
-                  captainIsChoosingFixture={captainIsChoosingFixture}
-                  fixtureTurnNumber={fixtureTurnNumber}
-                  fixtureTurnTotal={fixtureTurnTotal}
-                  playerTurnNumber={isCaptainParallelMode ? 1 : playerTurnNumber}
-                  playerTurnTotal={isCaptainParallelMode ? 1 : playerTurnTotal}
-                />
-              ) : isParallelDraft ? (
-                <SprintTurnIndicator
-                  turnNumber={sprintTurnNumber}
-                  totalTurns={Math.max(sprintTotalTurns, 1)}
-                />
-              ) : (
-                <RoundRobinTurnIndicator
-                  turnNumber={turnNumber}
-                  totalTurns={totalTurns}
-                />
-              )}
-            </div>
-          }
-        />
-      </div>
-      {isCaptainMode && captainName && (
-        <CaptainBanner captainName={captainName} />
-      )}
-      {isLeader && game.state === "DRAFT" && (
-        <SectionCard className={standardSectionCardClass}>
-          <button
-            onClick={stopPredictions}
-            disabled={stoppingPredictions}
-            className="w-full rounded-[18px] border border-amber-200/12 bg-[linear-gradient(90deg,rgba(78,56,33,0.88),rgba(52,42,34,0.82),rgba(78,56,33,0.88))] px-4 py-3 font-display text-base font-semibold tracking-[0.12em] text-foreground shadow-[0_16px_28px_rgba(40,24,10,0.22)] transition hover:border-amber-200/18 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
-          </button>
-        </SectionCard>
-      )}
-      {stopConfirmOpen ? (
-        <AnimatedModal
-          open
-          onClose={() => setStopConfirmOpen(false)}
-          zIndexClassName="z-[90]"
-          overlayClassName="bg-black/50"
-          panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
-        >
-          <div className="text-lg font-semibold text-foreground">
-            Stop Mini-game
-          </div>
-          <div className="text-sm text-muted">
-            Stop this mini-game and send everyone back to lobby?
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => setStopConfirmOpen(false)}
-              disabled={stoppingPredictions}
-              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmStopPredictions}
-              disabled={stoppingPredictions}
-              className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
-            >
-              Confirm Stop
-            </button>
-          </div>
-        </AnimatedModal>
-      ) : null}
-      {/* fixture */}
-      <SectionCard className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.98),rgba(7,12,22,0.97))] p-4 shadow-[0_20px_42px_rgba(4,8,16,0.32)] sm:p-5">
-        {captainTurnNeedsFixtureChoice && (
-          <div className="mb-3 space-y-2">
-            <div className="text-xs text-muted text-center">
-              Captain: choose fixture
-            </div>
-            <SpecialBreak />
-            <div className="grid items-start gap-2 grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {remainingCaptainFixtureIds.map((fid) => {
-                const f = fixtures.find((x) => x.fixtureId === fid);
-                const isSelected = captainFixtureChoice === fid;
-                const homeColor = f
-                  ? colorForTeam(f.home.tla, f.home.shortName, f.home.name)
-                  : "#475569";
-                const awayColor = f
-                  ? colorForTeam(f.away.tla, f.away.shortName, f.away.name)
-                  : "#475569";
-                const clashBgStyle: React.CSSProperties = {
-                  backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
-                };
-                return (
-                  <button
-                    key={fid}
-                    type="button"
-                    onClick={() => setCaptainFixtureChoice(fid)}
-                    className={[
-                      "relative w-full overflow-hidden rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
-                      isSelected
-                        ? "-translate-y-[1px] border-amber-200/30 text-foreground shadow-[0_16px_34px_rgba(44,27,12,0.3),inset_0_0_0_1px_rgba(255,225,178,0.12)]"
-                        : "border-white/12 bg-surface text-foreground hover:border-white/22 hover:bg-surface-2",
-                    ].join(" ")}
-                    style={clashBgStyle}
-                  >
-                    {isSelected ? (
-                      <>
-                        <span className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-[linear-gradient(180deg,rgba(244,175,108,0.96)_0%,rgba(244,175,108,0.34)_100%)] shadow-[0_0_18px_rgba(244,175,108,0.28)]" />
-                        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-[linear-gradient(180deg,rgba(244,175,108,0)_0%,rgba(244,175,108,0.18)_100%)]" />
-                        <span className="pointer-events-none absolute right-2 top-2 rounded-full border border-amber-200/30 bg-[rgba(40,30,20,0.7)] px-2 py-0.5 font-display text-[0.58rem] uppercase tracking-[0.16em] text-amber-100/90">
-                          Selected
-                        </span>
-                      </>
-                    ) : null}
-                    {f ? (
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            badge={f.home.badge}
-                            wrapperClassName="h-9 w-9 rounded-full"
-                            imageClassName="h-7 w-7 object-contain"
-                            fallbackClassName="text-[10px] font-bold text-foreground"
-                          />
-                          <TeamLabel
-                            name={f.home.name}
-                            tla={f.home.tla}
-                            shortName={f.home.shortName}
-                            showFullName={false}
-                            wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameWindowPx={58}
-                          />
-                        </div>
-                        <span className="font-display text-[9px] uppercase">
-                          vs
-                        </span>
-                        <div className="flex flex-col items-center text-center min-w-0">
-                          <TeamBadge
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            badge={f.away.badge}
-                            wrapperClassName="h-9 w-9 rounded-full"
-                            imageClassName="h-7 w-7 object-contain"
-                            fallbackClassName="text-[10px] font-bold text-foreground"
-                          />
-                          <TeamLabel
-                            name={f.away.name}
-                            tla={f.away.tla}
-                            shortName={f.away.shortName}
-                            showFullName={false}
-                            wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
-                            abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
-                            fullNameWindowPx={58}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                    {isSelected ? (
-                      <span className="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 bg-[linear-gradient(90deg,rgba(244,175,108,0)_0%,rgba(244,175,108,0.9)_18%,rgba(244,175,108,0.9)_82%,rgba(244,175,108,0)_100%)]" />
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {waitingForCaptainFixture ? (
-          <div className="rounded-xl border-subtle bg-surface p-4 text-center">
-            <div className="inline-flex items-center gap-2 text-muted">
-              <Loader2 size={16} className="animate-spin" />
-              <span>
-                Waiting for{" "}
-                <span className="font-display text-foreground">
-                  {captainName || "captain"}
-                </span>{" "}
-                to choose fixture…
+            title={
+              <span
+                className={
+                  modeTitle === "Round-Robin"
+                    ? "inline-block text-[clamp(1.75rem,7.1vw,2.7rem)] tracking-[-0.012em]"
+                    : undefined
+                }
+              >
+                {modeTitle}
               </span>
-            </div>
-          </div>
-        ) : null}
-        {!captainTurnNeedsFixtureChoice && fixture && (
-          <div
-            className="fixture-clash-bg mb-2 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-white/15 bg-surface-2 px-3 py-3"
-            style={{
-              backgroundImage: `linear-gradient(120deg, ${hexToRgba(colorForTeam(fixture.home.tla, fixture.home.shortName, fixture.home.name), 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(colorForTeam(fixture.away.tla, fixture.away.shortName, fixture.away.name), 0.2)} 100%)`,
-            }}
+            }
+            subtitle={`${roomCode} • GW ${gw}`}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
+            frameActions={false}
+            actions={
+              <div className="text-right">
+                {isCaptainMode ? (
+                  <CaptainTurnIndicator
+                    captainIsChoosingFixture={captainIsChoosingFixture}
+                    fixtureTurnNumber={fixtureTurnNumber}
+                    fixtureTurnTotal={fixtureTurnTotal}
+                    playerTurnNumber={
+                      isCaptainParallelMode ? 1 : playerTurnNumber
+                    }
+                    playerTurnTotal={
+                      isCaptainParallelMode ? 1 : playerTurnTotal
+                    }
+                  />
+                ) : isParallelDraft ? (
+                  <SprintTurnIndicator
+                    turnNumber={sprintTurnNumber}
+                    totalTurns={Math.max(sprintTotalTurns, 1)}
+                  />
+                ) : (
+                  <RoundRobinTurnIndicator
+                    turnNumber={turnNumber}
+                    totalTurns={totalTurns}
+                  />
+                )}
+              </div>
+            }
+          />
+        {isCaptainMode && captainName && (
+          <CaptainBanner captainName={captainName} />
+        )}
+        {isLeader && game.state === "DRAFT" && (
+          <SectionCard className={standardSectionCardClass}>
+            <button
+              onClick={stopPredictions}
+              disabled={stoppingPredictions}
+              className="w-full rounded-[18px] border border-amber-200/12 bg-[linear-gradient(90deg,rgba(78,56,33,0.88),rgba(52,42,34,0.82),rgba(78,56,33,0.88))] px-4 py-3 font-display text-base font-semibold tracking-[0.12em] text-foreground shadow-[0_16px_28px_rgba(40,24,10,0.22)] transition hover:border-amber-200/18 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {stoppingPredictions ? "Stopping…" : "Stop Mini-game"}
+            </button>
+          </SectionCard>
+        )}
+        {stopConfirmOpen ? (
+          <AnimatedModal
+            open
+            onClose={() => setStopConfirmOpen(false)}
+            zIndexClassName="z-[90]"
+            overlayClassName="bg-black/50"
+            panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
           >
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div className="flex flex-col items-center text-center min-w-0">
-                <TeamBadge
-                  name={fixture.home.name}
-                  tla={fixture.home.tla}
-                  shortName={fixture.home.shortName}
-                  badge={fixture.home.badge}
-                  wrapperClassName="h-10 w-10 rounded-full"
-                  imageClassName="h-8 w-8 object-contain"
-                  fallbackClassName="text-[10px] font-bold text-foreground"
-                />
-                <TeamLabel
-                  name={fixture.home.name}
-                  tla={fixture.home.tla}
-                  shortName={fixture.home.shortName}
-                  showFullName={false}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameWindowPx={68}
-                />
+            <div className="text-lg font-semibold text-foreground">
+              Stop Mini-game
+            </div>
+            <div className="text-sm text-muted">
+              Stop this mini-game and send everyone back to lobby?
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setStopConfirmOpen(false)}
+                disabled={stoppingPredictions}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-foreground hover:bg-surface-2 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStopPredictions}
+                disabled={stoppingPredictions}
+                className="text-sm rounded-lg px-3 py-2 bg-surface border border-teal-500 text-danger hover:bg-surface-2 disabled:opacity-60"
+              >
+                Confirm Stop
+              </button>
+            </div>
+          </AnimatedModal>
+        ) : null}
+        {/* fixture */}
+        <SectionCard className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,16,28,0.98),rgba(7,12,22,0.97))] p-4 shadow-[0_20px_42px_rgba(4,8,16,0.32)] sm:p-5">
+          {captainTurnNeedsFixtureChoice && (
+            <div className="mb-3 space-y-2">
+              <div className="text-xs text-muted text-center">
+                Captain: choose fixture
               </div>
-              <div className="font-display text-xs text-muted uppercase">
-                vs
-              </div>
-              <div className="flex flex-col items-center text-center min-w-0">
-                <TeamBadge
-                  name={fixture.away.name}
-                  tla={fixture.away.tla}
-                  shortName={fixture.away.shortName}
-                  badge={fixture.away.badge}
-                  wrapperClassName="h-10 w-10 rounded-full"
-                  imageClassName="h-8 w-8 object-contain"
-                  fallbackClassName="text-[10px] font-bold text-foreground"
-                />
-                <TeamLabel
-                  name={fixture.away.name}
-                  tla={fixture.away.tla}
-                  shortName={fixture.away.shortName}
-                  showFullName={false}
-                  wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
-                  abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
-                  fullNameWindowPx={68}
-                />
+              <SpecialBreak />
+              <div className="grid items-start gap-2 grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {remainingCaptainFixtureIds.map((fid) => {
+                  const f = fixtures.find((x) => x.fixtureId === fid);
+                  const isSelected = captainFixtureChoice === fid;
+                  const homeColor = f
+                    ? colorForTeam(f.home.tla, f.home.shortName, f.home.name)
+                    : "#475569";
+                  const awayColor = f
+                    ? colorForTeam(f.away.tla, f.away.shortName, f.away.name)
+                    : "#475569";
+                  const clashBgStyle: React.CSSProperties = {
+                    backgroundImage: `linear-gradient(120deg, ${hexToRgba(homeColor, 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(awayColor, 0.2)} 100%)`,
+                  };
+                  return (
+                    <button
+                      key={fid}
+                      type="button"
+                      onClick={() => setCaptainFixtureChoice(fid)}
+                      className={[
+                        "relative w-full overflow-hidden rounded-tl-lg rounded-br-lg rounded-tr-none rounded-bl-none border p-3.5 text-left transition-all duration-200",
+                        isSelected
+                          ? "-translate-y-[1px] border-amber-200/30 text-foreground shadow-[0_16px_34px_rgba(44,27,12,0.3),inset_0_0_0_1px_rgba(255,225,178,0.12)]"
+                          : "border-white/12 bg-surface text-foreground hover:border-white/22 hover:bg-surface-2",
+                      ].join(" ")}
+                      style={clashBgStyle}
+                    >
+                      {isSelected ? (
+                        <>
+                          <span className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-[linear-gradient(180deg,rgba(244,175,108,0.96)_0%,rgba(244,175,108,0.34)_100%)] shadow-[0_0_18px_rgba(244,175,108,0.28)]" />
+                          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-[linear-gradient(180deg,rgba(244,175,108,0)_0%,rgba(244,175,108,0.18)_100%)]" />
+                          <span className="pointer-events-none absolute right-2 top-2 rounded-full border border-amber-200/30 bg-[rgba(40,30,20,0.7)] px-2 py-0.5 font-display text-[0.58rem] uppercase tracking-[0.16em] text-amber-100/90">
+                            Selected
+                          </span>
+                        </>
+                      ) : null}
+                      {f ? (
+                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={f.home.name}
+                              tla={f.home.tla}
+                              shortName={f.home.shortName}
+                              badge={f.home.badge}
+                              wrapperClassName="h-9 w-9 rounded-full"
+                              imageClassName="h-7 w-7 object-contain"
+                              fallbackClassName="text-[10px] font-bold text-foreground"
+                            />
+                            <TeamLabel
+                              name={f.home.name}
+                              tla={f.home.tla}
+                              shortName={f.home.shortName}
+                              showFullName={false}
+                              wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameWindowPx={58}
+                            />
+                          </div>
+                          <span className="font-display text-[9px] uppercase">
+                            vs
+                          </span>
+                          <div className="flex flex-col items-center text-center min-w-0">
+                            <TeamBadge
+                              name={f.away.name}
+                              tla={f.away.tla}
+                              shortName={f.away.shortName}
+                              badge={f.away.badge}
+                              wrapperClassName="h-9 w-9 rounded-full"
+                              imageClassName="h-7 w-7 object-contain"
+                              fallbackClassName="text-[10px] font-bold text-foreground"
+                            />
+                            <TeamLabel
+                              name={f.away.name}
+                              tla={f.away.tla}
+                              shortName={f.away.shortName}
+                              showFullName={false}
+                              wrapperClassName="mt-1 flex w-[62px] min-[420px]:w-[72px] flex-col items-center gap-1 text-center"
+                              abbrClassName="font-display w-full text-[10px] font-semibold text-foreground uppercase tracking-wide text-center"
+                              fullNameWindowPx={58}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                      {isSelected ? (
+                        <span className="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 bg-[linear-gradient(90deg,rgba(244,175,108,0)_0%,rgba(244,175,108,0.9)_18%,rgba(244,175,108,0.9)_82%,rgba(244,175,108,0)_100%)]" />
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          )}
+          {waitingForCaptainFixture ? (
+            <div className="rounded-xl border-subtle bg-surface p-4 text-center">
+              <div className="inline-flex items-center gap-2 text-muted">
+                <Loader2 size={16} className="animate-spin" />
+                <span>
+                  Waiting for{" "}
+                  <span className="font-display text-foreground">
+                    {captainName || "captain"}
+                  </span>{" "}
+                  to choose fixture…
+                </span>
+              </div>
+            </div>
+          ) : null}
+          {!captainTurnNeedsFixtureChoice && fixture && (
+            <div
+              className="fixture-clash-bg mb-2 rounded-tl-xl rounded-br-xl rounded-tr-none rounded-bl-none border border-white/15 bg-surface-2 px-3 py-3"
+              style={{
+                backgroundImage: `linear-gradient(120deg, ${hexToRgba(colorForTeam(fixture.home.tla, fixture.home.shortName, fixture.home.name), 0.2)} 0%, rgba(9,12,22,0.92) 42%, rgba(9,12,22,0.92) 58%, ${hexToRgba(colorForTeam(fixture.away.tla, fixture.away.shortName, fixture.away.name), 0.2)} 100%)`,
+              }}
+            >
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div className="flex flex-col items-center text-center min-w-0">
+                  <TeamBadge
+                    name={fixture.home.name}
+                    tla={fixture.home.tla}
+                    shortName={fixture.home.shortName}
+                    badge={fixture.home.badge}
+                    wrapperClassName="h-10 w-10 rounded-full"
+                    imageClassName="h-8 w-8 object-contain"
+                    fallbackClassName="text-[10px] font-bold text-foreground"
+                  />
+                  <TeamLabel
+                    name={fixture.home.name}
+                    tla={fixture.home.tla}
+                    shortName={fixture.home.shortName}
+                    showFullName={false}
+                    wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                    fullNameWindowPx={68}
+                  />
+                </div>
+                <div className="font-display text-xs text-muted uppercase">
+                  vs
+                </div>
+                <div className="flex flex-col items-center text-center min-w-0">
+                  <TeamBadge
+                    name={fixture.away.name}
+                    tla={fixture.away.tla}
+                    shortName={fixture.away.shortName}
+                    badge={fixture.away.badge}
+                    wrapperClassName="h-10 w-10 rounded-full"
+                    imageClassName="h-8 w-8 object-contain"
+                    fallbackClassName="text-[10px] font-bold text-foreground"
+                  />
+                  <TeamLabel
+                    name={fixture.away.name}
+                    tla={fixture.away.tla}
+                    shortName={fixture.away.shortName}
+                    showFullName={false}
+                    wrapperClassName="mt-1 flex w-[78px] sm:w-[86px] flex-col items-center gap-1 text-center"
+                    abbrClassName="font-display w-full text-[10px] sm:text-[11px] font-semibold text-foreground uppercase tracking-wide text-center"
+                    fullNameWindowPx={68}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {shouldShowTakenScores ? (
+            <div className="mt-3">
+              <TakenScoresStrip scores={displayTakenScores} />
+            </div>
+          ) : null}
+        </SectionCard>
+
+        {err && (
+          <SectionCard className="rounded-[20px] border border-red-300/20 bg-[linear-gradient(180deg,rgba(46,12,18,0.88),rgba(26,10,16,0.94))] p-4 shadow-[0_14px_28px_rgba(42,8,12,0.22)]">
+            <div className="text-sm text-red-200">{err}</div>
+          </SectionCard>
         )}
 
-        {shouldShowTakenScores ? (
-          <div className="mt-3">
-            <TakenScoresStrip scores={displayTakenScores} />
-          </div>
-        ) : null}
-      </SectionCard>
-
-      {err && (
-        <SectionCard className="rounded-[20px] border border-red-300/20 bg-[linear-gradient(180deg,rgba(46,12,18,0.88),rgba(26,10,16,0.94))] p-4 shadow-[0_14px_28px_rgba(42,8,12,0.22)]">
-          <div className="text-sm text-red-200">{err}</div>
-        </SectionCard>
-      )}
-
-      {/* pick action */}
-      {waitingForCaptainFixture ? null : captainTurnNeedsFixtureChoice ? (
-        <CaptainChooseFixturePanel
-          submitting={submitting}
-          isLocked={isLocked}
-          hasFixture={effectiveFixtureId != null}
-          onSubmit={submitPick}
-        />
-      ) : isParallelDraft ? (
-        <SprintActionPanel
-          myLockedIn={myLockedIn}
-          isCaptainMode={isCaptainParallelMode}
-          latestLockedPick={latestLockedPick}
-          lockedProgressPct={lockedProgressPct}
-          playersLeftToLock={playersLeftToLock}
-          homeScore={homeScore}
-          awayScore={awayScore}
-          onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
-          onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
-          submitting={submitting}
-          isLocked={isLocked}
-          hasFixture={effectiveFixtureId != null}
-          onSubmit={submitPick}
-        />
-      ) : (
-        <RoundRobinActionPanel
-          amITurn={amITurn}
-          currentTurnName={currentTurnName}
-          waitingText={
-            isCaptainParallelMode && !activeFixtureId ? (
-              <>
-                Waiting for{" "}
-                <span className="font-display">{captainName || "captain"}</span>{" "}
-                to choose fixture…
-              </>
-            ) : undefined
-          }
-          latestLockedPick={latestLockedPick}
-          homeScore={homeScore}
-          awayScore={awayScore}
-          onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
-          onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
-          submitting={submitting}
-          isLocked={isLocked}
-          hasFixture={effectiveFixtureId != null}
-          onSubmit={submitPick}
-        />
-      )}
+        {/* pick action */}
+        {waitingForCaptainFixture ? null : captainTurnNeedsFixtureChoice ? (
+          <CaptainChooseFixturePanel
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+          />
+        ) : isParallelDraft ? (
+          <SprintActionPanel
+            myLockedIn={myLockedIn}
+            isCaptainMode={isCaptainParallelMode}
+            latestLockedPick={latestLockedPick}
+            lockedProgressPct={lockedProgressPct}
+            playersLeftToLock={playersLeftToLock}
+            homeScore={homeScore}
+            awayScore={awayScore}
+            onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
+            onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+          />
+        ) : (
+          <RoundRobinActionPanel
+            amITurn={amITurn}
+            currentTurnName={currentTurnName}
+            waitingText={
+              isCaptainParallelMode && !activeFixtureId ? (
+                <>
+                  Waiting for{" "}
+                  <span className="font-display">
+                    {captainName || "captain"}
+                  </span>{" "}
+                  to choose fixture…
+                </>
+              ) : undefined
+            }
+            latestLockedPick={latestLockedPick}
+            homeScore={homeScore}
+            awayScore={awayScore}
+            onHomeChange={(v) => onlyDigitsOrEmpty(v) && setHomeScore(v)}
+            onAwayChange={(v) => onlyDigitsOrEmpty(v) && setAwayScore(v)}
+            submitting={submitting}
+            isLocked={isLocked}
+            hasFixture={effectiveFixtureId != null}
+            onSubmit={submitPick}
+          />
+        )}
+      </SectionStack>
     </PageShell>
   );
 }

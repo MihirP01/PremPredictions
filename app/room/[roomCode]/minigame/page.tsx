@@ -9,6 +9,8 @@ import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
 import { ModalHeader, ThemedModal } from "../../../../components/RoomModal";
 import SectionCard from "../../../../components/SectionCard";
+import SectionGrid from "../../../../components/SectionGrid";
+import SectionStack from "../../../../components/SectionStack";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
 import TopActionRow from "../../../../components/TopActionRow";
@@ -831,321 +833,317 @@ export default function MiniGameLobbyPage() {
       <PageShell
         width="wide"
         shellChrome={false}
-        outerClassName="min-h-0 px-2 pb-4 pt-2 bg-app sm:px-3 sm:pb-4 sm:pt-2"
-        contentClassName="relative z-[1] space-y-4"
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
       >
-        <div className="relative z-30 space-y-3">
+        <SectionStack gap="page">
           <TopActionRow
-            title="Predictions Lobby"
-            subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
-            actions={<PageBackButton onClick={onBack} />}
-          />
-        </div>
+              title="Predictions Lobby"
+              subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
+              actions={<PageBackButton onClick={onBack} />}
+            />
 
-        {error ? (
-          <SectionCard className={standardSectionCardClass}>
-            <div className="text-sm text-rose-200">{error}</div>
-          </SectionCard>
-        ) : null}
+          {error ? (
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-rose-200">{error}</div>
+            </SectionCard>
+          ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
-            <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="space-y-1.5">
-                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                      Predictions desk
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                        Gameweek
-                      </span>
-                      <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                        GW {gameweek ?? "—"} Predictions
-                      </span>
+          <SectionGrid
+            gap="page"
+            className="xl:grid-cols-2 xl:items-start"
+          >
+            <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
+              <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                        Predictions desk
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
+                          Gameweek
+                        </span>
+                        <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
+                          GW {gameweek ?? "—"} Predictions
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-black/18 px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.18em] text-white/38">
-                      Gameweek status
-                    </div>
-                    <div className="font-display text-lg font-semibold text-foreground">
-                      {isLocked
-                        ? "Missed"
-                        : allPlayersReady
-                          ? "Open"
-                          : `${missingCount} missing`}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                    Control centre
-                  </span>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <button
-                      onClick={() => setModeGuideOpen(true)}
-                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
-                    >
-                      Guide
-                    </button>
-                    {isLeader ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
+                    <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
+                      Control centre
+                    </span>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <button
-                        onClick={() => setModeSettingsOpen(true)}
+                        onClick={() => setModeGuideOpen(true)}
                         className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
                       >
-                        Mode
+                        Guide
                       </button>
-                    ) : null}
+                      {isLeader ? (
+                        <button
+                          onClick={() => setModeSettingsOpen(true)}
+                          className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-foreground transition hover:bg-white/[0.05]"
+                        >
+                          Mode
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <LobbyStatTile
-                    label="Style"
-                    value={modeLabel}
-                    note="Current room format"
-                  />
-                  <LobbyStatTile
-                    label="Identical Picks"
-                    value={allowIdenticalPicks ? "ON" : "OFF"}
-                    note={
-                      allowIdenticalPicks
-                        ? "Parallel-friendly picks."
-                        : "Unique picks enforced."
-                    }
-                  />
-                  <LobbyStatTile
-                    label="Power-Ups"
-                    value={powerupsEnabled ? "ON" : "OFF"}
-                    note={
-                      powerupsEnabled
-                        ? "Extra chip round enabled."
-                        : "Standard scoring only."
-                    }
-                  />
-                </div>
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
-                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Lobby readout
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <LobbyStatTile
+                      label="Style"
+                      value={modeLabel}
+                      note="Current room format"
+                    />
+                    <LobbyStatTile
+                      label="Identical Picks"
+                      value={allowIdenticalPicks ? "ON" : "OFF"}
+                      note={
+                        allowIdenticalPicks
+                          ? "Parallel-friendly picks."
+                          : "Unique picks enforced."
+                      }
+                    />
+                    <LobbyStatTile
+                      label="Power-Ups"
+                      value={powerupsEnabled ? "ON" : "OFF"}
+                      note={
+                        powerupsEnabled
+                          ? "Extra chip round enabled."
+                          : "Standard scoring only."
+                      }
+                    />
                   </div>
-                  <div className="mt-2 text-sm text-muted">
-                    {currentModeSummary}
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
+                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                      Lobby readout
+                    </div>
+                    <div className="mt-2 text-sm text-muted">
+                      {currentModeSummary}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </SectionCard>
+            </SectionCard>
 
-          <SectionCard className={standardSectionCardClass}>
-            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Lock window
-            </div>
-            <div className="mt-1 font-display text-xl font-semibold text-foreground">
-              {isLocked ? `GW${gameweek ?? "—"} locked` : "Weekend countdown"}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {(isLocked
-                ? [
-                    {
-                      label: "Days",
-                      value: unlockCountdown.days,
-                      progress: Math.min(
-                        (Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100,
-                        100,
-                      ),
-                    },
-                    {
-                      label: "Hours",
-                      value: unlockCountdown.hours,
-                      progress:
-                        (Math.floor(((unlockMsLeft / 1000) % 86400) / 3600) /
-                          24) *
-                        100,
-                    },
-                    {
-                      label: "Minutes",
-                      value: unlockCountdown.minutes,
-                      progress:
-                        (Math.floor(((unlockMsLeft / 1000) % 3600) / 60) / 60) *
-                        100,
-                    },
-                    {
-                      label: "Seconds",
-                      value: unlockCountdown.seconds,
-                      progress:
-                        ((Math.floor(unlockMsLeft / 1000) % 60) / 60) * 100,
-                    },
-                  ]
-                : countdownRings
-              ).map((unit) => (
-                <CountdownRing
-                  key={`${isLocked ? "unlock" : "lock"}-${unit.label}`}
-                  label={unit.label}
-                  value={unit.value}
-                  progress={unit.progress}
-                />
-              ))}
-            </div>
-            <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.02] p-4 text-sm text-muted">
-              {isLocked ? (
-                <div className="space-y-2 text-center">
-                  <div>
-                    Next gameweek:{" "}
-                    <span className="font-display font-semibold text-foreground">
-                      GW {gameweek != null ? gameweek + 1 : "—"}
-                    </span>
-                  </div>
-                  {unlockAtMs != null ? (
-                    <div className="font-display text-foreground">
-                      {(() => {
-                        const p = formatUnlockDateParts(unlockAtMs);
-                        return (
-                          <>
-                            {p.day}
-                            <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
-                              {p.suffix}
-                            </span>{" "}
-                            {p.monthYear} {p.time}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div>
-                  Lock closes automatically when the gameweek cutoff hits.
-                  Everyone must be ready before the leader can launch the round.
-                </div>
-              )}
-            </div>
-          </SectionCard>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <SectionCard className={standardSectionCardClass}>
-            <div>
+            <SectionCard className={standardSectionCardClass}>
               <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Ready board
+                Lock window
               </div>
               <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                Room player status
+                {isLocked ? `GW${gameweek ?? "—"} locked` : "Weekend countdown"}
               </div>
-              <div className="mt-4 space-y-2">
-                {roomPlayersCount === 0 ? (
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
-                    No players found in this room yet.
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(isLocked
+                  ? [
+                      {
+                        label: "Days",
+                        value: unlockCountdown.days,
+                        progress: Math.min(
+                          (Math.floor(unlockMsLeft / 1000 / 86400) / 7) * 100,
+                          100,
+                        ),
+                      },
+                      {
+                        label: "Hours",
+                        value: unlockCountdown.hours,
+                        progress:
+                          (Math.floor(((unlockMsLeft / 1000) % 86400) / 3600) /
+                            24) *
+                          100,
+                      },
+                      {
+                        label: "Minutes",
+                        value: unlockCountdown.minutes,
+                        progress:
+                          (Math.floor(((unlockMsLeft / 1000) % 3600) / 60) /
+                            60) *
+                          100,
+                      },
+                      {
+                        label: "Seconds",
+                        value: unlockCountdown.seconds,
+                        progress:
+                          ((Math.floor(unlockMsLeft / 1000) % 60) / 60) * 100,
+                      },
+                    ]
+                  : countdownRings
+                ).map((unit) => (
+                  <CountdownRing
+                    key={`${isLocked ? "unlock" : "lock"}-${unit.label}`}
+                    label={unit.label}
+                    value={unit.value}
+                    progress={unit.progress}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 rounded-[22px] border border-white/8 bg-white/[0.02] p-4 text-sm text-muted">
+                {isLocked ? (
+                  <div className="space-y-2 text-center">
+                    <div>
+                      Next gameweek:{" "}
+                      <span className="font-display font-semibold text-foreground">
+                        GW {gameweek != null ? gameweek + 1 : "—"}
+                      </span>
+                    </div>
+                    {unlockAtMs != null ? (
+                      <div className="font-display text-foreground">
+                        {(() => {
+                          const p = formatUnlockDateParts(unlockAtMs);
+                          return (
+                            <>
+                              {p.day}
+                              <span className="relative -top-[0.35em] ml-[1px] text-[0.72em] font-semibold">
+                                {p.suffix}
+                              </span>{" "}
+                              {p.monthYear} {p.time}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
-                  roomPlayers.map((p) => {
-                    const inLobby = lobbyUidSet.has(p.uid);
-                    return (
-                      <div
-                        key={p.uid}
-                        className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-display font-medium text-foreground">
-                            {p.displayName}
-                          </div>
-                          <div className="mt-1 text-xs text-muted">
-                            {p.uid === user?.uid
-                              ? "You"
-                              : p.uid === leaderUid
-                                ? "Room leader"
-                                : "Room player"}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {p.uid === leaderUid && (
-                            <StatusPill label="Leader" tone="neutral" />
-                          )}
-                          <StatusPill
-                            label={
-                              isLocked
-                                ? "Missed"
-                                : inLobby
-                                  ? "Ready"
-                                  : "Waiting"
-                            }
-                            tone={
-                              isLocked
-                                ? "waiting"
-                                : inLobby
-                                  ? "ready"
-                                  : "waiting"
-                            }
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
+                  <div>
+                    Lock closes automatically when the gameweek cutoff hits.
+                    Everyone must be ready before the leader can launch the
+                    round.
+                  </div>
                 )}
               </div>
-            </div>
-          </SectionCard>
+            </SectionCard>
+          </SectionGrid>
 
-          <SectionCard className={standardSectionCardClass}>
-            <div className="space-y-4">
-              <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
+          <SectionGrid
+            gap="page"
+            className="xl:grid-cols-2 xl:items-start"
+          >
+            <SectionCard className={standardSectionCardClass}>
+              <div>
                 <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Launch gate
+                  Ready board
                 </div>
                 <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  Start conditions
+                  Room player status
                 </div>
-                <div className="mt-3 space-y-3 text-sm text-muted">
-                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
-                    <span>Lobby readiness</span>
-                    <span className="font-display font-semibold text-foreground">
-                      {allPlayersReady ? "Ready" : "Pending"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
-                    <span>Deadline</span>
-                    <span className="font-display font-semibold text-foreground">
-                      {isLocked ? "Missed" : "Open"}
-                    </span>
-                  </div>
+                <div className="mt-4 space-y-2">
+                  {roomPlayersCount === 0 ? (
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+                      No players found in this room yet.
+                    </div>
+                  ) : (
+                    roomPlayers.map((p) => {
+                      const inLobby = lobbyUidSet.has(p.uid);
+                      return (
+                        <div
+                          key={p.uid}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-display font-medium text-foreground">
+                              {p.displayName}
+                            </div>
+                            <div className="mt-1 text-xs text-muted">
+                              {p.uid === user?.uid
+                                ? "You"
+                                : p.uid === leaderUid
+                                  ? "Room leader"
+                                  : "Room player"}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {p.uid === leaderUid && (
+                              <StatusPill label="Leader" tone="neutral" />
+                            )}
+                            <StatusPill
+                              label={
+                                isLocked
+                                  ? "Missed"
+                                  : inLobby
+                                    ? "Ready"
+                                    : "Waiting"
+                              }
+                              tone={
+                                isLocked
+                                  ? "waiting"
+                                  : inLobby
+                                    ? "ready"
+                                    : "waiting"
+                              }
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
+            </SectionCard>
 
-              {isLeader && !isLocked ? (
-                <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
-                  <button
-                    className="w-full rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] px-4 py-3 font-display text-sm font-semibold text-foreground transition hover:bg-[linear-gradient(135deg,rgba(245,158,11,0.2),rgba(56,189,248,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={
-                      starting ||
-                      gameweek == null ||
-                      !allPlayersReady ||
-                      isLocked
-                    }
-                    onClick={startMiniGame}
-                  >
-                    {starting ? "Starting…" : "Start Mini-game"}
-                  </button>
-                  <div className="mt-3 text-xs text-muted">
-                    {allPlayersReady
-                      ? "All conditions are met. Launch when ready."
-                      : "Launch remains locked until every room player is marked Ready."}
+            <SectionCard className={standardSectionCardClass}>
+              <div className="space-y-4">
+                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] p-4">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                    Launch gate
+                  </div>
+                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    Start conditions
+                  </div>
+                  <div className="mt-3 space-y-3 text-sm text-muted">
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                      <span>Lobby readiness</span>
+                      <span className="font-display font-semibold text-foreground">
+                        {allPlayersReady ? "Ready" : "Pending"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
+                      <span>Deadline</span>
+                      <span className="font-display font-semibold text-foreground">
+                        {isLocked ? "Missed" : "Open"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ) : isLocked ? (
-                <div className="rounded-[22px] border border-amber-300/20 bg-amber-400/5 px-4 py-4 text-sm text-amber-100/85">
-                  Missed deadline for this gameweek.
-                </div>
-              ) : (
-                <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>
-                    Waiting for the leader to start once everyone is ready…
-                  </span>
-                </div>
-              )}
-            </div>
-          </SectionCard>
-        </div>
+
+                {isLeader && !isLocked ? (
+                  <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
+                    <button
+                      className="w-full rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] px-4 py-3 font-display text-sm font-semibold text-foreground transition hover:bg-[linear-gradient(135deg,rgba(245,158,11,0.2),rgba(56,189,248,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={
+                        starting ||
+                        gameweek == null ||
+                        !allPlayersReady ||
+                        isLocked
+                      }
+                      onClick={startMiniGame}
+                    >
+                      {starting ? "Starting…" : "Start Mini-game"}
+                    </button>
+                    <div className="mt-3 text-xs text-muted">
+                      {allPlayersReady
+                        ? "All conditions are met. Launch when ready."
+                        : "Launch remains locked until every room player is marked Ready."}
+                    </div>
+                  </div>
+                ) : isLocked ? (
+                  <div className="rounded-[22px] border border-amber-300/20 bg-amber-400/5 px-4 py-4 text-sm text-amber-100/85">
+                    Missed deadline for this gameweek.
+                  </div>
+                ) : (
+                  <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>
+                      Waiting for the leader to start once everyone is ready…
+                    </span>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          </SectionGrid>
+        </SectionStack>
       </PageShell>
       <ThemedModal
         open={modeGuideOpen}

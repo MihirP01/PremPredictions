@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 let nextModalId = 1;
 let modalStack: number[] = [];
 const modalStackListeners = new Set<() => void>();
+const EMPTY_MODAL_STACK: number[] = [];
 
 function emitModalStack() {
   for (const listener of modalStackListeners) listener();
@@ -157,7 +158,7 @@ export default function AnimatedModal({
   const stack = useSyncExternalStore(
     subscribeModalStack,
     getModalStackSnapshot,
-    () => [],
+    () => EMPTY_MODAL_STACK,
   );
   const stackIndex = stack.indexOf(modalId.current);
   const isTopModal = stackIndex === stack.length - 1;

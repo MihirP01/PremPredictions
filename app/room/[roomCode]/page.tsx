@@ -355,6 +355,12 @@ export default function RoomPage() {
       ) {
         return;
       }
+      if (
+        typeof el.closest === "function" &&
+        el.closest("[data-settings-dropdown-root='true']")
+      ) {
+        return;
+      }
       if (settingsWrapRef.current?.contains(target)) return;
       setSettingsOpen(false);
     };
@@ -867,7 +873,7 @@ export default function RoomPage() {
                   />
                   <SettingsDropdownPanel
                     open={settingsOpen}
-                    className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0 w-[min(22rem,calc(100vw-1.5rem))] !z-[340]"
+                    className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0"
                   >
                     <div className="font-display font-semibold text-foreground">
                       Settings
@@ -1297,7 +1303,12 @@ export default function RoomPage() {
         onClose={() => setRoomSwitcherOpen(false)}
         maxWidthClassName="max-w-4xl"
       >
-        <ModalHeader title="Switch Rooms" showCloseButton={false} />
+        <ModalHeader
+          title="Switch Rooms"
+          onClose={() => setRoomSwitcherOpen(false)}
+          showCloseButton
+          closeButtonClassName="hidden sm:inline-flex"
+        />
 
         {switcherError && (
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
@@ -1435,7 +1446,12 @@ export default function RoomPage() {
         onClose={() => setRoomRulesOpen(false)}
         maxWidthClassName="max-w-4xl"
       >
-        <ModalHeader title="Room Settings" showCloseButton={false} />
+        <ModalHeader
+          title="Room Settings"
+          onClose={() => setRoomRulesOpen(false)}
+          showCloseButton
+          closeButtonClassName="hidden sm:inline-flex"
+        />
         <SectionGrid
           gap="page"
           className="lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"

@@ -318,6 +318,7 @@ type ModalHeaderProps = {
   onClose?: () => void;
   ariaLabel?: string;
   showCloseButton?: boolean;
+  closeButtonClassName?: string;
 };
 
 export function ModalHeader({
@@ -325,6 +326,7 @@ export function ModalHeader({
   onClose,
   ariaLabel,
   showCloseButton = true,
+  closeButtonClassName = "",
 }: ModalHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -340,6 +342,7 @@ export function ModalHeader({
         <ModalExitButton
           onClick={onClose}
           ariaLabel={ariaLabel || `Exit ${title.toLowerCase()}`}
+          className={closeButtonClassName}
         />
       ) : null}
     </div>

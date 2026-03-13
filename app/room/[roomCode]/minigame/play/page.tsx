@@ -496,6 +496,16 @@ export default function MiniGamePlayPage() {
     setErr(null);
   }, [effectiveFixtureId]);
 
+  const displayTakenScores = useMemo(
+    () =>
+      takenScores.length
+        ? takenScores
+        : devPreview
+          ? ["1-0", "2-1", "0-0"]
+          : [],
+    [devPreview, takenScores],
+  );
+
   const standardSectionCardClass =
     "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
 
@@ -688,15 +698,6 @@ export default function MiniGamePlayPage() {
     !captainTurnNeedsFixtureChoice &&
     !waitingForCaptainFixture &&
     effectiveFixtureId != null;
-  const displayTakenScores = useMemo(
-    () =>
-      takenScores.length
-        ? takenScores
-        : devPreview
-          ? ["1-0", "2-1", "0-0"]
-          : [],
-    [devPreview, takenScores],
-  );
 
   const stopPredictions = async () => {
     if (!user || !isLeader || gw == null || !seasonKey) return;

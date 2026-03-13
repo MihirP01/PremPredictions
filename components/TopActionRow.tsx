@@ -26,7 +26,7 @@ export default function TopActionRow({
 
   return (
     <div
-      className="top-action-row-enter"
+      className="top-action-row-enter relative z-[140] overflow-visible"
       style={{
         animationName,
         animationDuration: "500ms",

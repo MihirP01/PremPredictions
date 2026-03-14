@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminDb } from "../../../firebase-admin";
 
 const LEAGUE = "PL";
 const FOTMOB_LEAGUE_ID = 47;
@@ -51,6 +52,8 @@ function fmt(d) {
 function clampGW(gw) {
   return Math.min(38, Math.max(1, gw));
 }
+
+const MATCHDAY_CLUSTER_BREAK_MS = 5 * 24 * 60 * 60 * 1000;
 
 function zonedParts(ms, timeZone) {
   const date = typeof ms === "number" ? new Date(ms) : ms;
@@ -189,6 +192,106 @@ function selectCurrentGameweek(byMd, nowMs) {
   };
 }
 
+function buildByMatchday(matches, nowMs) {
+  const staged = new Map();
+
+  for (const match of Array.isArray(matches) ? matches : []) {
+    const md = Number(match?.matchday);
+    if (!Number.isFinite(md)) continue;
+
+    const kickoffMs = Date.parse(String(match?.utcDate || ""));
+    if (!Number.isFinite(kickoffMs)) continue;
+
+    const entry = staged.get(md) ?? [];
+    entry.push(kickoffMs);
+    staged.set(md, entry);
+  }
+
+  const byMd = new Map();
+
+  for (const [md, kickoffList] of staged.entries()) {
+    const orderedKickoffs = kickoffList
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    if (!orderedKickoffs.length) continue;
+
+    const clusters = [];
+    let currentCluster = [orderedKickoffs[0]];
+
+    for (let idx = 1; idx < orderedKickoffs.length; idx += 1) {
+      const kickoffMs = orderedKickoffs[idx];
+      const previousKickoffMs = orderedKickoffs[idx - 1];
+      if (kickoffMs - previousKickoffMs > MATCHDAY_CLUSTER_BREAK_MS) {
+        clusters.push(currentCluster);
+        currentCluster = [kickoffMs];
+        continue;
+      }
+      currentCluster.push(kickoffMs);
+    }
+    clusters.push(currentCluster);
+
+    const primaryCluster = clusters.sort((a, b) => {
+      if (b.length !== a.length) return b.length - a.length;
+      return a[0] - b[0];
+    })[0];
+
+    const earliestKickoffMs = primaryCluster[0];
+    const latestKickoffMs = primaryCluster[primaryCluster.length - 1];
+    const startedKickoffs = primaryCluster.filter((kickoffMs) => kickoffMs <= nowMs);
+
+    byMd.set(md, {
+      total: kickoffList.length,
+      earliestKickoffMs,
+      latestKickoffMs,
+      latestStartedKickoffMs: startedKickoffs.length
+        ? startedKickoffs[startedKickoffs.length - 1]
+        : null,
+    });
+  }
+
+  return byMd;
+}
+
+async function buildSnapshotCurrentGameweek(seasonKey, now) {
+  try {
+    const snap = await adminDb.doc(`_fixtureSnapshots/PL_${seasonKey}`).get();
+    if (!snap.exists) return null;
+
+    const raw = snap.data() || {};
+    const snapshotMatches = Array.isArray(raw.matches)
+      ? raw.matches
+      : Object.values(raw);
+    const matches = snapshotMatches.filter(
+      (value) =>
+        value &&
+        typeof value === "object" &&
+        Number.isFinite(Number(value.matchday)) &&
+        value.utcDate,
+    );
+
+    if (!matches.length) return null;
+
+    const byMd = buildByMatchday(matches, now.getTime());
+    const selected = selectCurrentGameweek(byMd, now.getTime());
+
+    return NextResponse.json(
+      {
+        currentGameweek: selected.currentGameweek,
+        seasonKey,
+        debug: {
+          source: "fixture-snapshot",
+          snapshotDoc: `PL_${seasonKey}`,
+          matchdaysSeen: selected.matchdaysSeen,
+          selectedBy: "next-upcoming-then-rollover-midnight-europe-london-snapshot",
+        },
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch {
+    return null;
+  }
+}
+
 async function buildFotmobFallback(seasonKey, now) {
   const season = seasonStartYearFromKey(seasonKey);
   const fotmobSeason = fotmobSeasonFromStartYear(season);
@@ -248,20 +351,25 @@ async function buildFotmobFallback(seasonKey, now) {
 }
 
 export async function GET(req) {
-  const API_KEY = process.env.FOOTBALLDATA_KEY;
-  if (!API_KEY) {
-    return NextResponse.json(
-      { error: "API key not configured" },
-      { status: 500 },
-    );
-  }
-
   const { searchParams } = new URL(req.url);
   const requestedSeason = searchParams.get("seasonKey");
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
   const season = seasonStartYearFromKey(seasonKey);
 
   const now = new Date();
+  const snapshotCurrent = await buildSnapshotCurrentGameweek(seasonKey, now);
+  if (snapshotCurrent) return snapshotCurrent;
+
+  const API_KEY = process.env.FOOTBALLDATA_KEY;
+  if (!API_KEY) {
+    const fallback = await buildFotmobFallback(seasonKey, now);
+    if (fallback) return fallback;
+    return NextResponse.json(
+      { error: "API key not configured" },
+      { status: 500 },
+    );
+  }
+
   const from = new Date(now);
   from.setUTCDate(from.getUTCDate() - 120);
   const to = new Date(now);
@@ -300,35 +408,7 @@ export async function GET(req) {
   const data = await res.json();
   const matches = Array.isArray(data?.matches) ? data.matches : [];
 
-  const byMd = new Map();
-  const nowMs = now.getTime();
-  for (const m of matches) {
-    const md = m?.matchday;
-    if (!Number.isFinite(md)) continue;
-
-    const kickoffMs = Date.parse(String(m?.utcDate || ""));
-    if (!Number.isFinite(kickoffMs)) continue;
-
-    const entry = byMd.get(md) ?? {
-      total: 0,
-      earliestKickoffMs: kickoffMs,
-      latestKickoffMs: kickoffMs,
-      latestStartedKickoffMs: null,
-    };
-    entry.total += 1;
-    entry.earliestKickoffMs = Math.min(entry.earliestKickoffMs, kickoffMs);
-    entry.latestKickoffMs = Math.max(entry.latestKickoffMs, kickoffMs);
-    if (kickoffMs <= nowMs) {
-      entry.latestStartedKickoffMs =
-        entry.latestStartedKickoffMs == null
-          ? kickoffMs
-          : Math.max(entry.latestStartedKickoffMs, kickoffMs);
-    }
-
-    byMd.set(md, entry);
-  }
-
-  const selected = selectCurrentGameweek(byMd, nowMs);
+  const selected = selectCurrentGameweek(buildByMatchday(matches, now.getTime()), now.getTime());
 
   return NextResponse.json(
     {

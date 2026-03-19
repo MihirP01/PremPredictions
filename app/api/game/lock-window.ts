@@ -19,6 +19,11 @@ const INELIGIBLE_DRAFT_STATUSES = new Set([
   "AWARDED",
 ]);
 
+function coerceKickoffMs(value: unknown): number | null {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function getBaseUrl(req: Request) {
   const host = req.headers.get("host");
   const proto = host?.includes("localhost") ? "http" : "https";
@@ -78,6 +83,7 @@ export async function loadGwFixturesWithLockWindow(
   gw: number,
   seasonKey?: string,
 ) {
+  const nowMs = Date.now();
   const params = new URLSearchParams({ gameweek: String(gw) });
   if (seasonKey) params.set("seasonKey", seasonKey);
   const fxRes = await fetch(`${baseUrl}/api/fixtures?${params.toString()}`, {
@@ -93,11 +99,14 @@ export async function loadGwFixturesWithLockWindow(
       const status = String(f.status || "")
         .toUpperCase()
         .trim();
-      return !INELIGIBLE_DRAFT_STATUSES.has(status);
+      if (INELIGIBLE_DRAFT_STATUSES.has(status)) return false;
+      const kickoffMs = coerceKickoffMs(f.kickoff);
+      if (kickoffMs != null && kickoffMs <= nowMs) return false;
+      return true;
     })
     .sort((a, b) => {
-      const ka = Date.parse(String(a.kickoff || ""));
-      const kb = Date.parse(String(b.kickoff || ""));
+      const ka = coerceKickoffMs(a.kickoff);
+      const kb = coerceKickoffMs(b.kickoff);
       if (Number.isFinite(ka) && Number.isFinite(kb) && ka !== kb)
         return ka - kb;
       const ia = Number(a.fixtureId);
@@ -111,8 +120,8 @@ export async function loadGwFixturesWithLockWindow(
     .filter((n) => Number.isFinite(n));
 
   const kickoffTimes = eligibleFixtures
-    .map((f) => Date.parse(String(f.kickoff || "")))
-    .filter((n) => Number.isFinite(n))
+    .map((f) => coerceKickoffMs(f.kickoff))
+    .filter((n) => n != null)
     .sort((a, b) => a - b);
 
   if (fixtureIds.length === 0) {

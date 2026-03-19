@@ -37,14 +37,30 @@ type GameStateDoc = { state?: string };
 type Fixture = { kickoff?: string; status?: string };
 
 const ESTIMATED_FULL_TIME_MS = 150 * 60 * 1000;
+const INELIGIBLE_DRAFT_STATUSES = new Set([
+  "FINISHED",
+  "FT",
+  "IN_PLAY",
+  "PAUSED",
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+  "AWARDED",
+]);
 
-function isFinalFixtureStatus(status?: string) {
-  const normalized = String(status || "")
+function isDraftEligibleFixture(
+  fixture: Fixture | null | undefined,
+  nowMs: number,
+) {
+  const normalized = String(fixture?.status || "")
     .trim()
     .toUpperCase();
-  return (
-    normalized === "FINISHED" || normalized === "FT" || normalized === "AWARDED"
-  );
+  if (INELIGIBLE_DRAFT_STATUSES.has(normalized)) return false;
+
+  const kickoffMs = Date.parse(String(fixture?.kickoff || ""));
+  if (Number.isFinite(kickoffMs) && kickoffMs <= nowMs) return false;
+
+  return true;
 }
 
 function formatUnlockDateParts(ms: number) {
@@ -367,20 +383,23 @@ export default function MiniGameLobbyPage() {
       const fixtures: Fixture[] = Array.isArray(data?.fixtures)
         ? data.fixtures
         : [];
-      const kickoffTimes = fixtures
+      const currentNowMs = Date.now();
+      const eligibleFixtures = fixtures.filter((fixture) =>
+        isDraftEligibleFixture(fixture, currentNowMs),
+      );
+      const kickoffTimes = eligibleFixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => a - b);
       const firstKickoff = kickoffTimes[0];
-      const pendingKickoffs = fixtures
-        .filter((f) => !isFinalFixtureStatus(f.status))
+      const pendingKickoffs = eligibleFixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => a - b);
       const lastPendingKickoff = pendingKickoffs.length
         ? pendingKickoffs[pendingKickoffs.length - 1]
         : null;
-      const allFinished = fixtures.length > 0 && pendingKickoffs.length === 0;
+      const allFinished = fixtures.length > 0 && eligibleFixtures.length === 0;
 
       if (cancelled) return;
 

@@ -108,7 +108,7 @@ export async function loadGwFixturesWithLockWindow(
       const ka = coerceKickoffMs(a.kickoff);
       const kb = coerceKickoffMs(b.kickoff);
       if (Number.isFinite(ka) && Number.isFinite(kb) && ka !== kb)
-        return ka - kb;
+        return (ka as number) - (kb as number);
       const ia = Number(a.fixtureId);
       const ib = Number(b.fixtureId);
       if (Number.isFinite(ia) && Number.isFinite(ib)) return ia - ib;

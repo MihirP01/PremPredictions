@@ -15,6 +15,9 @@ export type SeasonScoreUserDoc = {
   uid: string;
   points: number;
   breakdown: Record<string, ScoreBreakdownItem>;
+  scoreStatus?: "scored" | "missed" | "fair_play_bye";
+  fairPlayApplied?: boolean;
+  fairPlayMedian?: number | null;
 };
 
 export type SeasonScoreWeek = {
@@ -31,7 +34,7 @@ export type SeasonScoresSnapshot = {
   gameWeeks: number[];
 };
 
-const STORAGE_PREFIX = "seasonScores:v1:";
+const STORAGE_PREFIX = "seasonScores:v2:";
 const TTL_MS = 45_000;
 
 const memCache = new Map<
@@ -145,11 +148,18 @@ async function fetchSnapshot(
           uid?: string;
           points?: number;
           breakdown?: Record<string, ScoreBreakdownItem>;
+          scoreStatus?: "scored" | "missed" | "fair_play_bye";
+          fairPlayApplied?: boolean;
+          fairPlayMedian?: number | null;
         };
         return {
           uid: String(data.uid ?? userDoc.id),
           points: Number(data.points ?? 0),
           breakdown: data.breakdown ?? {},
+          scoreStatus: data.scoreStatus,
+          fairPlayApplied: data.fairPlayApplied === true,
+          fairPlayMedian:
+            data.fairPlayMedian == null ? null : Number(data.fairPlayMedian),
         };
       });
       return {

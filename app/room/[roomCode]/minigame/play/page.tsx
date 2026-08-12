@@ -37,6 +37,7 @@ import {
 } from "./modes/RoundRobinMode";
 import { TakenScoresStrip } from "./modes/ScoreDesk";
 import { SprintActionPanel, SprintTurnIndicator } from "./modes/SprintMode";
+import LeagueMode from "./modes/LeagueMode";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
@@ -46,7 +47,8 @@ type GameDoc = {
   totalTurns: number;
   players: string[];
   draftMode?: "turn" | "parallel";
-  gameModeStyle?: "round_robin" | "sprint" | "captain";
+  gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
+  leagueFairPlayEnabled?: boolean;
   currentFixtureId?: number | null;
   draftReadyByUid?: Record<string, boolean>;
   sameResultLock?: boolean;
@@ -129,6 +131,25 @@ function colorForTeam(
 
 function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);
+}
+
+function timestampMs(value: unknown) {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === "object") {
+    const timestamp = value as {
+      toMillis?: () => number;
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+    };
+    if (typeof timestamp.toMillis === "function") return timestamp.toMillis();
+    if (typeof timestamp.toDate === "function")
+      return timestamp.toDate().getTime();
+    const seconds = Number(timestamp.seconds ?? timestamp._seconds);
+    if (Number.isFinite(seconds)) return seconds * 1000;
+  }
+  const parsed = new Date(String(value || "")).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export default function MiniGamePlayPage() {
@@ -261,6 +282,7 @@ export default function MiniGamePlayPage() {
   }, [roomCode]);
 
   const isCaptainMode = game?.gameModeStyle === "captain";
+  const isLeagueMode = game?.gameModeStyle === "league";
   const isCaptainParallelMode =
     isCaptainMode &&
     (game?.sameResultLock === false || game?.draftMode === "parallel");
@@ -734,6 +756,114 @@ export default function MiniGamePlayPage() {
     }
   };
 
+  const saveLeaguePredictions = async (
+    picks: Array<{ fixtureId: number; score: string | null }>,
+  ) => {
+    if (!user || gw == null || !seasonKey) {
+      throw new Error("Gameweek is still loading.");
+    }
+    const res = await fetch("/api/game/league-picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomCode,
+        gw,
+        uid: user.uid,
+        seasonKey,
+        picks,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      savedCount?: number;
+    };
+    if (!res.ok) throw new Error(data.error || "Failed to save predictions.");
+    return Number(data.savedCount ?? 0);
+  };
+
+  if (isLeagueMode) {
+    const leagueFixtures = (game.fixtureIds ?? [])
+      .map((fixtureId) => fixtures.find((item) => item.fixtureId === fixtureId))
+      .filter((item): item is Fixture => Boolean(item));
+
+    return (
+      <PageShell
+        width="wide"
+        shellChrome={false}
+        outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+        contentClassName="relative z-[1]"
+      >
+        <SectionStack gap="page">
+          <TopActionRow
+            title="League"
+            subtitle={`${roomCode} • GW ${gw}`}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
+            frameActions={false}
+            actions={
+              <button
+                type="button"
+                onClick={() => router.push(`/room/${roomCode}`)}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-display font-semibold text-foreground"
+              >
+                Back to room
+              </button>
+            }
+          />
+          {isLeader ? (
+            <SectionCard className={standardSectionCardClass}>
+              <button
+                onClick={stopPredictions}
+                disabled={stoppingPredictions}
+                className="w-full rounded-[18px] border border-amber-200/12 bg-[linear-gradient(90deg,rgba(78,56,33,0.88),rgba(52,42,34,0.82),rgba(78,56,33,0.88))] px-4 py-3 font-display text-sm font-semibold text-foreground disabled:opacity-60"
+              >
+                {stoppingPredictions ? "Closing…" : "Close League predictions"}
+              </button>
+            </SectionCard>
+          ) : null}
+          <LeagueMode
+            fixtures={leagueFixtures}
+            savedPicks={myPickByFixture}
+            lockAtMs={timestampMs(game.lockAt)}
+            fairPlayEnabled={game.leagueFairPlayEnabled === true}
+            onSave={saveLeaguePredictions}
+          />
+        </SectionStack>
+        {stopConfirmOpen ? (
+          <AnimatedModal
+            open
+            onClose={() => setStopConfirmOpen(false)}
+            zIndexClassName="z-[90]"
+            overlayClassName="bg-black/50"
+            panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
+          >
+            <div className="text-lg font-semibold text-foreground">
+              Close League predictions
+            </div>
+            <div className="text-sm text-muted">
+              Remove this gameweek and all saved League predictions?
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setStopConfirmOpen(false)}
+                disabled={stoppingPredictions}
+                className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStopPredictions}
+                disabled={stoppingPredictions}
+                className="rounded-lg border border-rose-300/20 bg-rose-400/[0.06] px-3 py-2 text-sm text-danger"
+              >
+                Confirm close
+              </button>
+            </div>
+          </AnimatedModal>
+        ) : null}
+      </PageShell>
+    );
+  }
+
   const modeTitle =
     game?.gameModeStyle === "captain"
       ? "Captain"
@@ -750,48 +880,46 @@ export default function MiniGamePlayPage() {
     >
       <SectionStack gap="page">
         <TopActionRow
-            title={
-              <span
-                className={
-                  modeTitle === "Round-Robin"
-                    ? "inline-block text-[clamp(1.75rem,7.1vw,2.7rem)] tracking-[-0.012em]"
-                    : undefined
-                }
-              >
-                {modeTitle}
-              </span>
-            }
-            subtitle={`${roomCode} • GW ${gw}`}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
-            frameActions={false}
-            actions={
-              <div className="text-right">
-                {isCaptainMode ? (
-                  <CaptainTurnIndicator
-                    captainIsChoosingFixture={captainIsChoosingFixture}
-                    fixtureTurnNumber={fixtureTurnNumber}
-                    fixtureTurnTotal={fixtureTurnTotal}
-                    playerTurnNumber={
-                      isCaptainParallelMode ? 1 : playerTurnNumber
-                    }
-                    playerTurnTotal={
-                      isCaptainParallelMode ? 1 : playerTurnTotal
-                    }
-                  />
-                ) : isParallelDraft ? (
-                  <SprintTurnIndicator
-                    turnNumber={sprintTurnNumber}
-                    totalTurns={Math.max(sprintTotalTurns, 1)}
-                  />
-                ) : (
-                  <RoundRobinTurnIndicator
-                    turnNumber={turnNumber}
-                    totalTurns={totalTurns}
-                  />
-                )}
-              </div>
-            }
-          />
+          title={
+            <span
+              className={
+                modeTitle === "Round-Robin"
+                  ? "inline-block text-[clamp(1.75rem,7.1vw,2.7rem)] tracking-[-0.012em]"
+                  : undefined
+              }
+            >
+              {modeTitle}
+            </span>
+          }
+          subtitle={`${roomCode} • GW ${gw}`}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3"
+          frameActions={false}
+          actions={
+            <div className="text-right">
+              {isCaptainMode ? (
+                <CaptainTurnIndicator
+                  captainIsChoosingFixture={captainIsChoosingFixture}
+                  fixtureTurnNumber={fixtureTurnNumber}
+                  fixtureTurnTotal={fixtureTurnTotal}
+                  playerTurnNumber={
+                    isCaptainParallelMode ? 1 : playerTurnNumber
+                  }
+                  playerTurnTotal={isCaptainParallelMode ? 1 : playerTurnTotal}
+                />
+              ) : isParallelDraft ? (
+                <SprintTurnIndicator
+                  turnNumber={sprintTurnNumber}
+                  totalTurns={Math.max(sprintTotalTurns, 1)}
+                />
+              ) : (
+                <RoundRobinTurnIndicator
+                  turnNumber={turnNumber}
+                  totalTurns={totalTurns}
+                />
+              )}
+            </div>
+          }
+        />
         {isCaptainMode && captainName && (
           <CaptainBanner captainName={captainName} />
         )}

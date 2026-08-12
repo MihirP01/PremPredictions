@@ -231,15 +231,17 @@ export default function MiniGameLobbyPage() {
 
   const [starting, setStarting] = useState(false);
   const [gameModeStyle, setGameModeStyle] = useState<
-    "round_robin" | "sprint" | "captain"
+    "round_robin" | "sprint" | "captain" | "league"
   >("round_robin");
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState<boolean>(true);
   const [powerupsEnabled, setPowerupsEnabled] = useState<boolean>(false);
+  const [leagueFairPlayEnabled, setLeagueFairPlayEnabled] =
+    useState<boolean>(false);
   const [modeSettingsOpen, setModeSettingsOpen] = useState(false);
   const [modeGuideOpen, setModeGuideOpen] = useState(false);
   const [modeSettingsBusy, setModeSettingsBusy] = useState(false);
   const [guideOpenMode, setGuideOpenMode] = useState<
-    "round_robin" | "captain" | "sprint" | null
+    "round_robin" | "captain" | "sprint" | "league" | null
   >("round_robin");
   const [guideOpenPowerup, setGuideOpenPowerup] = useState<
     "all_in" | "safety_net" | null
@@ -255,17 +257,21 @@ export default function MiniGameLobbyPage() {
       ? "Round-Robin"
       : gameModeStyle === "captain"
         ? "Captain"
-        : "Sprint";
+        : gameModeStyle === "league"
+          ? "League"
+          : "Sprint";
   const currentModeSummary =
-    gameModeStyle === "sprint"
-      ? "Everyone submits at once each fixture. Fastest flow for larger rooms."
-      : gameModeStyle === "captain"
-        ? allowIdenticalPicks
-          ? "Captain picks the fixture order, then everyone submits together."
-          : "Captain picks the fixture order, then players submit one-by-one."
-        : allowIdenticalPicks
-          ? "Classic turn flow with duplicate score picks allowed."
-          : "Classic turn flow with unique score picks per fixture.";
+    gameModeStyle === "league"
+      ? "Everyone submits the full gameweek independently before the cutoff. No shared live session is required."
+      : gameModeStyle === "sprint"
+        ? "Everyone submits at once each fixture. Fastest flow for larger rooms."
+        : gameModeStyle === "captain"
+          ? allowIdenticalPicks
+            ? "Captain picks the fixture order, then everyone submits together."
+            : "Captain picks the fixture order, then players submit one-by-one."
+          : allowIdenticalPicks
+            ? "Classic turn flow with duplicate score picks allowed."
+            : "Classic turn flow with unique score picks per fixture.";
 
   // Track current lobby doc ref so we can reliably remove it on back/logout/unmount
   const lobbyRefRef = useRef<ReturnType<typeof doc> | null>(null);
@@ -295,6 +301,7 @@ export default function MiniGameLobbyPage() {
           style === "sprint" ? true : Boolean(data.allowIdenticalPicks),
         );
         setPowerupsEnabled(Boolean(data.powerupsEnabled));
+        setLeagueFairPlayEnabled(Boolean(data.leagueFairPlayEnabled));
         const st = String(data.gameState || "")
           .trim()
           .toUpperCase();
@@ -346,6 +353,9 @@ export default function MiniGameLobbyPage() {
           style === "sprint" ? true : !roomMeta.settings.sameResultLock,
         );
         setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
+        setLeagueFairPlayEnabled(
+          roomMeta.settings.leagueFairPlayEnabled === true,
+        );
       },
       () => {},
     );
@@ -683,7 +693,7 @@ export default function MiniGameLobbyPage() {
       roomPlayers.length > 0 &&
       roomPlayers.every((p) => lobbyUidSet.has(p.uid)) &&
       players.length === roomPlayers.length;
-    if (!everyoneReady) {
+    if (gameModeStyle !== "league" && !everyoneReady) {
       setError(
         `All room players must be Ready before starting (${players.length}/${roomPlayers.length}).`,
       );
@@ -718,7 +728,7 @@ export default function MiniGameLobbyPage() {
   }
 
   async function updateGameModeStyle(
-    nextStyle: "round_robin" | "sprint" | "captain",
+    nextStyle: "round_robin" | "sprint" | "captain" | "league",
   ) {
     if (!user || !isLeader || modeSettingsBusy) return;
     setModeSettingsBusy(true);
@@ -737,8 +747,11 @@ export default function MiniGameLobbyPage() {
       if (!res.ok) throw new Error(data?.error || "Failed to update mode.");
       setGameModeStyle(nextStyle);
       setAllowIdenticalPicks(
-        nextStyle === "sprint" ? true : !(data?.sameResultLock !== false),
+        nextStyle === "sprint" || nextStyle === "league"
+          ? true
+          : !(data?.sameResultLock !== false),
       );
+      if (nextStyle === "league") setPowerupsEnabled(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to update mode.");
     } finally {
@@ -748,7 +761,7 @@ export default function MiniGameLobbyPage() {
 
   async function toggleSameResultLock() {
     if (!user || !isLeader || modeSettingsBusy) return;
-    if (gameModeStyle === "sprint") return;
+    if (gameModeStyle === "sprint" || gameModeStyle === "league") return;
     const nextAllowIdentical = !allowIdenticalPicks;
     setModeSettingsBusy(true);
     setError(null);
@@ -775,7 +788,8 @@ export default function MiniGameLobbyPage() {
   }
 
   async function togglePowerupsEnabled() {
-    if (!user || !isLeader || modeSettingsBusy) return;
+    if (!user || !isLeader || modeSettingsBusy || gameModeStyle === "league")
+      return;
     const nextEnabled = !powerupsEnabled;
     setModeSettingsBusy(true);
     setError(null);
@@ -800,6 +814,33 @@ export default function MiniGameLobbyPage() {
     }
   }
 
+  async function toggleLeagueFairPlay() {
+    if (!user || !isLeader || modeSettingsBusy || gameModeStyle !== "league")
+      return;
+    const nextEnabled = !leagueFairPlayEnabled;
+    setModeSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          leagueFairPlayEnabled: nextEnabled,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to update Fair Play.");
+      setLeagueFairPlayEnabled(data?.leagueFairPlayEnabled === true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update Fair Play.");
+    } finally {
+      setModeSettingsBusy(false);
+    }
+  }
+
   // Simple loading guard
   if (loading) return null;
 
@@ -808,6 +849,7 @@ export default function MiniGameLobbyPage() {
     roomPlayersCount > 0 &&
     roomPlayers.every((p) => lobbyUidSet.has(p.uid)) &&
     players.length === roomPlayersCount;
+  const launchReady = gameModeStyle === "league" || allPlayersReady;
   const isLocked = !devPreview && lockAtMs != null && nowMs >= lockAtMs;
   const unlockMsLeft = unlockAtMs != null ? Math.max(unlockAtMs - nowMs, 0) : 0;
   const unlockCountdown = getCountdownParts(unlockMsLeft);
@@ -857,10 +899,10 @@ export default function MiniGameLobbyPage() {
       >
         <SectionStack gap="page">
           <TopActionRow
-              title="Predictions Lobby"
-              subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
-              actions={<PageBackButton onClick={onBack} />}
-            />
+            title="Predictions Lobby"
+            subtitle={`${roomCode}${gameweek != null ? ` • GW ${gameweek}` : ""}`}
+            actions={<PageBackButton onClick={onBack} />}
+          />
 
           {error ? (
             <SectionCard className={standardSectionCardClass}>
@@ -868,10 +910,7 @@ export default function MiniGameLobbyPage() {
             </SectionCard>
           ) : null}
 
-          <SectionGrid
-            gap="page"
-            className="xl:grid-cols-2 xl:items-start"
-          >
+          <SectionGrid gap="page" className="xl:grid-cols-2 xl:items-start">
             <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
               <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
                 <div className="flex flex-col gap-4">
@@ -919,20 +958,36 @@ export default function MiniGameLobbyPage() {
                     />
                     <LobbyStatTile
                       label="Identical Picks"
-                      value={allowIdenticalPicks ? "ON" : "OFF"}
+                      value={
+                        gameModeStyle === "league"
+                          ? "N/A"
+                          : allowIdenticalPicks
+                            ? "ON"
+                            : "OFF"
+                      }
                       note={
-                        allowIdenticalPicks
-                          ? "Parallel-friendly picks."
-                          : "Unique picks enforced."
+                        gameModeStyle === "league"
+                          ? "Private independent entries."
+                          : allowIdenticalPicks
+                            ? "Parallel-friendly picks."
+                            : "Unique picks enforced."
                       }
                     />
                     <LobbyStatTile
                       label="Power-Ups"
-                      value={powerupsEnabled ? "ON" : "OFF"}
+                      value={
+                        gameModeStyle === "league"
+                          ? "OFF"
+                          : powerupsEnabled
+                            ? "ON"
+                            : "OFF"
+                      }
                       note={
-                        powerupsEnabled
-                          ? "Extra chip round enabled."
-                          : "Standard scoring only."
+                        gameModeStyle === "league"
+                          ? "League uses standard scoring."
+                          : powerupsEnabled
+                            ? "Extra chip round enabled."
+                            : "Standard scoring only."
                       }
                     />
                   </div>
@@ -1028,18 +1083,16 @@ export default function MiniGameLobbyPage() {
                 ) : (
                   <div>
                     Lock closes automatically when the gameweek cutoff hits.
-                    Everyone must be ready before the leader can launch the
-                    round.
+                    {gameModeStyle === "league"
+                      ? "The leader can open League predictions now; players can submit separately until the cutoff."
+                      : "Everyone must be ready before the leader can launch the round."}
                   </div>
                 )}
               </div>
             </SectionCard>
           </SectionGrid>
 
-          <SectionGrid
-            gap="page"
-            className="xl:grid-cols-2 xl:items-start"
-          >
+          <SectionGrid gap="page" className="xl:grid-cols-2 xl:items-start">
             <SectionCard className={standardSectionCardClass}>
               <div>
                 <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -1081,14 +1134,16 @@ export default function MiniGameLobbyPage() {
                               label={
                                 isLocked
                                   ? "Missed"
-                                  : inLobby
-                                    ? "Ready"
-                                    : "Waiting"
+                                  : gameModeStyle === "league"
+                                    ? "Included"
+                                    : inLobby
+                                      ? "Ready"
+                                      : "Waiting"
                               }
                               tone={
                                 isLocked
                                   ? "waiting"
-                                  : inLobby
+                                  : gameModeStyle === "league" || inLobby
                                     ? "ready"
                                     : "waiting"
                               }
@@ -1115,7 +1170,7 @@ export default function MiniGameLobbyPage() {
                     <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
                       <span>Lobby readiness</span>
                       <span className="font-display font-semibold text-foreground">
-                        {allPlayersReady ? "Ready" : "Pending"}
+                        {launchReady ? "Ready" : "Pending"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2">
@@ -1132,19 +1187,22 @@ export default function MiniGameLobbyPage() {
                     <button
                       className="w-full rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] px-4 py-3 font-display text-sm font-semibold text-foreground transition hover:bg-[linear-gradient(135deg,rgba(245,158,11,0.2),rgba(56,189,248,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={
-                        starting ||
-                        gameweek == null ||
-                        !allPlayersReady ||
-                        isLocked
+                        starting || gameweek == null || !launchReady || isLocked
                       }
                       onClick={startMiniGame}
                     >
-                      {starting ? "Starting…" : "Start Mini-game"}
+                      {starting
+                        ? "Opening…"
+                        : gameModeStyle === "league"
+                          ? "Open League Predictions"
+                          : "Start Mini-game"}
                     </button>
                     <div className="mt-3 text-xs text-muted">
-                      {allPlayersReady
-                        ? "All conditions are met. Launch when ready."
-                        : "Launch remains locked until every room player is marked Ready."}
+                      {gameModeStyle === "league"
+                        ? "Every room member is included automatically and can submit in their own time."
+                        : allPlayersReady
+                          ? "All conditions are met. Launch when ready."
+                          : "Launch remains locked until every room player is marked Ready."}
                     </div>
                   </div>
                 ) : isLocked ? (
@@ -1179,8 +1237,10 @@ export default function MiniGameLobbyPage() {
             Current setup
           </div>
           <div className="mt-2 font-display text-xl font-semibold text-foreground">
-            {modeLabel} • Allow Identical Picks{" "}
-            {allowIdenticalPicks ? "ON" : "OFF"}
+            {modeLabel}
+            {gameModeStyle !== "league"
+              ? ` • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
+              : ` • Fair Play ${leagueFairPlayEnabled ? "ON" : "OFF"}`}
           </div>
           <div className="mt-2 text-xs text-muted">
             Power-Ups: {powerupsEnabled ? "ON" : "OFF"}
@@ -1211,6 +1271,11 @@ export default function MiniGameLobbyPage() {
                 key: "sprint" as const,
                 title: "Sprint",
                 body: "Fastest mode. Everyone submits together each fixture and picks stay hidden until reveal.",
+              },
+              {
+                key: "league" as const,
+                title: "League",
+                body: "Large-room asynchronous mode. Every room member enters the full gameweek independently before the cutoff. Missing fixtures stay blank. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure
@@ -1274,12 +1339,13 @@ export default function MiniGameLobbyPage() {
           <div className="mt-1 text-sm text-muted">
             Pick the mode that defines turn order and pace for this room.
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {(
               [
                 ["round_robin", "Round-Robin"],
                 ["captain", "Captain"],
                 ["sprint", "Sprint"],
+                ["league", "League"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -1304,14 +1370,19 @@ export default function MiniGameLobbyPage() {
               Scoring rules
             </div>
             <div className="mt-1 text-sm text-muted">
-              Identical picks can be locked per round except in Sprint.
+              Identical picks can be locked per round except in Sprint and
+              League.
             </div>
             <button
               onClick={toggleSameResultLock}
-              disabled={modeSettingsBusy || gameModeStyle === "sprint"}
+              disabled={
+                modeSettingsBusy ||
+                gameModeStyle === "sprint" ||
+                gameModeStyle === "league"
+              }
               className={[
                 "mt-4 w-full rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:opacity-60",
-                gameModeStyle === "sprint"
+                gameModeStyle === "sprint" || gameModeStyle === "league"
                   ? "cursor-not-allowed border-white/8 bg-white/[0.02] text-muted"
                   : "border-white/8 bg-white/[0.03] text-foreground hover:bg-white/[0.05]",
               ].join(" ")}
@@ -1320,9 +1391,11 @@ export default function MiniGameLobbyPage() {
                 ? "Saving..."
                 : gameModeStyle === "sprint"
                   ? "Allow Identical Picks: ON (Sprint)"
-                  : allowIdenticalPicks
-                    ? "Allow Identical Picks: ON"
-                    : "Allow Identical Picks: OFF"}
+                  : gameModeStyle === "league"
+                    ? "Identical Picks: N/A (League)"
+                    : allowIdenticalPicks
+                      ? "Allow Identical Picks: ON"
+                      : "Allow Identical Picks: OFF"}
             </button>
           </SectionCard>
           <SectionCard className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
@@ -1330,21 +1403,47 @@ export default function MiniGameLobbyPage() {
               Power-Up deck
             </div>
             <div className="mt-1 text-sm text-muted">
-              Enable or disable the extra chip round for this lobby.
+              {gameModeStyle === "league"
+                ? "League uses standard scoring without a shared chip round."
+                : "Enable or disable the extra chip round for this lobby."}
             </div>
             <button
               onClick={togglePowerupsEnabled}
-              disabled={modeSettingsBusy}
+              disabled={modeSettingsBusy || gameModeStyle === "league"}
               className="mt-4 w-full rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-foreground transition hover:bg-white/[0.05] disabled:opacity-60"
             >
               {modeSettingsBusy
                 ? "Saving..."
-                : powerupsEnabled
-                  ? "Power-Ups: ON"
-                  : "Power-Ups: OFF"}
+                : gameModeStyle === "league"
+                  ? "Power-Ups: OFF (League)"
+                  : powerupsEnabled
+                    ? "Power-Ups: ON"
+                    : "Power-Ups: OFF"}
             </button>
           </SectionCard>
         </div>
+        {gameModeStyle === "league" ? (
+          <SectionCard className="rounded-[22px] border border-emerald-300/20 bg-emerald-400/[0.04] p-4">
+            <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-emerald-100/70">
+              League Fair Play
+            </div>
+            <div className="mt-1 text-sm text-muted">
+              Give a player who submits no scores the room median for that
+              gameweek as a clearly labelled Fair Play bye.
+            </div>
+            <button
+              onClick={toggleLeagueFairPlay}
+              disabled={modeSettingsBusy}
+              className="mt-4 w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/[0.06] px-4 py-3 text-sm font-medium text-foreground transition hover:bg-emerald-400/[0.1] disabled:opacity-60"
+            >
+              {modeSettingsBusy
+                ? "Saving..."
+                : leagueFairPlayEnabled
+                  ? "Fair Play: ON"
+                  : "Fair Play: OFF"}
+            </button>
+          </SectionCard>
+        ) : null}
       </ThemedModal>
     </>
   );

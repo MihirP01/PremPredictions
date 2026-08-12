@@ -8,9 +8,10 @@ export type RoomBootstrapData = {
   gameState: string;
   leaderUid: string | null;
   themeAccent: string;
-  gameModeStyle: "round_robin" | "sprint" | "captain";
+  gameModeStyle: "round_robin" | "sprint" | "captain" | "league";
   allowIdenticalPicks: boolean;
   powerupsEnabled?: boolean;
+  leagueFairPlayEnabled?: boolean;
   seasonOptions?: string[];
 };
 

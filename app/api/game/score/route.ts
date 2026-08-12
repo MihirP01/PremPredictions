@@ -13,6 +13,8 @@ import {
 type GameDoc = {
   players?: string[];
   fixtureIds?: number[];
+  gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
+  leagueFairPlayEnabled?: boolean;
 };
 
 type FixtureItem = {
@@ -58,6 +60,15 @@ function buildBaseUrl(req: Request) {
   const proto =
     forwardedProto || (host?.includes("localhost") ? "http" : "https");
   return host ? `${proto}://${host}` : "http://localhost:3000";
+}
+
+function median(values: number[]) {
+  if (!values.length) return null;
+  const ordered = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 1
+    ? ordered[middle]
+    : (ordered[middle - 1] + ordered[middle]) / 2;
 }
 
 async function fetchActualResultsForGw(
@@ -169,11 +180,11 @@ async function scoreSingleGw(
     });
   }
 
-  const batch = adminDb.batch();
-  let scoredUsers = 0;
-
-  for (const uid of players) {
+  const calculated = players.map((uid) => {
     let total = 0;
+    const hasPrediction = fixtureIds.some((fid) =>
+      pickMap.has(`${uid}|${fid}`),
+    );
     const breakdown: Record<
       string,
       {
@@ -217,14 +228,43 @@ async function scoreSingleGw(
       };
     }
 
-    const scoreRef = adminDb.doc(`${seasonBase}/scores/gw-${gw}/users/${uid}`);
+    return { uid, rawPoints: total, hasPrediction, breakdown };
+  });
+
+  const isLeague = game.gameModeStyle === "league";
+  const fairPlayEnabled = isLeague && game.leagueFairPlayEnabled === true;
+  const fairPlayMedian = median(
+    calculated
+      .filter((entry) => entry.hasPrediction)
+      .map((entry) => entry.rawPoints),
+  );
+
+  const batch = adminDb.batch();
+  let scoredUsers = 0;
+
+  for (const entry of calculated) {
+    const missed = isLeague && !entry.hasPrediction;
+    const fairPlayApplied = missed && fairPlayEnabled && fairPlayMedian != null;
+    const points = fairPlayApplied ? fairPlayMedian : entry.rawPoints;
+    const scoreStatus = fairPlayApplied
+      ? "fair_play_bye"
+      : missed
+        ? "missed"
+        : "scored";
+    const scoreRef = adminDb.doc(
+      `${seasonBase}/scores/gw-${gw}/users/${entry.uid}`,
+    );
     batch.set(
       scoreRef,
       {
-        uid,
+        uid: entry.uid,
         gw,
-        points: total,
-        breakdown,
+        points,
+        rawPoints: entry.rawPoints,
+        breakdown: entry.breakdown,
+        scoreStatus,
+        fairPlayApplied,
+        fairPlayMedian: fairPlayApplied ? fairPlayMedian : null,
         computedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -240,6 +280,8 @@ async function scoreSingleGw(
       roomCode,
       scoredUsers,
       fixturesWithResults: actualByFixture.size,
+      leagueFairPlayEnabled: fairPlayEnabled,
+      fairPlayMedian,
       computedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },

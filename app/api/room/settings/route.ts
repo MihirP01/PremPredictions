@@ -10,8 +10,9 @@ type RoomSettingsBody = {
   leaderUid?: string;
   sameResultLock?: boolean;
   powerupsEnabled?: boolean;
+  leagueFairPlayEnabled?: boolean;
   themeAccent?: string;
-  gameModeStyle?: "round_robin" | "sprint" | "captain";
+  gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
 };
 
 type RoomDoc = {
@@ -19,8 +20,9 @@ type RoomDoc = {
   settings?: {
     sameResultLock?: boolean;
     powerupsEnabled?: boolean;
+    leagueFairPlayEnabled?: boolean;
     themeAccent?: string;
-    gameModeStyle?: "round_robin" | "sprint" | "captain";
+    gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   };
 };
 
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
     const leaderUid = String(body.leaderUid || "");
     const sameResultLock = body.sameResultLock;
     const powerupsEnabled = body.powerupsEnabled;
+    const leagueFairPlayEnabled = body.leagueFairPlayEnabled;
     const themeAccent =
       typeof body.themeAccent === "string"
         ? body.themeAccent.trim().toLowerCase()
@@ -59,13 +62,14 @@ export async function POST(req: Request) {
     if (
       typeof sameResultLock !== "boolean" &&
       typeof powerupsEnabled !== "boolean" &&
+      typeof leagueFairPlayEnabled !== "boolean" &&
       typeof themeAccent !== "string" &&
       typeof gameModeStyle !== "string"
     ) {
       return NextResponse.json(
         {
           error:
-            "Provide sameResultLock and/or powerupsEnabled and/or themeAccent and/or gameModeStyle",
+            "Provide sameResultLock, powerupsEnabled, leagueFairPlayEnabled, themeAccent and/or gameModeStyle",
         },
         { status: 400 },
       );
@@ -80,7 +84,8 @@ export async function POST(req: Request) {
       gameModeStyle &&
       gameModeStyle !== "round_robin" &&
       gameModeStyle !== "sprint" &&
-      gameModeStyle !== "captain"
+      gameModeStyle !== "captain" &&
+      gameModeStyle !== "league"
     ) {
       return NextResponse.json(
         { error: "Invalid gameModeStyle" },
@@ -100,12 +105,13 @@ export async function POST(req: Request) {
     }
 
     const currentSettings = room.settings ?? {};
-    let nextGameModeStyle: "round_robin" | "sprint" | "captain" =
+    let nextGameModeStyle: "round_robin" | "sprint" | "captain" | "league" =
       currentSettings.gameModeStyle || "round_robin";
     if (
       gameModeStyle === "round_robin" ||
       gameModeStyle === "sprint" ||
-      gameModeStyle === "captain"
+      gameModeStyle === "captain" ||
+      gameModeStyle === "league"
     ) {
       nextGameModeStyle = gameModeStyle;
     }
@@ -113,13 +119,19 @@ export async function POST(req: Request) {
       typeof sameResultLock === "boolean"
         ? sameResultLock
         : currentSettings.sameResultLock !== false;
-    if (nextGameModeStyle === "sprint") {
+    if (nextGameModeStyle === "sprint" || nextGameModeStyle === "league") {
       nextSameResultLock = false;
     }
     const nextPowerupsEnabled =
-      typeof powerupsEnabled === "boolean"
-        ? powerupsEnabled
-        : currentSettings.powerupsEnabled === true;
+      nextGameModeStyle === "league"
+        ? false
+        : typeof powerupsEnabled === "boolean"
+          ? powerupsEnabled
+          : currentSettings.powerupsEnabled === true;
+    const nextLeagueFairPlayEnabled =
+      typeof leagueFairPlayEnabled === "boolean"
+        ? leagueFairPlayEnabled
+        : currentSettings.leagueFairPlayEnabled === true;
 
     const nextSettings: Record<string, unknown> = {
       updatedAt: FieldValue.serverTimestamp(),
@@ -127,6 +139,7 @@ export async function POST(req: Request) {
     nextSettings.gameModeStyle = nextGameModeStyle;
     nextSettings.sameResultLock = nextSameResultLock;
     nextSettings.powerupsEnabled = nextPowerupsEnabled;
+    nextSettings.leagueFairPlayEnabled = nextLeagueFairPlayEnabled;
     if (themeAccent) nextSettings.themeAccent = themeAccent;
 
     await roomRef.set({ settings: nextSettings }, { merge: true });
@@ -135,6 +148,7 @@ export async function POST(req: Request) {
       ok: true,
       sameResultLock: nextSameResultLock,
       powerupsEnabled: nextPowerupsEnabled,
+      leagueFairPlayEnabled: nextLeagueFairPlayEnabled,
       gameModeStyle: nextGameModeStyle,
       themeAccent: themeAccent ?? undefined,
     });

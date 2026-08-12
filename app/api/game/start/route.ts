@@ -17,7 +17,8 @@ type RoomDoc = {
   settings?: {
     sameResultLock?: boolean;
     powerupsEnabled?: boolean;
-    gameModeStyle?: "round_robin" | "sprint" | "captain";
+    leagueFairPlayEnabled?: boolean;
+    gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   };
 };
 
@@ -59,35 +60,49 @@ export async function POST(req: Request) {
     const room = roomSnap.data() as RoomDoc;
     if (room.leaderUid !== leaderUid)
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
-    const style: "round_robin" | "sprint" | "captain" =
+    const style: "round_robin" | "sprint" | "captain" | "league" =
       room.settings?.gameModeStyle ?? "round_robin";
     const sameResultLock =
-      style === "sprint" ? false : room.settings?.sameResultLock !== false;
+      style === "sprint" || style === "league"
+        ? false
+        : room.settings?.sameResultLock !== false;
     const draftMode: "turn" | "parallel" =
-      style === "sprint" || (style === "captain" && !sameResultLock)
+      style === "sprint" ||
+      style === "league" ||
+      (style === "captain" && !sameResultLock)
         ? "parallel"
         : "turn";
-    const powerupsEnabled = room.settings?.powerupsEnabled === true;
+    const powerupsEnabled =
+      style !== "league" && room.settings?.powerupsEnabled === true;
+    const leagueFairPlayEnabled =
+      style === "league" && room.settings?.leagueFairPlayEnabled === true;
 
     const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
 
-    // roster = current lobby users (ONLY those in minigame lobby)
-    const lobbySnap = await adminDb
-      .collection(`${seasonBase}/games/gw-${gw}/lobby`)
-      .get();
-    const players = lobbySnap.docs.map((d) => d.id);
-
-    if (players.length < 2)
-      return NextResponse.json(
-        { error: "Need at least 2 players in lobby" },
-        { status: 400 },
-      );
-
-    // Require every current room member to be present in lobby before starting.
+    // League is asynchronous, so its roster is every room member. The live
+    // modes continue to use the players who are present in the lobby.
     const roomPlayersSnap = await adminDb
       .collection(`rooms/${roomCode}/players`)
       .get();
     const roomPlayers = roomPlayersSnap.docs.map((d) => d.id);
+    const lobbySnap = await adminDb
+      .collection(`${seasonBase}/games/gw-${gw}/lobby`)
+      .get();
+    const lobbyPlayers = lobbySnap.docs.map((d) => d.id);
+    const players = style === "league" ? roomPlayers : lobbyPlayers;
+
+    if (players.length < 2)
+      return NextResponse.json(
+        {
+          error:
+            style === "league"
+              ? "Need at least 2 room players to open League predictions"
+              : "Need at least 2 players in lobby",
+        },
+        { status: 400 },
+      );
+
+    // Live modes still require every current room member to be present.
     const lobbySet = new Set(players);
     const allMembersPresent =
       roomPlayers.length > 0 &&
@@ -101,7 +116,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!allMembersPresent) {
+    if (style !== "league" && !allMembersPresent) {
       return NextResponse.json(
         {
           error: `All room players must join lobby before starting (${players.length}/${roomPlayers.length})`,
@@ -171,6 +186,7 @@ export async function POST(req: Request) {
           sameResultLock,
           powerupsEnabled,
           gameModeStyle: style,
+          leagueFairPlayEnabled,
           draftReadyByUid: {},
           firstKickoffAt,
           lockAt,

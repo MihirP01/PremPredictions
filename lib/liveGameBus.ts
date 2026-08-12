@@ -26,7 +26,8 @@ type RoomMetaLike = {
   settings: {
     sameResultLock: boolean;
     powerupsEnabled: boolean;
-    gameModeStyle: "round_robin" | "sprint" | "captain";
+    gameModeStyle: "round_robin" | "sprint" | "captain" | "league";
+    leagueFairPlayEnabled: boolean;
     themeAccent: string;
     hasPassword: boolean;
   };
@@ -380,7 +381,8 @@ function attachRoomMetaListener(
         settings?: {
           sameResultLock?: boolean;
           powerupsEnabled?: boolean;
-          gameModeStyle?: "round_robin" | "sprint" | "captain";
+          gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
+          leagueFairPlayEnabled?: boolean;
           themeAccent?: string;
           hasPassword?: boolean;
         };
@@ -394,6 +396,7 @@ function attachRoomMetaListener(
           gameModeStyle:
             data?.settings?.gameModeStyle ??
             (sameResultLock ? "round_robin" : "sprint"),
+          leagueFairPlayEnabled: data?.settings?.leagueFairPlayEnabled === true,
           themeAccent: String(data?.settings?.themeAccent || "teal"),
           hasPassword: Boolean(data?.settings?.hasPassword),
         },

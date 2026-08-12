@@ -48,9 +48,10 @@ export async function GET(req: NextRequest) {
           leaderUid?: string;
           settings?: {
             themeAccent?: string;
-            gameModeStyle?: "round_robin" | "sprint" | "captain";
+            gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
             sameResultLock?: boolean;
             powerupsEnabled?: boolean;
+            leagueFairPlayEnabled?: boolean;
           };
         }
       | undefined;
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
         gameModeStyle: room?.settings?.gameModeStyle ?? "sprint",
         allowIdenticalPicks: room?.settings?.sameResultLock === false,
         powerupsEnabled: room?.settings?.powerupsEnabled === true,
+        leagueFairPlayEnabled: room?.settings?.leagueFairPlayEnabled === true,
         seasonOptions,
       },
       {

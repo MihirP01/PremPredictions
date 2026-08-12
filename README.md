@@ -19,7 +19,10 @@ Multiplayer Premier League prediction app with:
 ## Core Features
 
 - **Room system**: create/join/switch/leave rooms, leader role controls.
-- **Minigame flow**: Lobby -> Draft -> Golden -> Reveal.
+- **Live modes**: Captain, Round-Robin, and Sprint use the shared lobby flow.
+- **League mode**: room-wide asynchronous gameweek submissions with editable
+  blanks until the cutoff; optional Fair Play awards a completely missed week
+  the submitted-player median as a labelled bye.
 - **Scoring**:
   - exact score = 2 points
   - correct result (W/D/L) = 1 point
@@ -95,6 +98,7 @@ firebase deploy --only firestore:rules
 - `GET /api/fixtures?gameweek=<n>`
 - `POST /api/game/start`
 - `POST /api/game/pick`
+- `POST /api/game/league-picks`
 - `POST /api/game/golden`
 - `POST /api/game/score`
 - `POST /api/room/delete`

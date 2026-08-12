@@ -55,6 +55,14 @@ function youPillClass() {
   return "ml-1 inline-flex items-center rounded-full border border-subtle bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-muted align-middle";
 }
 
+function FairPlayPill({ includes = false }: { includes?: boolean }) {
+  return (
+    <span className="ml-1 inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-emerald-100/90 align-middle">
+      {includes ? "Includes Fair Play" : "Fair Play bye"}
+    </span>
+  );
+}
+
 function podiumLabel(position: number) {
   if (position === 1) return "1st";
   if (position === 2) return "2nd";
@@ -194,6 +202,9 @@ export default function LeaderboardMatrixPage() {
   const [hasPredByUserByGw, setHasPredByUserByGw] = useState<
     Record<string, Record<number, boolean>>
   >({});
+  const [fairPlayByUserByGw, setFairPlayByUserByGw] = useState<
+    Record<string, Record<number, boolean>>
+  >({});
 
   // auth guard
   useEffect(() => {
@@ -318,11 +329,15 @@ export default function LeaderboardMatrixPage() {
 
       const matrix: Record<string, Record<number, number>> = {};
       const predMatrix: Record<string, Record<number, boolean>> = {};
+      const fairPlayMatrix: Record<string, Record<number, boolean>> = {};
       for (const p of players) {
         matrix[p.uid] = {};
         predMatrix[p.uid] = {};
+        fairPlayMatrix[p.uid] = {};
         for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
         for (let gw = 1; gw <= currentGw; gw++) predMatrix[p.uid][gw] = false;
+        for (let gw = 1; gw <= currentGw; gw++)
+          fairPlayMatrix[p.uid][gw] = false;
       }
 
       try {
@@ -372,7 +387,9 @@ export default function LeaderboardMatrixPage() {
 
             matrix[uid][gw] = points;
             predMatrix[uid][gw] = hasPred;
-            if (hasPred || points > 0) gwHasMeaningfulScore = true;
+            fairPlayMatrix[uid][gw] = data.fairPlayApplied === true;
+            if (hasPred || points > 0 || data.fairPlayApplied)
+              gwHasMeaningfulScore = true;
           }
           if (gwHasMeaningfulScore) scoredWeeks.add(gw);
         }
@@ -380,6 +397,7 @@ export default function LeaderboardMatrixPage() {
         const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
         setPointsByUserByGw(matrix);
         setHasPredByUserByGw(predMatrix);
+        setFairPlayByUserByGw(fairPlayMatrix);
         setGwScoreComputedAt(currentGwComputedAt);
         setLeaderboardRefreshedAt(new Date());
         setScoredGameweeks(scoredList);
@@ -526,6 +544,16 @@ export default function LeaderboardMatrixPage() {
     },
     [topView, hasPredByUserByGw, currentGw, lastScoredGw, weeks],
   );
+  const hasFairPlayForTopView = useCallback(
+    (uid: string) => {
+      if (topView === "current")
+        return !!fairPlayByUserByGw?.[uid]?.[currentGw];
+      if (topView === "previous")
+        return !!fairPlayByUserByGw?.[uid]?.[lastScoredGw];
+      return weeks.some((gw) => !!fairPlayByUserByGw?.[uid]?.[gw]);
+    },
+    [topView, fairPlayByUserByGw, currentGw, lastScoredGw, weeks],
+  );
   const scoreLabel = useCallback(
     (score: number, hasPred: boolean) =>
       score === 0 && hasPred ? "🦆" : String(score),
@@ -631,6 +659,9 @@ export default function LeaderboardMatrixPage() {
   const leadingHasPred = leadingPlayer
     ? hasPredForTopView(leadingPlayer.uid)
     : false;
+  const leadingHasFairPlay = leadingPlayer
+    ? hasFairPlayForTopView(leadingPlayer.uid)
+    : false;
   const standardSectionCardClass =
     "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const headerActions = (
@@ -716,7 +747,7 @@ export default function LeaderboardMatrixPage() {
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     {leadingPlayer
-                      ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}`
+                      ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}${leadingHasFairPlay ? (topView === "overall" ? " • includes Fair Play" : " • Fair Play bye") : ""}`
                       : "No scored entries yet"}
                   </div>
                 </div>
@@ -784,10 +815,7 @@ export default function LeaderboardMatrixPage() {
           </div>
         </SectionCard>
 
-        <SectionGrid
-          gap="page"
-          className="xl:grid-cols-2 xl:items-start"
-        >
+        <SectionGrid gap="page" className="xl:grid-cols-2 xl:items-start">
           <SectionCard className={standardSectionCardClass}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -809,6 +837,9 @@ export default function LeaderboardMatrixPage() {
                   : 0;
                 const hasPred = slot.player
                   ? hasPredForTopView(slot.player.uid)
+                  : false;
+                const hasFairPlay = slot.player
+                  ? hasFairPlayForTopView(slot.player.uid)
                   : false;
                 const barHeight =
                   slot.tier === "gold"
@@ -852,6 +883,11 @@ export default function LeaderboardMatrixPage() {
                       <div className="mt-3 text-center font-display text-xl font-semibold text-foreground">
                         {slot.player ? scoreLabel(points, hasPred) : "—"}
                       </div>
+                      {hasFairPlay ? (
+                        <div className="mt-2 text-center">
+                          <FairPlayPill includes={topView === "overall"} />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -923,6 +959,9 @@ export default function LeaderboardMatrixPage() {
                         {topViewRankByUid[p.uid] ?? i + 1}. {p.displayName}
                         {user?.uid === p.uid ? (
                           <span className={youPillClass()}>You</span>
+                        ) : null}
+                        {hasFairPlayForTopView(p.uid) ? (
+                          <FairPlayPill includes={topView === "overall"} />
                         ) : null}
                       </span>
                       <span className="font-display font-semibold text-foreground">
@@ -1008,6 +1047,8 @@ export default function LeaderboardMatrixPage() {
               {mobileGwSortedPlayers.map((p) => {
                 const pts = pointsByUserByGw?.[p.uid]?.[selectedTableGw] ?? 0;
                 const hasPred = !!hasPredByUserByGw?.[p.uid]?.[selectedTableGw];
+                const hasFairPlay =
+                  !!fairPlayByUserByGw?.[p.uid]?.[selectedTableGw];
                 const rank = mobileGwRankByUid[p.uid] ?? 0;
                 const rankToHighlight = pts > 0 ? rank : 0;
                 return (
@@ -1032,6 +1073,7 @@ export default function LeaderboardMatrixPage() {
                       {user?.uid === p.uid ? (
                         <span className={youPillClass()}>You</span>
                       ) : null}
+                      {hasFairPlay ? <FairPlayPill /> : null}
                     </div>
                     <div className="font-display text-sm font-semibold text-foreground">
                       {scoreLabel(pts, hasPred)}
@@ -1088,20 +1130,29 @@ export default function LeaderboardMatrixPage() {
                           const cellPts = pointsByUserByGw?.[p.uid]?.[gw] ?? 0;
                           const rank = gwRankByUid?.[gw]?.[p.uid] ?? 0;
                           const rankToHighlight = cellPts > 0 ? rank : 0;
+                          const hasFairPlay =
+                            !!fairPlayByUserByGw?.[p.uid]?.[gw];
                           return (
-                            <span
-                              className={[
-                                "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
-                                rankToHighlight === 1
-                                  ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
-                                  : rankToHighlight === 2
-                                    ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
-                                    : rankToHighlight === 3
-                                      ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
-                                      : "",
-                              ].join(" ")}
-                            >
-                              {cellPts}
+                            <span className="inline-flex flex-col items-center gap-1">
+                              <span
+                                className={[
+                                  "font-display inline-flex min-w-[44px] justify-center whitespace-nowrap rounded-md px-1.5 py-0.5",
+                                  rankToHighlight === 1
+                                    ? "metal-glow metal-glow-gold bg-yellow-400/20 border border-yellow-400/80"
+                                    : rankToHighlight === 2
+                                      ? "metal-glow metal-glow-silver bg-gray-300/20 border border-gray-300/80"
+                                      : rankToHighlight === 3
+                                        ? "metal-glow metal-glow-bronze bg-amber-500/20 border border-amber-500/80"
+                                        : "",
+                                ].join(" ")}
+                              >
+                                {cellPts}
+                              </span>
+                              {hasFairPlay ? (
+                                <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-emerald-200/85">
+                                  Fair Play bye
+                                </span>
+                              ) : null}
                             </span>
                           );
                         })()}

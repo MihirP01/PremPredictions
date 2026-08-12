@@ -165,8 +165,9 @@ export default function RoomPage() {
   const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
   const [powerupsEnabled, setPowerupsEnabled] = useState(false);
   const [gameModeStyle, setGameModeStyle] = useState<
-    "round_robin" | "sprint" | "captain"
+    "round_robin" | "sprint" | "captain" | "league"
   >("round_robin");
+  const [leagueFairPlayEnabled, setLeagueFairPlayEnabled] = useState(false);
   const [themeAccent, setThemeAccent] = useState<string>("teal");
   const [hasPassword, setHasPassword] = useState(false);
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
@@ -397,6 +398,9 @@ export default function RoomPage() {
           style === "sprint" ? true : !roomMeta.settings.sameResultLock,
         );
         setPowerupsEnabled(roomMeta.settings.powerupsEnabled === true);
+        setLeagueFairPlayEnabled(
+          roomMeta.settings.leagueFairPlayEnabled === true,
+        );
         setThemeAccent(roomMeta.settings.themeAccent);
         setHasPassword(roomMeta.settings.hasPassword);
       },
@@ -775,6 +779,33 @@ export default function RoomPage() {
     }
   }
 
+  async function toggleLeagueFairPlay() {
+    if (!user || !isLeader || roomSettingsBusy || gameModeStyle !== "league")
+      return;
+    const nextEnabled = !leagueFairPlayEnabled;
+    setRoomSettingsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/room/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          leaderUid: user.uid,
+          leagueFairPlayEnabled: nextEnabled,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to update Fair Play.");
+      setLeagueFairPlayEnabled(data?.leagueFairPlayEnabled === true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update Fair Play.");
+    } finally {
+      setRoomSettingsBusy(false);
+    }
+  }
+
   async function recalcScoresFromHub() {
     if (!user || !isLeader || recalcBusy || !seasonKey) return;
     setRecalcBusy(true);
@@ -837,11 +868,13 @@ export default function RoomPage() {
     }),
   );
   const resultLockSubtext =
-    gameModeStyle === "sprint"
-      ? "Sprint • Allow Identical Picks OFF"
-      : gameModeStyle === "captain"
-        ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
-        : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
+    gameModeStyle === "league"
+      ? `League • Fair Play ${leagueFairPlayEnabled ? "ON" : "OFF"}`
+      : gameModeStyle === "sprint"
+        ? "Sprint • Allow Identical Picks OFF"
+        : gameModeStyle === "captain"
+          ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
+          : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
   const standardSectionCardClass =
     "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const sharedButtonClass =
@@ -863,96 +896,96 @@ export default function RoomPage() {
       >
         <SectionStack gap="page">
           <TopActionRow
-              title="Hub"
-              subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
-              className="flex items-start justify-between gap-3 sm:items-end"
-              actions={
-                <div ref={settingsWrapRef} className="relative z-[220] ml-auto">
-                  <SettingsTriggerButton
-                    onClick={() => setSettingsOpen((v) => !v)}
-                  />
-                  <SettingsDropdownPanel
-                    open={settingsOpen}
-                    className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0"
-                  >
-                    <div className="font-display font-semibold text-foreground">
-                      Settings
+            title="Hub"
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            className="flex items-start justify-between gap-3 sm:items-end"
+            actions={
+              <div ref={settingsWrapRef} className="relative z-[220] ml-auto">
+                <SettingsTriggerButton
+                  onClick={() => setSettingsOpen((v) => !v)}
+                />
+                <SettingsDropdownPanel
+                  open={settingsOpen}
+                  className="left-auto right-0 top-[calc(100%+0.5rem)] mt-0"
+                >
+                  <div className="font-display font-semibold text-foreground">
+                    Settings
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                        Nickname
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleNicknameSection}
+                        className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+                      >
+                        {nicknameExpanded ? "Collapse" : "Expand"}
+                        {nicknameExpanded ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
+                      </button>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                          Nickname
-                        </div>
+                    {nicknameExpanded && (
+                      <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
+                        <input
+                          value={nickNameDraft}
+                          onChange={(e) => setNickNameDraft(e.target.value)}
+                          maxLength={20}
+                          placeholder="Nickname"
+                          className={sharedInputClass}
+                        />
                         <button
-                          type="button"
-                          onClick={toggleNicknameSection}
-                          className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
+                          onClick={saveNickName}
+                          disabled={nickNameBusy}
+                          className={sharedButtonClass}
                         >
-                          {nicknameExpanded ? "Collapse" : "Expand"}
-                          {nicknameExpanded ? (
-                            <ChevronUp size={14} />
-                          ) : (
-                            <ChevronDown size={14} />
-                          )}
+                          {nickNameBusy ? "Saving..." : "Save"}
+                        </button>
+                        <div className="text-xs text-muted">
+                          Nickname shows across the room. Leave blank to use
+                          your name.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <SpecialBreak className="mt-2" />
+                    <button
+                      onClick={() => {
+                        openSettingsModalWithDelay(() => {
+                          setRoomSwitcherOpen(true);
+                        });
+                        void loadMemberRooms();
+                      }}
+                      className={sharedButtonClass}
+                    >
+                      Switch Rooms
+                    </button>
+                    <LogoutButton />
+                    {isLeader && (
+                      <div className="space-y-2">
+                        <SpecialBreak />
+                        <button
+                          onClick={() => {
+                            openSettingsModalWithDelay(() => {
+                              setRoomRulesOpen(true);
+                            });
+                          }}
+                          className={sharedButtonClass}
+                        >
+                          Room Settings
                         </button>
                       </div>
-                      {nicknameExpanded && (
-                        <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
-                          <input
-                            value={nickNameDraft}
-                            onChange={(e) => setNickNameDraft(e.target.value)}
-                            maxLength={20}
-                            placeholder="Nickname"
-                            className={sharedInputClass}
-                          />
-                          <button
-                            onClick={saveNickName}
-                            disabled={nickNameBusy}
-                            className={sharedButtonClass}
-                          >
-                            {nickNameBusy ? "Saving..." : "Save"}
-                          </button>
-                          <div className="text-xs text-muted">
-                            Nickname shows across the room. Leave blank to use
-                            your name.
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <SpecialBreak className="mt-2" />
-                      <button
-                        onClick={() => {
-                          openSettingsModalWithDelay(() => {
-                            setRoomSwitcherOpen(true);
-                          });
-                          void loadMemberRooms();
-                        }}
-                        className={sharedButtonClass}
-                      >
-                        Switch Rooms
-                      </button>
-                      <LogoutButton />
-                      {isLeader && (
-                        <div className="space-y-2">
-                          <SpecialBreak />
-                          <button
-                            onClick={() => {
-                              openSettingsModalWithDelay(() => {
-                                setRoomRulesOpen(true);
-                              });
-                            }}
-                            className={sharedButtonClass}
-                          >
-                            Room Settings
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </SettingsDropdownPanel>
-                </div>
-              }
-            />
+                    )}
+                  </div>
+                </SettingsDropdownPanel>
+              </div>
+            }
+          />
 
           {error && (
             <SectionCard className={standardSectionCardClass}>
@@ -1007,7 +1040,9 @@ export default function RoomPage() {
                         ? "Round-Robin"
                         : gameModeStyle === "captain"
                           ? "Captain"
-                          : "Sprint"}
+                          : gameModeStyle === "league"
+                            ? "League"
+                            : "Sprint"}
                     </div>
                     <div className="mt-1 text-xs text-muted">
                       {resultLockSubtext}
@@ -1122,10 +1157,7 @@ export default function RoomPage() {
             </SectionStack>
           </SectionCard>
 
-          <SectionGrid
-            gap="page"
-            className="xl:grid-cols-2 xl:items-start"
-          >
+          <SectionGrid gap="page" className="xl:grid-cols-2 xl:items-start">
             <SectionCard className={standardSectionCardClass}>
               <SectionStack gap="tight">
                 <div className="flex items-center justify-between gap-2">
@@ -1506,6 +1538,29 @@ export default function RoomPage() {
           </SectionStack>
 
           <SectionStack gap="page">
+            {gameModeStyle === "league" ? (
+              <div
+                className={`${modalSectionClass} border-emerald-300/20 bg-emerald-400/[0.04]`}
+              >
+                <div className={modalSectionTitleClass}>League Fair Play</div>
+                <div className="mt-1 text-sm text-muted">
+                  If a player misses the whole gameweek, award the room median
+                  as a labelled Fair Play bye. Partial entries still score
+                  normally with blanks worth zero.
+                </div>
+                <button
+                  onClick={toggleLeagueFairPlay}
+                  disabled={roomSettingsBusy}
+                  className={`${sharedButtonClass} mt-4`}
+                >
+                  {roomSettingsBusy
+                    ? "Saving..."
+                    : leagueFairPlayEnabled
+                      ? "Fair Play: ON"
+                      : "Fair Play: OFF"}
+                </button>
+              </div>
+            ) : null}
             <div
               className={`${modalSectionClass} border-rose-400/30 bg-rose-500/[0.06]`}
             >

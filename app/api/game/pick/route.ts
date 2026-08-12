@@ -21,7 +21,7 @@ type GameDoc = {
   currentTurn?: number;
   totalTurns?: number;
   draftMode?: "turn" | "parallel";
-  gameModeStyle?: "round_robin" | "sprint" | "captain";
+  gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   currentFixtureId?: number | null;
   sameResultLock?: boolean;
   draftReadyByUid?: Record<string, boolean>;
@@ -68,6 +68,9 @@ export async function POST(req: Request) {
       if (!gameSnap.exists) throw new Error("Game not started");
       const game = gameSnap.data() as GameDoc;
       if (game.state !== "DRAFT") throw new Error("Game not in DRAFT");
+      if (game.gameModeStyle === "league") {
+        throw new Error("Use the League gameweek submission form");
+      }
       const gameSameResultLock = (game as GameDoc).sameResultLock;
       let sameResultLock: boolean;
       if (typeof gameSameResultLock === "boolean") {

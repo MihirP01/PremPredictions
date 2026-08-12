@@ -33,6 +33,7 @@ import SectionStack from "../../../components/SectionStack";
 import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
   getRoomBootstrapCached,
+  patchRoomBootstrapCached,
   peekRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
@@ -186,6 +187,8 @@ export default function RoomPage() {
   const [seasonKey, setSeasonKey] = useState("");
   const [currentGw, setCurrentGw] = useState(1);
   const [recalcBusy, setRecalcBusy] = useState(false);
+  const [closeLeagueBusy, setCloseLeagueBusy] = useState(false);
+  const [closeLeagueConfirmOpen, setCloseLeagueConfirmOpen] = useState(false);
   const [tableRows, setTableRows] = useState<TableRow[]>([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
@@ -255,7 +258,8 @@ export default function RoomPage() {
           .trim()
           .toUpperCase();
         let target: string | null = null;
-        if (st === "DRAFT") target = `/room/${roomCode}/minigame/play`;
+        if (st === "DRAFT" && bootstrap.gameModeStyle !== "league")
+          target = `/room/${roomCode}/minigame/play`;
         else if (st === "GOLDEN") target = `/room/${roomCode}/minigame/golden`;
         else if (st === "POWERUPS")
           target = `/room/${roomCode}/minigame/powerups`;
@@ -830,6 +834,43 @@ export default function RoomPage() {
       );
     } finally {
       setRecalcBusy(false);
+    }
+  }
+
+  async function closeLeaguePredictions() {
+    if (
+      !user ||
+      !isLeader ||
+      closeLeagueBusy ||
+      !seasonKey ||
+      gameModeStyle !== "league"
+    )
+      return;
+    setCloseLeagueConfirmOpen(false);
+    setCloseLeagueBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/game/stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomCode,
+          gw: currentGw,
+          leaderUid: user.uid,
+          seasonKey,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to close League predictions.");
+      patchRoomBootstrapCached(roomCode, { gameState: "CLOSED" });
+      setRoomRulesOpen(false);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to close League predictions.",
+      );
+    } finally {
+      setCloseLeagueBusy(false);
     }
   }
 
@@ -1545,8 +1586,7 @@ export default function RoomPage() {
                 <div className={modalSectionTitleClass}>League Fair Play</div>
                 <div className="mt-1 text-sm text-muted">
                   If a player misses the whole gameweek, award the room median
-                  as a labelled Fair Play bye. Partial entries still score
-                  normally with blanks worth zero.
+                  as a labelled Fair Play bye.
                 </div>
                 <button
                   onClick={toggleLeagueFairPlay}
@@ -1558,6 +1598,15 @@ export default function RoomPage() {
                     : leagueFairPlayEnabled
                       ? "Fair Play: ON"
                       : "Fair Play: OFF"}
+                </button>
+                <button
+                  onClick={() => setCloseLeagueConfirmOpen(true)}
+                  disabled={closeLeagueBusy || !seasonKey}
+                  className={`${sharedButtonClass} mt-2`}
+                >
+                  {closeLeagueBusy
+                    ? "Closing submissions..."
+                    : "Close League Predictions"}
                 </button>
               </div>
             ) : null}
@@ -1579,6 +1628,17 @@ export default function RoomPage() {
           </SectionStack>
         </SectionGrid>
       </ThemedSheetModal>
+      <ConfirmDialog
+        open={closeLeagueConfirmOpen}
+        onClose={() =>
+          closeLeagueBusy ? null : setCloseLeagueConfirmOpen(false)
+        }
+        onConfirm={closeLeaguePredictions}
+        title="Close League Predictions"
+        body="Stop new submissions for this gameweek? Existing locked predictions will be kept for scoring."
+        confirmLabel="Close Submissions"
+        confirming={closeLeagueBusy}
+      />
       <ThemedModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}

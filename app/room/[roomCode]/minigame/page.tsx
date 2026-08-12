@@ -323,6 +323,9 @@ export default function MiniGameLobbyPage() {
             );
           } else
             router.replace(withDevPreview(`/room/${roomCode}/minigame/reveal`));
+        } else if (st === "CLOSED") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}`);
         }
       } catch {
         if (cancelled) return;
@@ -655,6 +658,11 @@ export default function MiniGameLobbyPage() {
           routedRef.current = true;
           router.replace(withDevPreview(`/room/${roomCode}/minigame/reveal`));
           return;
+        }
+
+        if (st === "CLOSED") {
+          routedRef.current = true;
+          router.replace(`/room/${roomCode}`);
         }
       },
       (err) => {
@@ -1275,7 +1283,7 @@ export default function MiniGameLobbyPage() {
               {
                 key: "league" as const,
                 title: "League",
-                body: "Large-room asynchronous mode. Every room member enters the full gameweek independently before the cutoff. Missing fixtures stay blank. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
+                body: "Large-room asynchronous mode. Every room member predicts every eligible gameweek fixture independently, then submits once to lock the complete entry. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure

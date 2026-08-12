@@ -19,6 +19,7 @@ type RoomDoc = {
 
 type GameDoc = {
   state?: string;
+  gameModeStyle?: string;
 };
 
 function onlyAlnum(s: string) {
@@ -72,6 +73,17 @@ export async function POST(req: Request) {
         { error: `Cannot stop from state ${state || "UNKNOWN"}` },
         { status: 400 },
       );
+    }
+    if (game.gameModeStyle === "league") {
+      await gameRef.set(
+        {
+          state: "CLOSED",
+          closedBy: leaderUid,
+          closedAt: new Date(),
+        },
+        { merge: true },
+      );
+      return NextResponse.json({ ok: true, state: "CLOSED" });
     }
     const picksCol = adminDb.collection(
       `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}/picks`,

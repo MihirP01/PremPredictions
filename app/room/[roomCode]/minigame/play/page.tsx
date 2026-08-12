@@ -17,7 +17,7 @@ import {
   patchRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { getFixturesCached } from "@/lib/fixturesClient";
+import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import {
@@ -40,7 +40,7 @@ import { SprintActionPanel, SprintTurnIndicator } from "./modes/SprintMode";
 import LeagueMode from "./modes/LeagueMode";
 
 type GameDoc = {
-  state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
+  state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL" | "CLOSED";
   order: string[];
   fixtureIds: number[];
   currentTurn: number;
@@ -49,6 +49,8 @@ type GameDoc = {
   draftMode?: "turn" | "parallel";
   gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   leagueFairPlayEnabled?: boolean;
+  leagueSubmittedByUid?: Record<string, boolean>;
+  voidedFixtureIds?: number[];
   currentFixtureId?: number | null;
   draftReadyByUid?: Record<string, boolean>;
   sameResultLock?: boolean;
@@ -131,6 +133,26 @@ function colorForTeam(
 
 function onlyDigitsOrEmpty(v: string) {
   return v === "" || /^\d+$/.test(v);
+}
+
+const INELIGIBLE_LEAGUE_STATUSES = new Set([
+  "FINISHED",
+  "FT",
+  "IN_PLAY",
+  "PAUSED",
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+  "AWARDED",
+]);
+
+function isLeagueFixtureEligible(fixture: Fixture) {
+  const status = String(fixture.status || "")
+    .trim()
+    .toUpperCase();
+  if (INELIGIBLE_LEAGUE_STATUSES.has(status)) return false;
+  const kickoffMs = Date.parse(String(fixture.kickoff || ""));
+  return !Number.isFinite(kickoffMs) || kickoffMs > Date.now();
 }
 
 function timestampMs(value: unknown) {
@@ -290,6 +312,27 @@ export default function MiniGamePlayPage() {
     game?.draftMode === "parallel" ||
     (game?.gameModeStyle === "sprint" && game?.draftMode !== "turn");
   const isCaptainTurnMode = isCaptainMode && !isCaptainParallelMode;
+
+  useEffect(() => {
+    if (!isLeagueMode || gw == null || !seasonKey) return;
+    let cancelled = false;
+    void refreshFixturesCached(gw, seasonKey)
+      .then((data) => {
+        if (!cancelled)
+          setFixtures(Array.isArray(data.fixtures) ? data.fixtures : []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gw, isLeagueMode, seasonKey]);
+
+  useEffect(() => {
+    if (!user || !isLeagueMode) return;
+    if (game?.leagueSubmittedByUid?.[user.uid] === true) {
+      router.replace(`/room/${roomCode}`);
+    }
+  }, [game?.leagueSubmittedByUid, isLeagueMode, roomCode, router, user]);
 
   const current = useMemo(() => {
     if (!game) return null;
@@ -567,6 +610,10 @@ export default function MiniGamePlayPage() {
       router.replace(`/room/${roomCode}/minigame/powerups`);
       return null;
     }
+    if (bootstrapState === "CLOSED") {
+      router.replace(`/room/${roomCode}`);
+      return null;
+    }
     if (!bootstrapResolved || bootstrapState === "DRAFT") {
       return (
         <PageShell
@@ -617,6 +664,10 @@ export default function MiniGamePlayPage() {
   }
   if (game.state === "POWERUPS") {
     router.replace(`/room/${roomCode}/minigame/powerups`);
+    return null;
+  }
+  if (game.state === "CLOSED") {
+    router.replace(`/room/${roomCode}`);
     return null;
   }
 
@@ -747,8 +798,16 @@ export default function MiniGamePlayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to stop predictions");
-      patchRoomBootstrapCached(roomCode, { gameState: "LOBBY" });
-      router.replace(`/room/${roomCode}/minigame`);
+      const nextState =
+        String(data?.state || "LOBBY")
+          .trim()
+          .toUpperCase() || "LOBBY";
+      patchRoomBootstrapCached(roomCode, { gameState: nextState });
+      router.replace(
+        nextState === "CLOSED"
+          ? `/room/${roomCode}`
+          : `/room/${roomCode}/minigame`,
+      );
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to stop predictions");
     } finally {
@@ -757,7 +816,7 @@ export default function MiniGamePlayPage() {
   };
 
   const saveLeaguePredictions = async (
-    picks: Array<{ fixtureId: number; score: string | null }>,
+    picks: Array<{ fixtureId: number; score: string }>,
   ) => {
     if (!user || gw == null || !seasonKey) {
       throw new Error("Gameweek is still loading.");
@@ -778,13 +837,20 @@ export default function MiniGamePlayPage() {
       savedCount?: number;
     };
     if (!res.ok) throw new Error(data.error || "Failed to save predictions.");
+    router.replace(`/room/${roomCode}`);
     return Number(data.savedCount ?? 0);
   };
 
   if (isLeagueMode) {
+    const voidedFixtureIds = new Set(game.voidedFixtureIds ?? []);
     const leagueFixtures = (game.fixtureIds ?? [])
       .map((fixtureId) => fixtures.find((item) => item.fixtureId === fixtureId))
-      .filter((item): item is Fixture => Boolean(item));
+      .filter(
+        (item): item is Fixture =>
+          Boolean(item) &&
+          !voidedFixtureIds.has((item as Fixture).fixtureId) &&
+          isLeagueFixtureEligible(item as Fixture),
+      );
 
     return (
       <PageShell
@@ -840,7 +906,8 @@ export default function MiniGamePlayPage() {
               Close League predictions
             </div>
             <div className="text-sm text-muted">
-              Remove this gameweek and all saved League predictions?
+              Close this League gameweek to new submissions? Locked predictions
+              and scoring data will be kept.
             </div>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -855,7 +922,7 @@ export default function MiniGamePlayPage() {
                 disabled={stoppingPredictions}
                 className="rounded-lg border border-rose-300/20 bg-rose-400/[0.06] px-3 py-2 text-sm text-danger"
               >
-                Confirm close
+                Close submissions
               </button>
             </div>
           </AnimatedModal>

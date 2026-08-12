@@ -31,7 +31,7 @@ type Props = {
   lockAtMs: number | null;
   fairPlayEnabled: boolean;
   onSave: (
-    picks: Array<{ fixtureId: number; score: string | null }>,
+    picks: Array<{ fixtureId: number; score: string }>,
   ) => Promise<number>;
 };
 
@@ -71,9 +71,7 @@ export default function LeagueMode({
   const [draft, setDraft] = useState<Record<number, DraftScore>>(() =>
     initialDraft(fixtures, savedPicks),
   );
-  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -105,41 +103,31 @@ export default function LeagueMode({
         [side]: value,
       },
     }));
-    setDirty(true);
-    setMessage(null);
     setError(null);
   }
 
   async function savePredictions() {
     if (saving || isLocked) return;
-    const incomplete = fixtures.find((fixture) => {
+    const incomplete = fixtures.some((fixture) => {
       const score = draft[fixture.fixtureId] ?? { home: "", away: "" };
-      return Boolean(score.home) !== Boolean(score.away);
+      return !score.home || !score.away;
     });
     if (incomplete) {
-      setError("Enter both team scores, or leave both boxes blank.");
+      setError("Predict every eligible fixture before submitting.");
       return;
     }
 
     setSaving(true);
     setError(null);
-    setMessage(null);
     try {
-      const count = await onSave(
+      await onSave(
         fixtures.map((fixture) => {
           const score = draft[fixture.fixtureId] ?? { home: "", away: "" };
           return {
             fixtureId: fixture.fixtureId,
-            score:
-              score.home && score.away ? `${score.home}-${score.away}` : null,
+            score: `${score.home}-${score.away}`,
           };
         }),
-      );
-      setDirty(false);
-      setMessage(
-        count === fixtures.length
-          ? "All gameweek predictions saved."
-          : `${count}/${fixtures.length} predictions saved; blanks remain unscored.`,
       );
     } catch (saveError: unknown) {
       setError(
@@ -161,12 +149,12 @@ export default function LeagueMode({
               Asynchronous gameweek
             </div>
             <div className="mt-1 font-display text-xl font-semibold text-foreground">
-              Submit whenever you are ready
+              Complete every prediction, then lock once
             </div>
             <div className="mt-2 max-w-2xl text-sm text-muted">
-              Your scores save independently from the rest of the room. You can
-              return and edit them until the deadline; any untouched fixture is
-              recorded as blank.
+              Your entry is independent from the rest of the room. Every
+              eligible fixture is required, and submitting permanently locks the
+              whole gameweek before returning you to the room.
             </div>
           </div>
           <div className="shrink-0 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-foreground">
@@ -187,7 +175,6 @@ export default function LeagueMode({
       <div className="grid gap-3 lg:grid-cols-2">
         {fixtures.map((fixture) => {
           const score = draft[fixture.fixtureId] ?? { home: "", away: "" };
-          const saved = savedPicks.has(fixture.fixtureId) && !dirty;
           return (
             <SectionCard
               key={fixture.fixtureId}
@@ -260,14 +247,12 @@ export default function LeagueMode({
                     minute: "2-digit",
                   })}
                 </span>
-                {saved ? (
+                {score.home && score.away ? (
                   <span className="inline-flex items-center gap-1 text-emerald-200/85">
-                    <CheckCircle2 size={12} /> Saved
+                    <CheckCircle2 size={12} /> Entered
                   </span>
-                ) : score.home && score.away ? (
-                  <span>Ready to save</span>
                 ) : (
-                  <span>Blank</span>
+                  <span>Required</span>
                 )}
               </div>
             </SectionCard>
@@ -279,9 +264,6 @@ export default function LeagueMode({
         {error ? (
           <div className="mb-3 text-sm text-rose-200">{error}</div>
         ) : null}
-        {message ? (
-          <div className="mb-3 text-sm text-emerald-200">{message}</div>
-        ) : null}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted">
             <span className="font-display font-semibold text-foreground">
@@ -292,7 +274,12 @@ export default function LeagueMode({
           <button
             type="button"
             onClick={savePredictions}
-            disabled={saving || isLocked || !dirty}
+            disabled={
+              saving ||
+              isLocked ||
+              !fixtures.length ||
+              filledCount !== fixtures.length
+            }
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(56,189,248,0.14))] px-5 font-display text-sm font-semibold text-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save size={15} />
@@ -300,9 +287,9 @@ export default function LeagueMode({
               ? "Saving…"
               : isLocked
                 ? "Gameweek locked"
-                : dirty
-                  ? "Save predictions"
-                  : "Predictions saved"}
+                : filledCount === fixtures.length
+                  ? "Submit and lock gameweek"
+                  : "Complete every prediction"}
           </button>
         </div>
       </SectionCard>

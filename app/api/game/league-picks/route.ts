@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
+import { getBaseUrl, loadGwFixturesWithLockWindow } from "../lock-window";
 
 type LeaguePickInput = {
   fixtureId?: number;
@@ -24,6 +25,8 @@ type GameDoc = {
   fixtureIds?: number[];
   gameModeStyle?: string;
   lockAt?: unknown;
+  leagueSubmittedByUid?: Record<string, boolean>;
+  voidedFixtureIds?: number[];
 };
 
 function timestampMs(value: unknown) {
@@ -81,6 +84,13 @@ export async function POST(req: Request) {
     const gameBase = `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}`;
     const gameRef = adminDb.doc(gameBase);
 
+    const currentFixtures = await loadGwFixturesWithLockWindow(
+      getBaseUrl(req),
+      gw,
+      seasonKey,
+    );
+    const currentlyEligible = new Set(currentFixtures.fixtureIds);
+
     const savedCount = await adminDb.runTransaction(async (tx) => {
       const gameSnap = await tx.get(gameRef);
       if (!gameSnap.exists) throw new Error("League predictions are not open");
@@ -93,32 +103,58 @@ export async function POST(req: Request) {
       const players = Array.isArray(game.players) ? game.players : [];
       if (!players.includes(uid))
         throw new Error("You are not in this League roster");
+      if (game.leagueSubmittedByUid?.[uid] === true) {
+        throw new Error("Your League predictions are already locked");
+      }
 
       const lockAt = timestampMs(game.lockAt);
       if (lockAt != null && Date.now() >= lockAt) {
         throw new Error("The gameweek deadline has passed");
       }
 
-      const fixtureIds = Array.isArray(game.fixtureIds) ? game.fixtureIds : [];
-      const allowedFixtures = new Set(fixtureIds.map(Number));
-      const byFixture = new Map<number, string | null>();
+      const fixtureIds = Array.isArray(game.fixtureIds)
+        ? game.fixtureIds.map(Number).filter(Number.isFinite)
+        : [];
+      const storedVoids = new Set(
+        Array.isArray(game.voidedFixtureIds)
+          ? game.voidedFixtureIds.map(Number).filter(Number.isFinite)
+          : [],
+      );
+      for (const fixtureId of fixtureIds) {
+        if (!currentlyEligible.has(fixtureId)) storedVoids.add(fixtureId);
+      }
+      const requiredFixtureIds = fixtureIds.filter(
+        (fixtureId) => !storedVoids.has(fixtureId),
+      );
+      if (!requiredFixtureIds.length) {
+        throw new Error("There are no eligible fixtures left to predict");
+      }
+
+      const allowedFixtures = new Set(requiredFixtureIds);
+      const byFixture = new Map<number, string>();
       for (const pick of submittedPicks) {
         const fixtureId = Number(pick.fixtureId);
         if (!Number.isFinite(fixtureId) || !allowedFixtures.has(fixtureId)) {
           throw new Error("A submitted fixture is not part of this gameweek");
         }
-        byFixture.set(fixtureId, normalizeScore(pick.score));
+        const score = normalizeScore(pick.score);
+        if (!score) throw new Error("Every eligible fixture needs a score");
+        if (byFixture.has(fixtureId)) {
+          throw new Error("A fixture was submitted more than once");
+        }
+        byFixture.set(fixtureId, score);
       }
 
-      let count = 0;
-      for (const fixtureId of fixtureIds) {
-        if (!byFixture.has(fixtureId)) continue;
+      if (
+        byFixture.size !== requiredFixtureIds.length ||
+        requiredFixtureIds.some((fixtureId) => !byFixture.has(fixtureId))
+      ) {
+        throw new Error("Predict every eligible fixture before submitting");
+      }
+
+      for (const fixtureId of requiredFixtureIds) {
         const pickRef = adminDb.doc(`${gameBase}/picks/${uid}_${fixtureId}`);
-        const score = byFixture.get(fixtureId);
-        if (!score) {
-          tx.delete(pickRef);
-          continue;
-        }
+        const score = byFixture.get(fixtureId) as string;
         tx.set(
           pickRef,
           {
@@ -127,12 +163,19 @@ export async function POST(req: Request) {
             score,
             updatedAt: new Date(),
           },
-          { merge: true },
+          { merge: false },
         );
-        count += 1;
       }
 
-      return count;
+      tx.update(gameRef, {
+        leagueSubmittedByUid: {
+          ...(game.leagueSubmittedByUid ?? {}),
+          [uid]: true,
+        },
+        voidedFixtureIds: [...storedVoids].sort((a, b) => a - b),
+      });
+
+      return requiredFixtureIds.length;
     });
 
     return NextResponse.json({ ok: true, savedCount });

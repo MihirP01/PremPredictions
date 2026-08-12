@@ -15,6 +15,8 @@ type GameDoc = {
   fixtureIds?: number[];
   gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   leagueFairPlayEnabled?: boolean;
+  leagueSubmittedByUid?: Record<string, boolean>;
+  voidedFixtureIds?: number[];
 };
 
 type FixtureItem = {
@@ -54,6 +56,12 @@ function isFinalStatus(status: string | null | undefined) {
   return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
 
+const VOIDED_FIXTURE_STATUSES = new Set([
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+]);
+
 function buildBaseUrl(req: Request) {
   const host = req.headers.get("host");
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -92,14 +100,22 @@ async function fetchActualResultsForGw(
     : [];
 
   const actualByFixture = new Map<number, string>();
+  const voidedFixtureIds = new Set<number>();
   for (const f of fixtures) {
     const id = Number(f.fixtureId);
     if (!Number.isFinite(id)) continue;
-    if (f.result && isFinalStatus(f.status))
+    const status = String(f.status || "")
+      .trim()
+      .toUpperCase();
+    if (VOIDED_FIXTURE_STATUSES.has(status)) {
+      voidedFixtureIds.add(id);
+      continue;
+    }
+    if (f.result && isFinalStatus(status))
       actualByFixture.set(id, String(f.result));
   }
 
-  return actualByFixture;
+  return { actualByFixture, voidedFixtureIds };
 }
 
 async function scoreSingleGw(
@@ -130,7 +146,17 @@ async function scoreSingleGw(
     };
   }
 
-  const actualByFixture = await fetchActualResultsForGw(baseUrl, gw, seasonKey);
+  const fixtureResults = await fetchActualResultsForGw(baseUrl, gw, seasonKey);
+  const actualByFixture = fixtureResults.actualByFixture;
+  const voidedFixtureIds = new Set(
+    Array.isArray(game.voidedFixtureIds)
+      ? game.voidedFixtureIds.map(Number).filter(Number.isFinite)
+      : [],
+  );
+  fixtureResults.voidedFixtureIds.forEach((fixtureId) =>
+    voidedFixtureIds.add(fixtureId),
+  );
+  voidedFixtureIds.forEach((fixtureId) => actualByFixture.delete(fixtureId));
 
   if (actualByFixture.size === 0) {
     return {
@@ -182,9 +208,9 @@ async function scoreSingleGw(
 
   const calculated = players.map((uid) => {
     let total = 0;
-    const hasPrediction = fixtureIds.some((fid) =>
-      pickMap.has(`${uid}|${fid}`),
-    );
+    const hasPrediction =
+      game.leagueSubmittedByUid?.[uid] === true ||
+      fixtureIds.some((fid) => pickMap.has(`${uid}|${fid}`));
     const breakdown: Record<
       string,
       {
@@ -204,6 +230,7 @@ async function scoreSingleGw(
     const activePowerupType = pwr?.locked ? pwr.powerupType : null;
 
     for (const fid of fixtureIds) {
+      if (voidedFixtureIds.has(fid)) continue;
       const actual = actualByFixture.get(fid);
       if (!actual) continue;
 
@@ -273,6 +300,13 @@ async function scoreSingleGw(
   }
 
   const weekSummaryRef = adminDb.doc(`${seasonBase}/scores/gw-${gw}`);
+  if (game.gameModeStyle === "league") {
+    batch.set(
+      adminDb.doc(gameBase),
+      { voidedFixtureIds: [...voidedFixtureIds].sort((a, b) => a - b) },
+      { merge: true },
+    );
+  }
   batch.set(
     weekSummaryRef,
     {

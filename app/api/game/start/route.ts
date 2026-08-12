@@ -156,8 +156,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Ensure exactly 10 if that’s your rule; otherwise allow any length.
-    const fixtureIds10 = fixtureIds.slice(0, 10);
+    // Live rounds retain their ten-fixture shape. League includes every
+    // eligible fixture assigned to the requested gameweek (including DGWs).
+    const gameFixtureIds =
+      style === "league" ? fixtureIds : fixtureIds.slice(0, 10);
 
     // Choose first player randomly each week, then rotate through order
     const order = shuffle(players);
@@ -178,15 +180,17 @@ export async function POST(req: Request) {
           leaderUid,
           players,
           order,
-          fixtureIds: fixtureIds10,
+          fixtureIds: gameFixtureIds,
           currentFixtureId: null,
           currentTurn: 0,
-          totalTurns: order.length * fixtureIds10.length,
+          totalTurns: order.length * gameFixtureIds.length,
           draftMode,
           sameResultLock,
           powerupsEnabled,
           gameModeStyle: style,
           leagueFairPlayEnabled,
+          leagueSubmittedByUid: {},
+          voidedFixtureIds: [],
           draftReadyByUid: {},
           firstKickoffAt,
           lockAt,

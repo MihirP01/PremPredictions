@@ -11,6 +11,7 @@ type FixturesApiResponse = {
 const LOCK_WINDOW_MS = 30 * 60 * 1000;
 const INELIGIBLE_DRAFT_STATUSES = new Set([
   "FINISHED",
+  "FT",
   "IN_PLAY",
   "PAUSED",
   "POSTPONED",

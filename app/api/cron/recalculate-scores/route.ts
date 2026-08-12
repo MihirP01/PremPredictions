@@ -31,6 +31,8 @@ type GameDoc = {
   fixtureIds?: number[];
   gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
   leagueFairPlayEnabled?: boolean;
+  leagueSubmittedByUid?: Record<string, boolean>;
+  voidedFixtureIds?: number[];
 };
 
 type PickDoc = {
@@ -62,6 +64,12 @@ function isFinalStatus(status: string | null | undefined) {
     .toUpperCase();
   return s === "FINISHED" || s === "FT" || s === "AWARDED";
 }
+
+const VOIDED_FIXTURE_STATUSES = new Set([
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+]);
 
 function buildBaseUrl(req: Request) {
   const host = req.headers.get("host");
@@ -98,15 +106,23 @@ async function fetchActualResultsForGw(
   };
 
   const actualByFixture = new Map<number, string>();
+  const voidedFixtureIds = new Set<number>();
   const matches = Array.isArray(data.fixtures) ? data.fixtures : [];
   for (const m of matches) {
     const id = Number(m?.fixtureId);
     if (!Number.isFinite(id)) continue;
-    if (m?.result && isFinalStatus(m?.status)) {
+    const status = String(m?.status || "")
+      .trim()
+      .toUpperCase();
+    if (VOIDED_FIXTURE_STATUSES.has(status)) {
+      voidedFixtureIds.add(id);
+      continue;
+    }
+    if (m?.result && isFinalStatus(status)) {
       actualByFixture.set(id, String(m.result));
     }
   }
-  return actualByFixture;
+  return { actualByFixture, voidedFixtureIds };
 }
 
 async function runCurrentGwRecalcForRoom(
@@ -170,11 +186,21 @@ async function runCurrentGwRecalcForRoom(
       };
     }
 
-    const actualByFixture = await fetchActualResultsForGw(
+    const fixtureResults = await fetchActualResultsForGw(
       baseUrl,
       gw,
       seasonKey,
     );
+    const actualByFixture = fixtureResults.actualByFixture;
+    const voidedFixtureIds = new Set(
+      Array.isArray(game.voidedFixtureIds)
+        ? game.voidedFixtureIds.map(Number).filter(Number.isFinite)
+        : [],
+    );
+    fixtureResults.voidedFixtureIds.forEach((fixtureId) =>
+      voidedFixtureIds.add(fixtureId),
+    );
+    voidedFixtureIds.forEach((fixtureId) => actualByFixture.delete(fixtureId));
     if (actualByFixture.size === 0) {
       return {
         roomCode,
@@ -243,9 +269,9 @@ async function runCurrentGwRecalcForRoom(
 
     const calculated = players.map((uid) => {
       let total = 0;
-      const hasPrediction = fixtureIds.some((fid) =>
-        pickMap.has(`${uid}|${fid}`),
-      );
+      const hasPrediction =
+        game.leagueSubmittedByUid?.[uid] === true ||
+        fixtureIds.some((fid) => pickMap.has(`${uid}|${fid}`));
       const breakdown: Record<
         string,
         {
@@ -264,6 +290,7 @@ async function runCurrentGwRecalcForRoom(
       const activePowerupType = pwr?.locked ? pwr.powerupType : null;
 
       for (const fid of fixtureIds) {
+        if (voidedFixtureIds.has(fid)) continue;
         const actual = actualByFixture.get(fid);
         if (!actual) continue;
         const pred = pickMap.get(`${uid}|${fid}`) || "";
@@ -325,6 +352,14 @@ async function runCurrentGwRecalcForRoom(
         { merge: true },
       );
       scoredUsers += 1;
+    }
+
+    if (game.gameModeStyle === "league") {
+      batch.set(
+        adminDb.doc(gameBase),
+        { voidedFixtureIds: [...voidedFixtureIds].sort((a, b) => a - b) },
+        { merge: true },
+      );
     }
 
     batch.set(

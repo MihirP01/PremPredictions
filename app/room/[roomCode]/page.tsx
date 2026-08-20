@@ -323,23 +323,33 @@ export default function RoomPage() {
     };
   }, [loading, user, roomCode]);
 
-  const predictionsRouteForState = (state: string) =>
-    String(state || "")
+  const predictionsRouteForState = (
+    state: string,
+    mode: typeof gameModeStyle = gameModeStyle,
+  ) => {
+    const st = String(state || "")
       .trim()
-      .toUpperCase() === "REVEAL"
-      ? `/room/${roomCode}/minigame/reveal`
-      : `/room/${roomCode}/minigame`;
+      .toUpperCase();
+    if (st === "REVEAL") return `/room/${roomCode}/minigame/reveal`;
+    if (mode === "league") return `/room/${roomCode}/minigame/play`;
+    return `/room/${roomCode}/minigame`;
+  };
 
   async function openPredictionsTarget() {
     const cachedBootstrap = peekRoomBootstrapCached(roomCode);
+    const mode = cachedBootstrap?.gameModeStyle ?? gameModeStyle;
     const immediateHref = predictionsRouteForState(
       cachedBootstrap?.gameState || "",
+      mode,
     );
     router.push(immediateHref);
     if (cachedBootstrap) return;
     void getRoomBootstrapCached(roomCode)
       .then((bootstrap) => {
-        const nextHref = predictionsRouteForState(bootstrap?.gameState || "");
+        const nextHref = predictionsRouteForState(
+          bootstrap?.gameState || "",
+          bootstrap?.gameModeStyle ?? mode,
+        );
         if (nextHref !== immediateHref) {
           router.replace(nextHref);
         }

@@ -15,6 +15,7 @@ import TopActionRow from "../../../../../components/TopActionRow";
 import {
   getRoomBootstrapCached,
   patchRoomBootstrapCached,
+  refreshRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
@@ -206,6 +207,7 @@ export default function MiniGamePlayPage() {
   const [stoppingPredictions, setStoppingPredictions] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [bootstrapState, setBootstrapState] = useState<string>("");
+  const [bootstrapGameMode, setBootstrapGameMode] = useState<string>("");
   const [bootstrapResolved, setBootstrapResolved] = useState(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -220,7 +222,10 @@ export default function MiniGamePlayPage() {
     let cancelled = false;
     const loadBootstrap = async () => {
       try {
-        const data = await getRoomBootstrapCached(roomCode);
+        let data = await getRoomBootstrapCached(roomCode);
+        if (data.gameModeStyle === "league") {
+          data = await refreshRoomBootstrapCached(roomCode);
+        }
         const n = Number(data.currentGameweek ?? 1);
         if (!cancelled) {
           setGw(Number.isFinite(n) ? n : 1);
@@ -230,6 +235,7 @@ export default function MiniGamePlayPage() {
               .trim()
               .toUpperCase(),
           );
+          setBootstrapGameMode(String(data.gameModeStyle || ""));
           setBootstrapResolved(true);
         }
       } catch {
@@ -304,7 +310,8 @@ export default function MiniGamePlayPage() {
   }, [roomCode]);
 
   const isCaptainMode = game?.gameModeStyle === "captain";
-  const isLeagueMode = game?.gameModeStyle === "league";
+  const isLeagueMode =
+    game?.gameModeStyle === "league" || bootstrapGameMode === "league";
   const isCaptainParallelMode =
     isCaptainMode &&
     (game?.sameResultLock === false || game?.draftMode === "parallel");
@@ -326,6 +333,21 @@ export default function MiniGamePlayPage() {
       cancelled = true;
     };
   }, [gw, isLeagueMode, seasonKey]);
+
+  useEffect(() => {
+    if (!user || !isLeagueMode || gw == null || !seasonKey) return;
+    if (game?.state === "DRAFT" || game?.state === "CLOSED") return;
+    void fetch("/api/game/league-open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomCode,
+        gw,
+        uid: user.uid,
+        seasonKey,
+      }),
+    }).catch(() => {});
+  }, [user, isLeagueMode, gw, seasonKey, game?.state, roomCode]);
 
   useEffect(() => {
     if (!user || !isLeagueMode) return;
@@ -594,6 +616,25 @@ export default function MiniGamePlayPage() {
     );
   }
   if (!game) {
+    if (isLeagueMode) {
+      return (
+        <PageShell
+          width="wide"
+          shellChrome={false}
+          outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+          contentClassName="relative z-[1]"
+        >
+          <SectionStack gap="page">
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Opening League predictions…</span>
+              </div>
+            </SectionCard>
+          </SectionStack>
+        </PageShell>
+      );
+    }
     if (bootstrapState === "LOBBY") {
       router.replace(`/room/${roomCode}/minigame`);
       return null;
@@ -651,6 +692,25 @@ export default function MiniGamePlayPage() {
 
   // phase routing
   if (game.state === "LOBBY") {
+    if (isLeagueMode) {
+      return (
+        <PageShell
+          width="wide"
+          shellChrome={false}
+          outerClassName="min-h-0 px-2 pb-0 pt-0 bg-app sm:px-3 sm:pb-0 sm:pt-0"
+          contentClassName="relative z-[1]"
+        >
+          <SectionStack gap="page">
+            <SectionCard className={standardSectionCardClass}>
+              <div className="text-sm text-muted inline-flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Opening League predictions…</span>
+              </div>
+            </SectionCard>
+          </SectionStack>
+        </PageShell>
+      );
+    }
     router.replace(`/room/${roomCode}/minigame`);
     return null;
   }

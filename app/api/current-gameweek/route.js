@@ -146,6 +146,37 @@ function nextLocalMidnightMs(baseMs, timeZone) {
   );
 }
 
+function selectLeagueGameweek(byMd, nowMs) {
+  const matchdays = [...byMd.keys()].sort((a, b) => a - b);
+  const nextOpen = matchdays.find((md) => {
+    const earliest = byMd.get(md)?.earliestKickoffMs;
+    return Number.isFinite(earliest) && earliest > nowMs;
+  });
+
+  if (Number.isFinite(nextOpen)) {
+    return {
+      currentGameweek: clampGW(Number(nextOpen)),
+      matchdaysSeen: matchdays.length,
+    };
+  }
+
+  const latestMd = matchdays.length ? Math.max(...matchdays) : 1;
+  return {
+    currentGameweek: clampGW(latestMd + 1),
+    matchdaysSeen: matchdays.length,
+  };
+}
+
+function selectGameweek(byMd, nowMs, mode) {
+  return mode === "league"
+    ? selectLeagueGameweek(byMd, nowMs)
+    : selectCurrentGameweek(byMd, nowMs);
+}
+
+function leagueSelectedBy(source) {
+  return `next-gw-at-first-kickoff-${source}`;
+}
+
 function selectCurrentGameweek(byMd, nowMs) {
   const matchdays = [...byMd.keys()].sort((a, b) => a - b);
 
@@ -252,7 +283,7 @@ function buildByMatchday(matches, nowMs) {
   return byMd;
 }
 
-async function buildSnapshotCurrentGameweek(seasonKey, now) {
+async function buildSnapshotCurrentGameweek(seasonKey, now, mode) {
   try {
     const snap = await adminDb.doc(`_fixtureSnapshots/PL_${seasonKey}`).get();
     if (!snap.exists) return null;
@@ -272,7 +303,7 @@ async function buildSnapshotCurrentGameweek(seasonKey, now) {
     if (!matches.length) return null;
 
     const byMd = buildByMatchday(matches, now.getTime());
-    const selected = selectCurrentGameweek(byMd, now.getTime());
+    const selected = selectGameweek(byMd, now.getTime(), mode);
 
     return NextResponse.json(
       {
@@ -282,7 +313,10 @@ async function buildSnapshotCurrentGameweek(seasonKey, now) {
           source: "fixture-snapshot",
           snapshotDoc: `PL_${seasonKey}`,
           matchdaysSeen: selected.matchdaysSeen,
-          selectedBy: "next-upcoming-then-rollover-midnight-europe-london-snapshot",
+          selectedBy:
+            mode === "league"
+              ? leagueSelectedBy("snapshot")
+              : "next-upcoming-then-rollover-midnight-europe-london-snapshot",
         },
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -292,7 +326,7 @@ async function buildSnapshotCurrentGameweek(seasonKey, now) {
   }
 }
 
-async function buildFotmobFallback(seasonKey, now) {
+async function buildFotmobFallback(seasonKey, now, mode) {
   const season = seasonStartYearFromKey(seasonKey);
   const fotmobSeason = fotmobSeasonFromStartYear(season);
   const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(fotmobSeason)}`;
@@ -335,7 +369,7 @@ async function buildFotmobFallback(seasonKey, now) {
     byMd.set(md, entry);
   }
 
-  const selected = selectCurrentGameweek(byMd, nowMs);
+  const selected = selectGameweek(byMd, nowMs, mode);
   return NextResponse.json(
     {
       currentGameweek: selected.currentGameweek,
@@ -343,7 +377,10 @@ async function buildFotmobFallback(seasonKey, now) {
       debug: {
         window: { source: "fotmob-fallback" },
         matchdaysSeen: selected.matchdaysSeen,
-        selectedBy: "next-upcoming-then-rollover-midnight-europe-london-fotmob",
+        selectedBy:
+          mode === "league"
+            ? leagueSelectedBy("fotmob")
+            : "next-upcoming-then-rollover-midnight-europe-london-fotmob",
       },
     },
     { headers: { "Cache-Control": "no-store" } },
@@ -355,14 +392,24 @@ export async function GET(req) {
   const requestedSeason = searchParams.get("seasonKey");
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
   const season = seasonStartYearFromKey(seasonKey);
+  const mode =
+    String(searchParams.get("mode") || "")
+      .trim()
+      .toLowerCase() === "league"
+      ? "league"
+      : "live";
 
   const now = new Date();
-  const snapshotCurrent = await buildSnapshotCurrentGameweek(seasonKey, now);
+  const snapshotCurrent = await buildSnapshotCurrentGameweek(
+    seasonKey,
+    now,
+    mode,
+  );
   if (snapshotCurrent) return snapshotCurrent;
 
   const API_KEY = process.env.FOOTBALLDATA_KEY;
   if (!API_KEY) {
-    const fallback = await buildFotmobFallback(seasonKey, now);
+    const fallback = await buildFotmobFallback(seasonKey, now, mode);
     if (fallback) return fallback;
     return NextResponse.json(
       { error: "API key not configured" },
@@ -385,7 +432,7 @@ export async function GET(req) {
   });
 
   if (res.status === 429) {
-    const fallback = await buildFotmobFallback(seasonKey, now);
+    const fallback = await buildFotmobFallback(seasonKey, now, mode);
     if (fallback) return fallback;
     const retryAfter = res.headers.get("retry-after") || "11";
     return NextResponse.json(
@@ -398,7 +445,7 @@ export async function GET(req) {
   }
 
   if (!res.ok) {
-    const fallback = await buildFotmobFallback(seasonKey, now);
+    const fallback = await buildFotmobFallback(seasonKey, now, mode);
     if (fallback) return fallback;
     const body = await res.text().catch(() => "");
     console.error("current-gameweek upstream error:", res.status, body);
@@ -408,7 +455,11 @@ export async function GET(req) {
   const data = await res.json();
   const matches = Array.isArray(data?.matches) ? data.matches : [];
 
-  const selected = selectCurrentGameweek(buildByMatchday(matches, now.getTime()), now.getTime());
+  const selected = selectGameweek(
+    buildByMatchday(matches, now.getTime()),
+    now.getTime(),
+    mode,
+  );
 
   return NextResponse.json(
     {
@@ -417,7 +468,10 @@ export async function GET(req) {
       debug: {
         window: { dateFrom: fmt(from), dateTo: fmt(to) },
         matchdaysSeen: selected.matchdaysSeen,
-        selectedBy: "next-upcoming-then-rollover-midnight-europe-london",
+        selectedBy:
+          mode === "league"
+            ? leagueSelectedBy("football-data")
+            : "next-upcoming-then-rollover-midnight-europe-london",
       },
     },
     { headers: { "Cache-Control": "no-store" } },

@@ -15,7 +15,10 @@ import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  refreshRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { resolveDisplayName } from "@/lib/displayNameResolver";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
@@ -42,6 +45,12 @@ const INELIGIBLE_DRAFT_STATUSES = new Set([
   "FT",
   "IN_PLAY",
   "PAUSED",
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+  "AWARDED",
+]);
+const VOIDED_FIXTURE_STATUSES = new Set([
   "POSTPONED",
   "SUSPENDED",
   "CANCELLED",
@@ -262,7 +271,7 @@ export default function MiniGameLobbyPage() {
           : "Sprint";
   const currentModeSummary =
     gameModeStyle === "league"
-      ? "Everyone submits the full gameweek independently before the cutoff. No shared live session is required."
+      ? "Everyone submits the full gameweek independently until 30 minutes before the first kickoff. The next gameweek unlocks once that first match starts."
       : gameModeStyle === "sprint"
         ? "Everyone submits at once each fixture. Fastest flow for larger rooms."
         : gameModeStyle === "captain"
@@ -400,11 +409,26 @@ export default function MiniGameLobbyPage() {
       const eligibleFixtures = fixtures.filter((fixture) =>
         isDraftEligibleFixture(fixture, currentNowMs),
       );
+      const scheduledKickoffs = fixtures
+        .filter((fixture) => {
+          const status = String(fixture.status || "")
+            .trim()
+            .toUpperCase();
+          if (VOIDED_FIXTURE_STATUSES.has(status)) return false;
+          return Number.isFinite(Date.parse(String(fixture.kickoff || "")));
+        })
+        .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+        .sort((a, b) => a - b);
+      const firstScheduledKickoff = scheduledKickoffs[0];
       const kickoffTimes = eligibleFixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
         .sort((a, b) => a - b);
       const firstKickoff = kickoffTimes[0];
+      const lockKickoff =
+        gameModeStyle === "league" && Number.isFinite(firstScheduledKickoff)
+          ? firstScheduledKickoff
+          : firstKickoff;
       const pendingKickoffs = eligibleFixtures
         .map((f) => Date.parse(String(f.kickoff || "")))
         .filter((n) => Number.isFinite(n))
@@ -417,24 +441,41 @@ export default function MiniGameLobbyPage() {
       if (cancelled) return;
 
       setLockAtMs(
-        Number.isFinite(firstKickoff) ? firstKickoff - LOCK_WINDOW_MS : null,
+        Number.isFinite(lockKickoff) ? lockKickoff - LOCK_WINDOW_MS : null,
       );
 
-      if (allFinished) {
+      if (gameModeStyle === "league") {
+        if (
+          Number.isFinite(firstScheduledKickoff) &&
+          currentNowMs >= firstScheduledKickoff
+        ) {
+          const next = await refreshRoomBootstrapCached(roomCode);
+          if (cancelled) return;
+          const nextGw = Number(next.currentGameweek);
+          if (Number.isFinite(nextGw) && nextGw !== gameweek) {
+            setGameweek(nextGw);
+            setSeasonKey(String(next.seasonKey || seasonKey));
+            return;
+          }
+        }
+        setUnlockAtMs(
+          Number.isFinite(firstScheduledKickoff)
+            ? firstScheduledKickoff
+            : null,
+        );
+      } else if (allFinished) {
         setUnlockAtMs(Date.now());
         setGameweek((prev) => (prev == null ? prev : Math.min(prev + 1, 38)));
         return;
-      }
-
-      if (Number.isFinite(lastPendingKickoff ?? NaN)) {
+      } else if (Number.isFinite(lastPendingKickoff ?? NaN)) {
         setUnlockAtMs((lastPendingKickoff as number) + ESTIMATED_FULL_TIME_MS);
       } else {
         setUnlockAtMs(null);
       }
 
       const shouldPoll =
-        Number.isFinite(firstKickoff) &&
-        Date.now() >= (firstKickoff as number) - LOCK_WINDOW_MS;
+        Number.isFinite(lockKickoff) &&
+        Date.now() >= (lockKickoff as number) - LOCK_WINDOW_MS;
       if (shouldPoll) {
         refreshTimer = setTimeout(() => {
           void syncFixturesWindow(true).catch(() => {});
@@ -453,7 +494,7 @@ export default function MiniGameLobbyPage() {
       cancelled = true;
       if (refreshTimer) clearTimeout(refreshTimer);
     };
-  }, [gameweek, seasonKey]);
+  }, [gameModeStyle, gameweek, roomCode, seasonKey]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -672,6 +713,47 @@ export default function MiniGameLobbyPage() {
 
     return () => unsub();
   }, [user, roomCode, gameweek, router, seasonKey, withDevPreview]);
+
+  useEffect(() => {
+    if (!user || gameModeStyle !== "league") return;
+    if (gameweek == null || !seasonKey) return;
+    if (lockAtMs != null && Date.now() >= lockAtMs) return;
+    if (routedRef.current) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/game/league-open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomCode,
+            gw: gameweek,
+            uid: user.uid,
+            seasonKey,
+          }),
+        });
+        if (cancelled || routedRef.current || !res.ok) return;
+        routedRef.current = true;
+        router.replace(withDevPreview(`/room/${roomCode}/minigame/play`));
+      } catch {
+        // Stay on the lobby if the week cannot be opened yet.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    gameModeStyle,
+    gameweek,
+    seasonKey,
+    lockAtMs,
+    roomCode,
+    router,
+    withDevPreview,
+  ]);
 
   async function safeLeaveLobby() {
     const ref = lobbyRefRef.current;
@@ -1090,10 +1172,10 @@ export default function MiniGameLobbyPage() {
                   </div>
                 ) : (
                   <div>
-                    Lock closes automatically when the gameweek cutoff hits.
+                    Lock closes automatically 30 minutes before the first kickoff.
                     {gameModeStyle === "league"
-                      ? "The leader can open League predictions now; players can submit separately until the cutoff."
-                      : "Everyone must be ready before the leader can launch the round."}
+                      ? " Anyone in the room can submit until then; the next gameweek opens once that first match starts."
+                      : " Everyone must be ready before the leader can launch the round."}
                   </div>
                 )}
               </div>
@@ -1221,7 +1303,9 @@ export default function MiniGameLobbyPage() {
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
                     <Loader2 size={14} className="animate-spin" />
                     <span>
-                      Waiting for the leader to start once everyone is ready…
+                      {gameModeStyle === "league"
+                        ? "Opening League predictions…"
+                        : "Waiting for the leader to start once everyone is ready…"}
                     </span>
                   </div>
                 )}
@@ -1283,7 +1367,7 @@ export default function MiniGameLobbyPage() {
               {
                 key: "league" as const,
                 title: "League",
-                body: "Large-room asynchronous mode. Every room member predicts every eligible gameweek fixture independently, then submits once to lock the complete entry. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
+                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure

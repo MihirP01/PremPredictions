@@ -2,9 +2,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
 import { getBaseUrl, loadGwFixturesWithLockWindow } from "../lock-window";
+import { ensureLeagueDraftGame } from "../league-game";
 
 type LeaguePickInput = {
   fixtureId?: number;
@@ -25,6 +27,7 @@ type GameDoc = {
   fixtureIds?: number[];
   gameModeStyle?: string;
   lockAt?: unknown;
+  firstKickoffAt?: unknown;
   leagueSubmittedByUid?: Record<string, boolean>;
   voidedFixtureIds?: number[];
 };
@@ -83,12 +86,42 @@ export async function POST(req: Request) {
 
     const gameBase = `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}`;
     const gameRef = adminDb.doc(gameBase);
+    const playerRef = adminDb.doc(`rooms/${roomCode}/players/${uid}`);
+    const playerSnap = await playerRef.get();
+    if (!playerSnap.exists) {
+      return NextResponse.json(
+        { error: "You are not in this room" },
+        { status: 403 },
+      );
+    }
 
     const currentFixtures = await loadGwFixturesWithLockWindow(
       getBaseUrl(req),
       gw,
       seasonKey,
+      { lockMode: "league" },
     );
+    if (Date.now() >= currentFixtures.lockAt.getTime()) {
+      return NextResponse.json(
+        {
+          error:
+            "League predictions lock 30 minutes before the first game of the gameweek.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const existingGame = await gameRef.get();
+    if (!existingGame.exists) {
+      await ensureLeagueDraftGame({
+        req,
+        roomCode,
+        gw,
+        seasonKey,
+        uid,
+      });
+    }
+
     const currentlyEligible = new Set(currentFixtures.fixtureIds);
 
     const savedCount = await adminDb.runTransaction(async (tx) => {
@@ -101,15 +134,16 @@ export async function POST(req: Request) {
       }
 
       const players = Array.isArray(game.players) ? game.players : [];
-      if (!players.includes(uid))
-        throw new Error("You are not in this League roster");
       if (game.leagueSubmittedByUid?.[uid] === true) {
         throw new Error("Your League predictions are already locked");
       }
 
-      const lockAt = timestampMs(game.lockAt);
+      const lockAt =
+        timestampMs(currentFixtures.lockAt) ?? timestampMs(game.lockAt);
       if (lockAt != null && Date.now() >= lockAt) {
-        throw new Error("The gameweek deadline has passed");
+        throw new Error(
+          "League predictions lock 30 minutes before the first game of the gameweek.",
+        );
       }
 
       const fixtureIds = Array.isArray(game.fixtureIds)
@@ -172,7 +206,12 @@ export async function POST(req: Request) {
           ...(game.leagueSubmittedByUid ?? {}),
           [uid]: true,
         },
+        players: players.includes(uid)
+          ? players
+          : FieldValue.arrayUnion(uid),
         voidedFixtureIds: [...storedVoids].sort((a, b) => a - b),
+        firstKickoffAt: currentFixtures.firstKickoffAt,
+        lockAt: currentFixtures.lockAt,
       });
 
       return requiredFixtureIds.length;

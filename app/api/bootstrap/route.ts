@@ -24,23 +24,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const currentGwRes = await fetch(
-      new URL("/api/current-gameweek", req.url),
-      {
-        cache: "no-store",
-      },
-    );
-    if (!currentGwRes.ok) {
-      return NextResponse.json(
-        { error: "Failed to resolve current gameweek" },
-        { status: currentGwRes.status },
-      );
-    }
-
-    const currentGwData = (await currentGwRes.json()) as CurrentGwPayload;
-    const seasonKey = String(currentGwData.seasonKey || "");
-    const currentGameweek = Number(currentGwData.currentGameweek ?? 1);
-
     const roomRef = adminDb.doc(`rooms/${roomCode}`);
     const roomSnap = await roomRef.get();
     const room = roomSnap.data() as
@@ -55,6 +38,24 @@ export async function GET(req: NextRequest) {
           };
         }
       | undefined;
+    const gameModeStyle = room?.settings?.gameModeStyle ?? "sprint";
+    const currentGwUrl = new URL("/api/current-gameweek", req.url);
+    if (gameModeStyle === "league")
+      currentGwUrl.searchParams.set("mode", "league");
+
+    const currentGwRes = await fetch(currentGwUrl, {
+      cache: "no-store",
+    });
+    if (!currentGwRes.ok) {
+      return NextResponse.json(
+        { error: "Failed to resolve current gameweek" },
+        { status: currentGwRes.status },
+      );
+    }
+
+    const currentGwData = (await currentGwRes.json()) as CurrentGwPayload;
+    const seasonKey = String(currentGwData.seasonKey || "");
+    const currentGameweek = Number(currentGwData.currentGameweek ?? 1);
 
     let gameState = "LOBBY";
     if (seasonKey && Number.isFinite(currentGameweek)) {
@@ -88,7 +89,7 @@ export async function GET(req: NextRequest) {
         gameState,
         leaderUid: room?.leaderUid ?? null,
         themeAccent: room?.settings?.themeAccent ?? "teal",
-        gameModeStyle: room?.settings?.gameModeStyle ?? "sprint",
+        gameModeStyle,
         allowIdenticalPicks: room?.settings?.sameResultLock === false,
         powerupsEnabled: room?.settings?.powerupsEnabled === true,
         leagueFairPlayEnabled: room?.settings?.leagueFairPlayEnabled === true,

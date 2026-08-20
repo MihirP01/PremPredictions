@@ -33,6 +33,7 @@ export default function RoomBottomNav() {
   const roomCode = String(params?.roomCode || "").toUpperCase();
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
+  const [isLeagueMode, setIsLeagueMode] = useState(false);
   const [activeBubble, setActiveBubble] = useState<{
     left: number;
     width: number;
@@ -65,8 +66,13 @@ export default function RoomBottomNav() {
         const bootstrapState = String(current?.gameState || "")
           .trim()
           .toUpperCase();
+        const leagueMode = current?.gameModeStyle === "league";
+        if (!cancelled) setIsLeagueMode(leagueMode);
 
-        if (bootstrapState === "REVEAL") {
+        if (leagueMode) {
+          setPredictionsHref(`/room/${roomCode}/minigame/play`);
+          setPredictionsDisabled(false);
+        } else if (bootstrapState === "REVEAL") {
           setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
           setPredictionsDisabled(false);
         } else if (
@@ -93,6 +99,12 @@ export default function RoomBottomNav() {
             )
               .trim()
               .toUpperCase();
+
+            if (leagueMode) {
+              setPredictionsHref(`/room/${roomCode}/minigame/play`);
+              setPredictionsDisabled(false);
+              return;
+            }
 
             if (state === "REVEAL") {
               setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
@@ -183,9 +195,10 @@ export default function RoomBottomNav() {
   const collapsed = showScrollAffordance && expandedCycle !== affordanceCycle;
 
   const hideForActiveGamePhase =
-    pathname === `/room/${roomCode}/minigame/play` ||
-    pathname === `/room/${roomCode}/minigame/golden` ||
-    pathname === `/room/${roomCode}/minigame/powerups`;
+    !isLeagueMode &&
+    (pathname === `/room/${roomCode}/minigame/play` ||
+      pathname === `/room/${roomCode}/minigame/golden` ||
+      pathname === `/room/${roomCode}/minigame/powerups`);
 
   const syncActiveBubble = useCallback(() => {
     const nav = navRef.current;

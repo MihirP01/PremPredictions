@@ -993,6 +993,9 @@ export default function RoomPage() {
                         </button>
                       </div>
                     )}
+                    <div className="pt-1 text-center text-[0.68rem] font-semibold tracking-[0.14em] text-white/32">
+                      v2.1.0
+                    </div>
                   </div>
                 </SettingsDropdownPanel>
               </div>

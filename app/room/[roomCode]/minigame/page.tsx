@@ -1272,7 +1272,19 @@ export default function MiniGameLobbyPage() {
                   </div>
                 </div>
 
-                {isLeader && !isLocked ? (
+                {gameModeStyle === "league" ? (
+                  isLocked ? (
+                    <div className="rounded-[22px] border border-amber-300/20 bg-amber-400/5 px-4 py-4 text-sm text-amber-100/85">
+                      This gameweek is locked. The next one opens at first
+                      kickoff.
+                    </div>
+                  ) : (
+                    <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Opening League predictions…</span>
+                    </div>
+                  )
+                ) : isLeader && !isLocked ? (
                   <div className="rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4">
                     <button
                       className="w-full rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(245,158,11,0.16),rgba(56,189,248,0.12))] px-4 py-3 font-display text-sm font-semibold text-foreground transition hover:bg-[linear-gradient(135deg,rgba(245,158,11,0.2),rgba(56,189,248,0.14))] disabled:cursor-not-allowed disabled:opacity-60"
@@ -1281,18 +1293,12 @@ export default function MiniGameLobbyPage() {
                       }
                       onClick={startMiniGame}
                     >
-                      {starting
-                        ? "Opening…"
-                        : gameModeStyle === "league"
-                          ? "Open League Predictions"
-                          : "Start Mini-game"}
+                      {starting ? "Opening…" : "Start Mini-game"}
                     </button>
                     <div className="mt-3 text-xs text-muted">
-                      {gameModeStyle === "league"
-                        ? "Every room member is included automatically and can submit in their own time."
-                        : allPlayersReady
-                          ? "All conditions are met. Launch when ready."
-                          : "Launch remains locked until every room player is marked Ready."}
+                      {allPlayersReady
+                        ? "All conditions are met. Launch when ready."
+                        : "Launch remains locked until every room player is marked Ready."}
                     </div>
                   </div>
                 ) : isLocked ? (
@@ -1303,9 +1309,7 @@ export default function MiniGameLobbyPage() {
                   <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
                     <Loader2 size={14} className="animate-spin" />
                     <span>
-                      {gameModeStyle === "league"
-                        ? "Opening League predictions…"
-                        : "Waiting for the leader to start once everyone is ready…"}
+                      Waiting for the leader to start once everyone is ready…
                     </span>
                   </div>
                 )}
@@ -1367,7 +1371,7 @@ export default function MiniGameLobbyPage() {
               {
                 key: "league" as const,
                 title: "League",
-                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
+                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Exact score is 2 points, correct result is 1 point. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure

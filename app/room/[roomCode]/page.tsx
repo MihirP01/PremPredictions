@@ -187,8 +187,6 @@ export default function RoomPage() {
   const [seasonKey, setSeasonKey] = useState("");
   const [currentGw, setCurrentGw] = useState(1);
   const [recalcBusy, setRecalcBusy] = useState(false);
-  const [closeLeagueBusy, setCloseLeagueBusy] = useState(false);
-  const [closeLeagueConfirmOpen, setCloseLeagueConfirmOpen] = useState(false);
   const [tableRows, setTableRows] = useState<TableRow[]>([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
@@ -844,43 +842,6 @@ export default function RoomPage() {
       );
     } finally {
       setRecalcBusy(false);
-    }
-  }
-
-  async function closeLeaguePredictions() {
-    if (
-      !user ||
-      !isLeader ||
-      closeLeagueBusy ||
-      !seasonKey ||
-      gameModeStyle !== "league"
-    )
-      return;
-    setCloseLeagueConfirmOpen(false);
-    setCloseLeagueBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/game/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          roomCode,
-          gw: currentGw,
-          leaderUid: user.uid,
-          seasonKey,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(data?.error || "Failed to close League predictions.");
-      patchRoomBootstrapCached(roomCode, { gameState: "CLOSED" });
-      setRoomRulesOpen(false);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Failed to close League predictions.",
-      );
-    } finally {
-      setCloseLeagueBusy(false);
     }
   }
 
@@ -1609,15 +1570,6 @@ export default function RoomPage() {
                       ? "Fair Play: ON"
                       : "Fair Play: OFF"}
                 </button>
-                <button
-                  onClick={() => setCloseLeagueConfirmOpen(true)}
-                  disabled={closeLeagueBusy || !seasonKey}
-                  className={`${sharedButtonClass} mt-2`}
-                >
-                  {closeLeagueBusy
-                    ? "Closing submissions..."
-                    : "Close League Predictions"}
-                </button>
               </div>
             ) : null}
             <div
@@ -1638,17 +1590,6 @@ export default function RoomPage() {
           </SectionStack>
         </SectionGrid>
       </ThemedSheetModal>
-      <ConfirmDialog
-        open={closeLeagueConfirmOpen}
-        onClose={() =>
-          closeLeagueBusy ? null : setCloseLeagueConfirmOpen(false)
-        }
-        onConfirm={closeLeaguePredictions}
-        title="Close League Predictions"
-        body="Stop new submissions for this gameweek? Existing locked predictions will be kept for scoring."
-        confirmLabel="Close Submissions"
-        confirming={closeLeagueBusy}
-      />
       <ThemedModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}

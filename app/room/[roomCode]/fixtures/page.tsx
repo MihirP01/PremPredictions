@@ -46,9 +46,11 @@ import {
 import { getGameDataCached } from "@/lib/gameDataClient";
 import {
   classifyPredictionTier,
+  getBasePointsFromScores,
   getPowerupVisualState,
 } from "@/lib/powerupScoring";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { subscribeRoomMeta } from "@/lib/liveGameBus";
 import {
   formatDateTimeLabel,
   formatDateWithOrdinal,
@@ -245,6 +247,29 @@ function colorForTeam(
 function fmtScore(s?: string | null) {
   if (!s) return "—";
   return String(s).replace("-", "–");
+}
+
+const HIDDEN_PICK = "***";
+const VOIDED_FIXTURE_STATUSES = new Set([
+  "POSTPONED",
+  "SUSPENDED",
+  "CANCELLED",
+  "AWARDED",
+]);
+const LEAGUE_LOCK_WINDOW_MS = 30 * 60 * 1000;
+
+function firstScheduledKickoffMs(list: Fixture[]) {
+  const times = list
+    .filter((fixture) => {
+      const status = String(fixture.status || "")
+        .trim()
+        .toUpperCase();
+      if (VOIDED_FIXTURE_STATUSES.has(status)) return false;
+      return Number.isFinite(Date.parse(String(fixture.kickoff || "")));
+    })
+    .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+    .sort((a, b) => a - b);
+  return times[0] ?? null;
 }
 
 function normalizeTeamNameForCompare(value?: string | null) {
@@ -847,6 +872,9 @@ export default function FixturesPage() {
     Record<number, boolean>
   >({});
   const [gameDataEnabled, setGameDataEnabled] = useState(true);
+  const [gameModeStyle, setGameModeStyle] = useState<
+    "round_robin" | "sprint" | "captain" | "league"
+  >("sprint");
   const [bootstrapped, setBootstrapped] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
@@ -1302,6 +1330,7 @@ export default function FixturesPage() {
           setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
           setSeasonKey(season);
           setSeasonOptions(options.length ? options : season ? [season] : []);
+          if (data.gameModeStyle) setGameModeStyle(data.gameModeStyle);
         }
       } catch {
         if (!cancelled) {
@@ -1316,6 +1345,18 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
+  }, [roomCode]);
+
+  useEffect(() => {
+    return subscribeRoomMeta(
+      roomCode,
+      (roomMeta) => {
+        if (roomMeta?.settings.gameModeStyle) {
+          setGameModeStyle(roomMeta.settings.gameModeStyle);
+        }
+      },
+      () => {},
+    );
   }, [roomCode]);
 
   // Auth guard
@@ -1530,6 +1571,50 @@ export default function FixturesPage() {
 
   const isLoading = fixtures === null || fixturesLoading;
   const navLoading = !bootstrapped;
+  const leaguePicksRevealed = useMemo(() => {
+    if (gameModeStyle !== "league") return true;
+    const firstKickoffMs = firstScheduledKickoffMs(fixtures ?? []);
+    if (firstKickoffMs == null) return false;
+    return nowMs >= firstKickoffMs - LEAGUE_LOCK_WINDOW_MS;
+  }, [fixtures, gameModeStyle, nowMs]);
+  const leagueWeekScores = useMemo(() => {
+    if (gameModeStyle !== "league") return [];
+    return players
+      .map((player) => {
+        let points = 0;
+        let exacts = 0;
+        let results = 0;
+        let graded = 0;
+        for (const fixture of fixtures ?? []) {
+          const actual = String(fixture.result || "").trim();
+          if (!actual) continue;
+          const pred = picksByFixture[fixture.fixtureId]?.[player.uid] ?? "";
+          const pts = getBasePointsFromScores(pred, actual);
+          const tier = classifyPredictionTier(pred, actual);
+          graded += 1;
+          points += pts;
+          if (tier === "exact") exacts += 1;
+          else if (tier === "result") results += 1;
+        }
+        return {
+          uid: player.uid,
+          displayName: player.displayName,
+          points,
+          exacts,
+          results,
+          graded,
+        };
+      })
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        return a.displayName.localeCompare(b.displayName, undefined, {
+          sensitivity: "base",
+        });
+      });
+  }, [fixtures, gameModeStyle, picksByFixture, players]);
+  const leagueHasGradedResults = leagueWeekScores.some(
+    (entry) => entry.graded > 0,
+  );
   const refreshLockSeconds = Math.max(
     0,
     Math.ceil((refreshLockedUntil - nowMs) / 1000),
@@ -1917,7 +2002,8 @@ export default function FixturesPage() {
                             Correct Result
                           </div>
                           <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            Winner or draw called correctly.
+                            Winner or draw called correctly
+                            {gameModeStyle === "league" ? " · 1 point" : "."}
                           </div>
                         </div>
                       </div>
@@ -1930,24 +2016,27 @@ export default function FixturesPage() {
                             Exact Score
                           </div>
                           <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            Full scoreline landed exactly.
+                            Full scoreline landed exactly
+                            {gameModeStyle === "league" ? " · 2 points" : "."}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
-                        <div className="pl-3">
-                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                            Powerup Hit
-                          </div>
-                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            Chip override landed.
+                    {gameModeStyle === "league" ? null : (
+                      <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                        <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                          <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
+                          <div className="pl-3">
+                            <div className="font-display text-[0.88rem] font-semibold text-foreground">
+                              Powerup Hit
+                            </div>
+                            <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
+                              Chip override landed.
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                     <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
                       <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
                         <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
@@ -1956,35 +2045,92 @@ export default function FixturesPage() {
                             Miss
                           </div>
                           <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            No points landed on the fixture.
+                            {gameModeStyle === "league"
+                              ? "Wrong result · 0 points"
+                              : "No points landed on the fixture."}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
-                      <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                        <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
-                          Chips
-                        </div>
-                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                          <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
-                            Golden Pick
-                          </span>
-                          <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
-                            All-In
-                          </span>
-                          <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
-                            Safety Net
-                          </span>
+                    {gameModeStyle === "league" ? null : (
+                      <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
+                        <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                          <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
+                            Chips
+                          </div>
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
+                              Golden Pick
+                            </span>
+                            <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
+                              All-In
+                            </span>
+                            <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
+                              Safety Net
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>
             </SectionStack>
           </div>
         </SectionCard>
+
+        {gameModeStyle === "league" ? (
+          <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                  League scoring
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  GW {gw} points
+                </div>
+                <div className="mt-1 text-sm text-muted">
+                  Exact score 2 points · correct result 1 point · miss 0.
+                </div>
+              </div>
+            </div>
+            {!leaguePicksRevealed ? (
+              <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+                Scores stay hidden until 30 minutes before the first kickoff.
+              </div>
+            ) : !leagueHasGradedResults ? (
+              <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+                Waiting on finished fixtures to grade this gameweek.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {leagueWeekScores.map((entry, index) => (
+                  <div
+                    key={entry.uid}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-display font-semibold text-foreground">
+                        {index + 1}. {entry.displayName}
+                        {entry.uid === user?.uid ? (
+                          <span className="ml-2 text-[0.62rem] uppercase tracking-[0.14em] text-white/45">
+                            You
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-muted">
+                        {entry.exacts} exact · {entry.results} result
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-display text-lg font-semibold text-foreground">
+                      {entry.points}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        ) : null}
 
         {error && (
           <SectionCard className={standardSectionCardClass}>
@@ -2318,12 +2464,20 @@ export default function FixturesPage() {
                                         picksByFixture?.[f.fixtureId]?.[
                                           p.uid
                                         ] ?? "";
-                                      const golden = goldenByUid[p.uid];
+                                      const hideOtherPick =
+                                        gameModeStyle === "league" &&
+                                        !leaguePicksRevealed &&
+                                        p.uid !== user?.uid;
+                                      const golden = hideOtherPick
+                                        ? undefined
+                                        : goldenByUid[p.uid];
                                       const isGolden =
                                         !!golden &&
                                         golden.fixtureId === f.fixtureId &&
                                         golden.score === pred;
-                                      const powerup = powerupByUid[p.uid];
+                                      const powerup = hideOtherPick
+                                        ? undefined
+                                        : powerupByUid[p.uid];
                                       const powerupType =
                                         powerup &&
                                         powerup.locked &&
@@ -2343,7 +2497,14 @@ export default function FixturesPage() {
                                         actual || "",
                                       ).trim();
                                       const hasScoredResult =
-                                        actualNorm.length > 0;
+                                        !hideOtherPick && actualNorm.length > 0;
+                                      const fixturePoints =
+                                        hideOtherPick || !hasScoredResult
+                                          ? null
+                                          : getBasePointsFromScores(
+                                              predNorm,
+                                              actualNorm,
+                                            );
                                       const predictionTier = hasScoredResult
                                         ? classifyPredictionTier(
                                             predNorm,
@@ -2458,7 +2619,14 @@ export default function FixturesPage() {
                                                   scoreBadgeClass,
                                                 ].join(" ")}
                                               >
-                                                {fmtScore(pred)}
+                                                {hideOtherPick && pred
+                                                  ? HIDDEN_PICK
+                                                  : fmtScore(pred)}
+                                                {fixturePoints != null ? (
+                                                  <span className="ml-1 text-[0.68rem] font-semibold text-white/55">
+                                                    +{fixturePoints}
+                                                  </span>
+                                                ) : null}
                                               </span>
                                             </div>
                                           </div>

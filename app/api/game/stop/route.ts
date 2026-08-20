@@ -75,15 +75,13 @@ export async function POST(req: Request) {
       );
     }
     if (game.gameModeStyle === "league") {
-      await gameRef.set(
+      return NextResponse.json(
         {
-          state: "CLOSED",
-          closedBy: leaderUid,
-          closedAt: new Date(),
+          error:
+            "League predictions follow the gameweek lock and cannot be closed early.",
         },
-        { merge: true },
+        { status: 400 },
       );
-      return NextResponse.json({ ok: true, state: "CLOSED" });
     }
     const picksCol = adminDb.collection(
       `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${gw}/picks`,

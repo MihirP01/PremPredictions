@@ -90,12 +90,9 @@ export async function ensureLeagueDraftGame(opts: {
       const state = String(game.state || "")
         .trim()
         .toUpperCase();
-      if (game.gameModeStyle === "league" && state === "CLOSED") {
-        throw new Error("League predictions are closed for this gameweek");
-      }
       if (
         game.gameModeStyle === "league" &&
-        (state === "DRAFT" || state === "LOBBY")
+        (state === "DRAFT" || state === "LOBBY" || state === "CLOSED")
       ) {
         const mergedPlayers = uniqueIds([
           ...(Array.isArray(game.players) ? game.players : []),

@@ -154,7 +154,8 @@ export default function LeagueMode({
             <div className="mt-2 max-w-2xl text-sm text-muted">
               Your entry is independent from the rest of the room. Every
               eligible fixture is required. Submitting locks your gameweek, and
-              the whole room locks 30 minutes before the first kickoff.
+              the whole room locks 30 minutes before the first kickoff. Scoring
+              is 2 points for an exact score and 1 point for the correct result.
             </div>
           </div>
           <div className="shrink-0 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-foreground">

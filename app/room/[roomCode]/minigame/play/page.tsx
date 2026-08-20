@@ -935,17 +935,6 @@ export default function MiniGamePlayPage() {
               </button>
             }
           />
-          {isLeader ? (
-            <SectionCard className={standardSectionCardClass}>
-              <button
-                onClick={stopPredictions}
-                disabled={stoppingPredictions}
-                className="w-full rounded-[18px] border border-amber-200/12 bg-[linear-gradient(90deg,rgba(78,56,33,0.88),rgba(52,42,34,0.82),rgba(78,56,33,0.88))] px-4 py-3 font-display text-sm font-semibold text-foreground disabled:opacity-60"
-              >
-                {stoppingPredictions ? "Closing…" : "Close League predictions"}
-              </button>
-            </SectionCard>
-          ) : null}
           <LeagueMode
             fixtures={leagueFixtures}
             savedPicks={myPickByFixture}
@@ -954,39 +943,6 @@ export default function MiniGamePlayPage() {
             onSave={saveLeaguePredictions}
           />
         </SectionStack>
-        {stopConfirmOpen ? (
-          <AnimatedModal
-            open
-            onClose={() => setStopConfirmOpen(false)}
-            zIndexClassName="z-[90]"
-            overlayClassName="bg-black/50"
-            panelClassName="w-full max-w-sm rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(8,14,24,0.98),rgba(10,18,32,0.96))] p-4 space-y-4 shadow-[0_24px_56px_rgba(3,8,20,0.4)]"
-          >
-            <div className="text-lg font-semibold text-foreground">
-              Close League predictions
-            </div>
-            <div className="text-sm text-muted">
-              Close this League gameweek to new submissions? Locked predictions
-              and scoring data will be kept.
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setStopConfirmOpen(false)}
-                disabled={stoppingPredictions}
-                className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmStopPredictions}
-                disabled={stoppingPredictions}
-                className="rounded-lg border border-rose-300/20 bg-rose-400/[0.06] px-3 py-2 text-sm text-danger"
-              >
-                Close submissions
-              </button>
-            </div>
-          </AnimatedModal>
-        ) : null}
       </PageShell>
     );
   }

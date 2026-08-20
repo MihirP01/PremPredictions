@@ -13,9 +13,175 @@ import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
 import {
   getRoomBootstrapCached,
   peekRoomBootstrapCached,
+  refreshRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
+import { useAuth } from "./AuthProvider";
 import useRoomScrollAffordance from "./useRoomScrollAffordance";
+
+function timestampMs(value: unknown) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (value && typeof value === "object") {
+    const candidate = value as {
+      toMillis?: () => number;
+      toDate?: () => Date;
+      seconds?: number;
+      _seconds?: number;
+    };
+    if (typeof candidate.toMillis === "function") return candidate.toMillis();
+    if (typeof candidate.toDate === "function")
+      return candidate.toDate().getTime();
+    const seconds = Number(candidate.seconds ?? candidate._seconds);
+    if (Number.isFinite(seconds)) return seconds * 1000;
+  }
+  return null;
+}
+
+function scheduleAt(atMs: number, run: () => void) {
+  const delay = atMs - Date.now();
+  if (delay <= 0 || delay > 2_000_000_000) return null;
+  return window.setTimeout(run, delay);
+}
+
+function isLeaguePredictionsBlocked(
+  snap: {
+    leagueSubmittedByUid?: Record<string, boolean>;
+    lockAt?: unknown;
+  } | null,
+  uid: string | undefined,
+) {
+  if (!snap) return false;
+  if (uid && snap.leagueSubmittedByUid?.[uid] === true) return true;
+  const lockAt = timestampMs(snap.lockAt);
+  return lockAt != null && Date.now() >= lockAt;
+}
+
+export function useLeaguePredictionsBlocked(roomCode: string) {
+  const { user } = useAuth();
+  const [blocked, setBlocked] = useState(false);
+  const [watch, setWatch] = useState<{
+    seasonKey: string;
+    gw: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!roomCode) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        let current = await getRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        if (current.gameModeStyle !== "league") {
+          setWatch(null);
+          setBlocked(false);
+          return;
+        }
+        current = await refreshRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        const seasonKey = String(current.seasonKey || "");
+        const gw = Number(current.currentGameweek || 1);
+        if (!seasonKey || !Number.isFinite(gw)) return;
+        setWatch({ seasonKey, gw });
+      } catch {
+        if (!cancelled) {
+          setWatch(null);
+          setBlocked(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomCode]);
+
+  useEffect(() => {
+    if (!roomCode || !watch) return;
+    let cancelled = false;
+    let lockTimer: number | null = null;
+    let nextWeekTimer: number | null = null;
+
+    const clearTimers = () => {
+      if (lockTimer != null) window.clearTimeout(lockTimer);
+      if (nextWeekTimer != null) window.clearTimeout(nextWeekTimer);
+      lockTimer = null;
+      nextWeekTimer = null;
+    };
+
+    let rolloverStarted = false;
+    const tryRollover = (attempt: number) => {
+      void refreshRoomBootstrapCached(roomCode).then((next) => {
+        if (cancelled) return;
+        const nextGw = Number(next.currentGameweek || 1);
+        if (Number.isFinite(nextGw) && nextGw !== watch.gw) {
+          setWatch({
+            seasonKey: String(next.seasonKey || watch.seasonKey),
+            gw: nextGw,
+          });
+          setBlocked(false);
+          return;
+        }
+        if (attempt < 8) {
+          nextWeekTimer = window.setTimeout(
+            () => tryRollover(attempt + 1),
+            15000,
+          );
+        }
+      });
+    };
+
+    const unsub = subscribeRoomGameDoc(
+      roomCode,
+      watch.seasonKey,
+      watch.gw,
+      (snap) => {
+        if (cancelled) return;
+        const game = snap as {
+          leagueSubmittedByUid?: Record<string, boolean>;
+          lockAt?: unknown;
+          firstKickoffAt?: unknown;
+        } | null;
+        setBlocked(isLeaguePredictionsBlocked(game, user?.uid));
+        const lockAt = timestampMs(game?.lockAt);
+        const firstKickoff = timestampMs(game?.firstKickoffAt);
+        const now = Date.now();
+        if (lockTimer == null && lockAt != null && now < lockAt) {
+          lockTimer = scheduleAt(lockAt, () => setBlocked(true));
+        }
+        if (rolloverStarted) return;
+        if (firstKickoff != null && now >= firstKickoff) {
+          rolloverStarted = true;
+          tryRollover(0);
+        } else if (
+          nextWeekTimer == null &&
+          firstKickoff != null &&
+          now < firstKickoff
+        ) {
+          nextWeekTimer = scheduleAt(firstKickoff + 750, () => {
+            rolloverStarted = true;
+            tryRollover(0);
+          });
+        }
+      },
+      () => {
+        if (!cancelled) setBlocked(false);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      unsub();
+      clearTimers();
+    };
+  }, [roomCode, watch, user?.uid]);
+
+  return blocked;
+}
 
 type NavItem = {
   key: "fixtures" | "predictions" | "home" | "leaderboard" | "stats";
@@ -31,6 +197,7 @@ export default function RoomBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
+  const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
   const [isLeagueMode, setIsLeagueMode] = useState(false);
@@ -71,7 +238,6 @@ export default function RoomBottomNav() {
 
         if (leagueMode) {
           setPredictionsHref(`/room/${roomCode}/minigame/play`);
-          setPredictionsDisabled(false);
         } else if (bootstrapState === "REVEAL") {
           setPredictionsHref(`/room/${roomCode}/minigame/reveal`);
           setPredictionsDisabled(false);
@@ -102,7 +268,6 @@ export default function RoomBottomNav() {
 
             if (leagueMode) {
               setPredictionsHref(`/room/${roomCode}/minigame/play`);
-              setPredictionsDisabled(false);
               return;
             }
 
@@ -160,7 +325,9 @@ export default function RoomBottomNav() {
         active:
           pathname === `/room/${roomCode}/minigame` ||
           pathname.startsWith(`/room/${roomCode}/minigame/`),
-        disabled: predictionsDisabled,
+        disabled: isLeagueMode
+          ? leaguePredictionsBlocked
+          : predictionsDisabled,
       },
       {
         key: "home",
@@ -184,7 +351,14 @@ export default function RoomBottomNav() {
         active: pathname === `/room/${roomCode}/stats`,
       },
     ],
-    [pathname, roomCode, predictionsDisabled, predictionsHref],
+    [
+      pathname,
+      roomCode,
+      predictionsDisabled,
+      predictionsHref,
+      isLeagueMode,
+      leaguePredictionsBlocked,
+    ],
   );
   const activeItem = items.find((item) => item.active) || items[2];
   const {
@@ -396,6 +570,11 @@ export default function RoomBottomNav() {
     event: React.PointerEvent<HTMLButtonElement>,
     item: NavItem,
   ) => {
+    if (item.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.pointerType === "mouse") return;
     lastTouchHandledAtRef.current = event.timeStamp;
     event.preventDefault();
@@ -514,12 +693,14 @@ export default function RoomBottomNav() {
                           width: "100%",
                           opacity: 1,
                           transform: "scale(1)",
+                          pointerEvents: item.disabled ? "none" : "auto",
                         }
                       : {
                           flex: "1 1 0%",
                           width: 0,
                           opacity: 1,
                           transform: "scale(1)",
+                          pointerEvents: item.disabled ? "none" : "auto",
                         }
                 }
               >
@@ -536,12 +717,12 @@ export default function RoomBottomNav() {
                   disabled={item.disabled}
                   aria-disabled={item.disabled ? "true" : undefined}
                   className={[
-                    "relative flex w-full min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5 transition-colors duration-250 ease-out pointer-events-auto",
-                    item.active
-                      ? "text-foreground"
-                      : item.disabled
-                        ? "text-muted opacity-50 cursor-not-allowed"
-                        : "text-muted",
+                    "relative flex w-full min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5 transition-colors duration-250 ease-out",
+                    item.disabled
+                      ? "pointer-events-none text-muted opacity-50 cursor-not-allowed"
+                      : "pointer-events-auto",
+                    item.active && !item.disabled ? "text-foreground" : "",
+                    !item.active && !item.disabled ? "text-muted" : "",
                   ].join(" ")}
                 >
                   <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">

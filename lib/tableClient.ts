@@ -1,6 +1,7 @@
 export type TableRow = {
   position: number;
   team: {
+    id?: number | null;
     name: string;
     tla?: string | null;
     shortName?: string;
@@ -23,7 +24,7 @@ export type TableData = {
 };
 
 const TTL_MS = 60 * 1000;
-const STORAGE_PREFIX = "tbl:v1:";
+const STORAGE_PREFIX = "tbl:v2:";
 const memCache = new Map<string, { expiresAt: number; data: TableData }>();
 const pending = new Map<string, Promise<TableData>>();
 

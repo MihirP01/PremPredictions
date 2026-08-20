@@ -71,32 +71,24 @@ export async function GET(req) {
     );
   }
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    console.error("Football-Data standings error:", response.status, body);
-    return NextResponse.json(
-      { error: "Football API error", status: response.status },
-      { status: 502 },
-    );
-  }
-
-  const data = await response.json();
   const teamsData = teamsResponse?.ok
     ? await teamsResponse.json().catch(() => ({}))
     : {};
+  const teamsList = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
   const tlaByTeamId = new Map(
-    Array.isArray(teamsData?.teams)
-      ? teamsData.teams.map((t) => [
-          Number(t?.id),
-          String(t?.tla || "").toUpperCase(),
-        ])
-      : [],
+    teamsList.map((t) => [
+      Number(t?.id),
+      String(t?.tla || "").toUpperCase(),
+    ]),
   );
 
   const mapRows = (rows = []) =>
     rows.map((row) => ({
       position: Number(row.position ?? 0),
       team: {
+        id: Number.isFinite(Number(row?.team?.id))
+          ? Number(row?.team?.id)
+          : null,
         name: row?.team?.name || "Club",
         tla: row?.team?.tla || tlaByTeamId.get(Number(row?.team?.id)) || null,
         shortName:
@@ -113,6 +105,16 @@ export async function GET(req) {
       points: Number(row.points ?? 0),
     }));
 
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.error("Football-Data standings error:", response.status, body);
+    return NextResponse.json(
+      { error: "Football API error", status: response.status },
+      { status: 502 },
+    );
+  }
+
+  const data = await response.json();
   const standingsTotal = mapRows(
     data?.standings?.find((s) => s?.type === "TOTAL")?.table ||
       data?.standings?.[0]?.table ||

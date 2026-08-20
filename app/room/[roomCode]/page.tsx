@@ -27,6 +27,7 @@ import {
   SettingsDropdownPanel,
   SettingsTriggerButton,
 } from "../../../components/RoomSettingsMenu";
+import { useLeaguePredictionsBlocked } from "../../../components/RoomBottomNav";
 import SpecialBreak from "../../../components/SpecialBreak";
 import SectionGrid from "../../../components/SectionGrid";
 import SectionStack from "../../../components/SectionStack";
@@ -38,6 +39,7 @@ import {
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getTableCached, type TableRow } from "@/lib/tableClient";
+import YearTableSection from "../../../components/YearTableSection";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -116,13 +118,26 @@ type HubNavTileProps = {
   hint: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
   onClick: () => void;
+  disabled?: boolean;
 };
 
-function HubNavTile({ label, hint, icon: Icon, onClick }: HubNavTileProps) {
+function HubNavTile({
+  label,
+  hint,
+  icon: Icon,
+  onClick,
+  disabled,
+}: HubNavTileProps) {
   return (
     <button
       onClick={onClick}
-      className="group rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 text-left shadow-[0_14px_32px_rgba(3,8,20,0.14)] transition hover:-translate-y-0.5 hover:bg-white/[0.045]"
+      disabled={disabled}
+      className={[
+        "group rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 text-left shadow-[0_14px_32px_rgba(3,8,20,0.14)] transition",
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "hover:-translate-y-0.5 hover:bg-white/[0.045]",
+      ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -148,6 +163,7 @@ export default function RoomPage() {
 
   const { user, loading } = useAuth();
   const router = useRouter();
+  const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
 
   const [leaderUid, setLeaderUid] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -334,6 +350,7 @@ export default function RoomPage() {
   };
 
   async function openPredictionsTarget() {
+    if (gameModeStyle === "league" && leaguePredictionsBlocked) return;
     const cachedBootstrap = peekRoomBootstrapCached(roomCode);
     const mode = cachedBootstrap?.gameModeStyle ?? gameModeStyle;
     const immediateHref = predictionsRouteForState(
@@ -1093,8 +1110,13 @@ export default function RoomPage() {
                   />
                   <HubNavTile
                     label="Predictions"
-                    hint="Current mini-game flow"
+                    hint={
+                      leaguePredictionsBlocked
+                        ? "Locked until next gameweek"
+                        : "Current mini-game flow"
+                    }
                     icon={Gamepad2}
+                    disabled={leaguePredictionsBlocked}
                     onClick={() => {
                       void openPredictionsTarget();
                     }}
@@ -1171,6 +1193,17 @@ export default function RoomPage() {
               </SectionGrid>
             </SectionStack>
           </SectionCard>
+
+          {user ? (
+            <YearTableSection
+              roomCode={roomCode}
+              seasonKey={seasonKey}
+              currentGw={currentGw}
+              uid={user.uid}
+              tableRows={tableRows}
+              players={players}
+            />
+          ) : null}
 
           <SectionGrid gap="page" className="xl:grid-cols-2 xl:items-start">
             <SectionCard className={standardSectionCardClass}>

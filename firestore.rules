@@ -100,6 +100,15 @@ service cloud.firestore {
             allow write: if false;
           }
         }
+
+        match /yearTable/{docId} {
+          allow read: if isMember(roomCode);
+          allow write: if false;
+          match /picks/{playerUid} {
+            allow read: if isMember(roomCode);
+            allow write: if false;
+          }
+        }
       }
 
       // Legacy top-level score docs.

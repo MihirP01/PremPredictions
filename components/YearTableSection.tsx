@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 import {
   ConfirmDialog,
   ModalHeader,
@@ -147,26 +147,43 @@ export default function YearTableSection({
   }, [roomCode, seasonKey, uid]);
 
   const rankedClubs = clubs.length ? clubs : fallbackClubs;
+  const remainingClubs = useMemo(() => {
+    const taken = new Set(draftOrder);
+    return rankedClubs.filter((club) => !taken.has(club.key));
+  }, [draftOrder, rankedClubs]);
   const hasAnyPicks = picks.length > 0;
   const canEnter = open && !myPick && rankedClubs.length === 20;
+  const nextRank = draftOrder.length + 1;
 
   function openEnter() {
-    const start = myPick?.order?.length
-      ? myPick.order
-      : rankedClubs.map((club) => club.key);
-    setDraftOrder(start);
+    setDraftOrder([]);
     setEnterOpen(true);
   }
 
-  function moveDraft(index: number, direction: -1 | 1) {
+  function pickClub(key: string) {
+    if (submitBusy || draftOrder.includes(key) || draftOrder.length >= 20)
+      return;
+    setDraftOrder((current) => [...current, key]);
+  }
+
+  function removeClub(key: string) {
+    if (submitBusy) return;
+    setDraftOrder((current) => current.filter((item) => item !== key));
+  }
+
+  function moveClub(index: number, direction: -1 | 1) {
     const next = index + direction;
-    if (next < 0 || next >= draftOrder.length) return;
+    if (next < 0 || next >= draftOrder.length || submitBusy) return;
     setDraftOrder((current) => {
       const copy = [...current];
       const [item] = copy.splice(index, 1);
       copy.splice(next, 0, item);
       return copy;
     });
+  }
+
+  function clubFor(key: string) {
+    return clubByKey.get(key) || fallbackClubs.find((item) => item.key === key);
   }
 
   async function submitDraft() {
@@ -267,7 +284,7 @@ export default function YearTableSection({
               ? "Your table is locked. Open the room list to compare."
               : open
                 ? `Enter before GW${YEAR_TABLE_LOCK_AFTER_GW + 1}. You only get one submission.`
-                : "Entries closed after GW5."}
+                : "Entries closed from GW2."}
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -306,54 +323,119 @@ export default function YearTableSection({
           closeButtonClassName="hidden sm:inline-flex"
         />
         <div className="text-sm text-muted">
-          Move every club into your 1–20 finish. Submitting locks this list for
-          the season.
+          Tap a club to fill the next place. Use up/down to shuffle a placed
+          club, or Remove to put it back in the list.
         </div>
-        <div className="max-h-[58dvh] space-y-2 overflow-y-auto no-scrollbar">
-          {draftOrder.map((key, index) => {
-            const club = clubByKey.get(key) || fallbackClubs.find((item) => item.key === key);
-            return (
-              <div
-                key={key}
-                className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2"
-              >
-                <div className="w-8 font-display text-sm font-semibold text-white/70">
-                  {index + 1}
-                </div>
-                <TeamBadge
-                  name={club?.name || key}
-                  tla={club?.tla}
-                  shortName={club?.shortName}
-                  badge={club?.badge}
-                  wrapperClassName="h-8 w-8"
-                  imageClassName="h-6 w-6 object-contain"
-                />
-                <div className="min-w-0 flex-1 font-display text-sm font-semibold text-foreground">
-                  {clubLabel(club, key)}
-                </div>
-                <div className="flex shrink-0 flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveDraft(index, -1)}
-                    disabled={index === 0 || submitBusy}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
-                    aria-label="Move up"
-                  >
-                    <ChevronUp size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveDraft(index, 1)}
-                    disabled={index === draftOrder.length - 1 || submitBusy}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
-                    aria-label="Move down"
-                  >
-                    <ChevronDown size={14} />
-                  </button>
-                </div>
+        <div className="max-h-[58dvh] space-y-4 overflow-y-auto no-scrollbar">
+          <div className="space-y-2">
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Your table · {draftOrder.length}/20
+            </div>
+            {draftOrder.length === 0 ? (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+                Start with 1st place.
               </div>
-            );
-          })}
+            ) : (
+              draftOrder.map((key, index) => {
+                const club = clubFor(key);
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2 sm:gap-3"
+                  >
+                    <div className="w-7 shrink-0 font-display text-sm font-semibold text-white/70 sm:w-8">
+                      {index + 1}
+                    </div>
+                    <TeamBadge
+                      name={club?.name || key}
+                      tla={club?.tla}
+                      shortName={club?.shortName}
+                      badge={club?.badge}
+                      wrapperClassName="h-8 w-8"
+                      imageClassName="h-6 w-6 object-contain"
+                    />
+                    <div className="min-w-0 flex-1 font-display text-sm font-semibold text-foreground">
+                      {clubLabel(club, key)}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveClub(index, -1)}
+                        disabled={index === 0 || submitBusy}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
+                        aria-label="Move up"
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveClub(index, 1)}
+                        disabled={index === draftOrder.length - 1 || submitBusy}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
+                        aria-label="Move down"
+                      >
+                        <ChevronDown size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeClub(key)}
+                        disabled={submitBusy}
+                        className="inline-flex h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.08em] text-white/70 transition hover:bg-white/[0.07] disabled:opacity-40"
+                        aria-label={`Remove ${clubLabel(club, key)}`}
+                      >
+                        <X size={12} />
+                        <span className="hidden sm:inline">Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {remainingClubs.length ? (
+            <div className="space-y-2">
+              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+                {nextRank <= 20
+                  ? `Pick ${nextRank}${
+                      nextRank === 1
+                        ? "st"
+                        : nextRank === 2
+                          ? "nd"
+                          : nextRank === 3
+                            ? "rd"
+                            : "th"
+                    }`
+                  : "Remaining clubs"}
+              </div>
+              {remainingClubs.map((club) => (
+                <button
+                  key={club.key}
+                  type="button"
+                  onClick={() => pickClub(club.key)}
+                  disabled={submitBusy || draftOrder.length >= 20}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-left transition hover:border-white/14 hover:bg-white/[0.055] disabled:opacity-50"
+                >
+                  <TeamBadge
+                    name={club.name}
+                    tla={club.tla}
+                    shortName={club.shortName}
+                    badge={club.badge}
+                    wrapperClassName="h-8 w-8"
+                    imageClassName="h-6 w-6 object-contain"
+                  />
+                  <div className="min-w-0 flex-1 font-display text-sm font-semibold text-foreground">
+                    {clubLabel(club, club.key)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+              All 20 clubs are placed. Shuffle with up/down, remove one to
+              pick again, or submit to lock.
+            </div>
+          )}
         </div>
         <button
           type="button"

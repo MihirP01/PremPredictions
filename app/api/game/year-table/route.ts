@@ -263,7 +263,7 @@ export async function POST(req: Request) {
     const currentGw = await resolveCurrentGw(req, roomCode, seasonKey);
     if (currentGw > YEAR_TABLE_LOCK_AFTER_GW) {
       return NextResponse.json(
-        { error: "Year predictions closed after GW5." },
+        { error: "Year predictions close before GW2." },
         { status: 400 },
       );
     }

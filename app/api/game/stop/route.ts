@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { resolveSeasonKey } from "../../season";
+import { isValidRoomCode } from "@/lib/roomCode";
 
 type StopBody = {
   roomCode?: string;
@@ -23,7 +24,7 @@ type GameDoc = {
 };
 
 function onlyAlnum(s: string) {
-  return /^[A-Z0-9]{4,8}$/.test(s);
+  return isValidRoomCode(s);
 }
 
 export async function POST(req: Request) {

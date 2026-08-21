@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../../../firebase-admin";
+import { isValidRoomCode } from "@/lib/roomCode";
 import { buildRoomPassword, verifyRoomPassword } from "@/lib/roomPassword";
 
 type AccessBody = {
@@ -29,7 +30,7 @@ type SecurityDoc = {
 };
 
 function validRoomCode(code: string) {
-  return /^[A-Z0-9]{4,8}$/.test(code);
+  return isValidRoomCode(code);
 }
 
 function cleanDisplayName(name: string) {

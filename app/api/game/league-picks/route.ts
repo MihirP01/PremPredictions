@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
+import { isValidRoomCode } from "@/lib/roomCode";
 import { getBaseUrl, loadGwFixturesWithLockWindow } from "../lock-window";
 import { ensureLeagueDraftGame } from "../league-game";
 
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
     const seasonKey = resolveSeasonKey(body.seasonKey);
     const submittedPicks = Array.isArray(body.picks) ? body.picks : [];
 
-    if (!/^[A-Z0-9]{4,8}$/.test(roomCode)) {
+    if (!isValidRoomCode(roomCode)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
     if (!Number.isFinite(gw) || gw < 1 || gw > 38) {

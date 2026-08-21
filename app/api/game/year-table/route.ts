@@ -6,12 +6,17 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
 import { getBaseUrl } from "../lock-window";
+import { canonicalRoomCode, isValidRoomCode } from "@/lib/roomCode";
 import {
   YEAR_TABLE_LOCK_AFTER_GW,
   YEAR_TABLE_SCORE_AFTER_GW,
   clubsFromTableRows,
   type YearTableClub,
 } from "@/lib/yearTableScoring";
+import {
+  isCompleteYearOrder,
+  syncYearTableAcrossRooms,
+} from "@/lib/yearTableSync";
 
 type YearTableBody = {
   roomCode?: string;
@@ -39,7 +44,7 @@ const FINISHED_STATUSES = new Set(["FINISHED", "FT", "AWARDED"]);
 const VOIDED_STATUSES = new Set(["POSTPONED", "SUSPENDED", "CANCELLED"]);
 
 function validRoomCode(code: string) {
-  return /^[A-Z0-9]{4,8}$/.test(code);
+  return isValidRoomCode(code);
 }
 
 function asIso(value: unknown) {
@@ -171,9 +176,7 @@ function serializePick(
 
 export async function GET(req: NextRequest) {
   try {
-    const roomCode = String(req.nextUrl.searchParams.get("roomCode") || "")
-      .trim()
-      .toUpperCase();
+    const roomCode = canonicalRoomCode(req.nextUrl.searchParams.get("roomCode"));
     const uid = String(req.nextUrl.searchParams.get("uid") || "").trim();
     const seasonKey = resolveSeasonKey(req.nextUrl.searchParams.get("seasonKey"));
 
@@ -189,9 +192,8 @@ export async function GET(req: NextRequest) {
       (await isGw38Complete(req, seasonKey));
 
     const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
-    const [metaSnap, picksSnap, clubs] = await Promise.all([
+    const [metaSnap, clubs] = await Promise.all([
       metaRef.get(),
-      picksCol.get(),
       loadTableClubs(req, seasonKey).catch(() => [] as YearTableClub[]),
     ]);
 
@@ -212,8 +214,13 @@ export async function GET(req: NextRequest) {
         },
     );
 
-    const picks = picksSnap.docs.map((docSnap) =>
-      serializePick(docSnap.id, docSnap.data() as { order?: unknown; submittedAt?: unknown }),
+    await syncYearTableAcrossRooms({ uid, seasonKey, sourceRoomCode: roomCode });
+    const syncedPicks = await picksCol.get();
+    const picks = syncedPicks.docs.map((docSnap) =>
+      serializePick(
+        docSnap.id,
+        docSnap.data() as { order?: unknown; submittedAt?: unknown },
+      ),
     );
     const myPick = picks.find((pick) => pick.uid === uid) ?? null;
 
@@ -246,9 +253,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as YearTableBody;
-    const roomCode = String(body.roomCode || "")
-      .trim()
-      .toUpperCase();
+    const roomCode = canonicalRoomCode(body.roomCode);
     const uid = String(body.uid || "").trim();
     const seasonKey = resolveSeasonKey(body.seasonKey);
     const submittedOrder = Array.isArray(body.order)
@@ -272,6 +277,15 @@ export async function POST(req: Request) {
     const liveKeys = clubs.map((club) => club.key);
     const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
     const pickRef = picksCol.doc(uid);
+
+    await syncYearTableAcrossRooms({ uid, seasonKey });
+    const alreadyLocked = await pickRef.get();
+    if (alreadyLocked.exists && isCompleteYearOrder(alreadyLocked.data()?.order)) {
+      return NextResponse.json(
+        { error: "Your year predictions are already locked" },
+        { status: 400 },
+      );
+    }
 
     await adminDb.runTransaction(async (tx) => {
       const [metaSnap, pickSnap] = await Promise.all([
@@ -320,6 +334,13 @@ export async function POST(req: Request) {
         order: submittedOrder,
         submittedAt: FieldValue.serverTimestamp(),
       });
+    });
+
+    await syncYearTableAcrossRooms({
+      uid,
+      seasonKey,
+      sourceRoomCode: roomCode,
+      sourceOrder: submittedOrder,
     });
 
     return NextResponse.json({ ok: true });

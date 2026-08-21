@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
+import { isValidRoomCode } from "@/lib/roomCode";
 
 type DeleteRoomBody = {
   roomCode?: string;
@@ -39,6 +40,12 @@ async function deleteSeasonData(roomCode: string, seasonKey: string) {
     await gwDoc.ref.delete();
   }
 
+  await deleteCollectionDocs(`${seasonBase}/yearTable/meta/picks`);
+  await adminDb
+    .doc(`${seasonBase}/yearTable/meta`)
+    .delete()
+    .catch(() => {});
+
   await adminDb
     .doc(`${seasonBase}`)
     .delete()
@@ -51,7 +58,7 @@ export async function POST(req: Request) {
     const roomCode = String(body.roomCode || "").toUpperCase();
     const leaderUid = String(body.leaderUid || "");
 
-    if (!/^[A-Z0-9]{4,8}$/.test(roomCode)) {
+    if (!isValidRoomCode(roomCode)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
     if (!leaderUid) {

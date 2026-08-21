@@ -39,6 +39,11 @@ import {
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getTableCached, type TableRow } from "@/lib/tableClient";
+import {
+  ROOM_CODE_ERROR,
+  isValidRoomCode,
+  normalizeRoomCode,
+} from "@/lib/roomCode";
 import YearTableSection from "../../../components/YearTableSection";
 import { db } from "../../../firebase";
 import {
@@ -69,14 +74,6 @@ const THEME_ACCENT_OPTIONS = [
   { value: "red", label: "Red" },
   { value: "slate", label: "Slate" },
 ] as const;
-
-function normalizeRoomCode(code: string) {
-  return code.trim().toUpperCase();
-}
-
-function validRoomCode(code: string) {
-  return /^[A-Z0-9]{4,8}$/.test(code);
-}
 
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
@@ -526,8 +523,8 @@ export default function RoomPage() {
   async function joinNewRoom() {
     if (!user) return;
     const code = normalizeRoomCode(joinCode);
-    if (!validRoomCode(code)) {
-      setSwitcherError("Room code must be 4–8 letters/numbers.");
+    if (!isValidRoomCode(code)) {
+      setSwitcherError(ROOM_CODE_ERROR);
       return;
     }
 
@@ -561,8 +558,8 @@ export default function RoomPage() {
   async function createNewRoom() {
     if (!user) return;
     const code = normalizeRoomCode(createCode);
-    if (!validRoomCode(code)) {
-      setSwitcherError("Room code must be 4–8 letters/numbers.");
+    if (!isValidRoomCode(code)) {
+      setSwitcherError(ROOM_CODE_ERROR);
       return;
     }
 
@@ -1435,6 +1432,7 @@ export default function RoomPage() {
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="AB12"
+                maxLength={24}
                 className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
               />
@@ -1458,6 +1456,7 @@ export default function RoomPage() {
                 value={createCode}
                 onChange={(e) => setCreateCode(e.target.value)}
                 placeholder="NEW25"
+                maxLength={24}
                 className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
               />

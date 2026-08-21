@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
+import { isValidRoomCode } from "@/lib/roomCode";
 import { getBaseUrl, loadGwFixturesWithLockWindow } from "../lock-window";
 import { resolveSeasonKey } from "../../season";
 import { ensureLeagueDraftGame } from "../league-game";
@@ -26,7 +27,7 @@ type RoomDoc = {
 type GameDoc = { state?: string };
 
 function onlyAlnum(s: string) {
-  return /^[A-Z0-9]{4,8}$/.test(s);
+  return isValidRoomCode(s);
 }
 
 function shuffle<T>(arr: T[]) {

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../../firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { isValidRoomCode } from "@/lib/roomCode";
 
 type RoomSettingsBody = {
   roomCode?: string;
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
         ? body.gameModeStyle.trim().toLowerCase()
         : undefined;
 
-    if (!/^[A-Z0-9]{4,8}$/.test(roomCode)) {
+    if (!isValidRoomCode(roomCode)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
     if (!leaderUid) {

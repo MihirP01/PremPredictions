@@ -13,6 +13,7 @@ import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { canonicalRoomCode } from "@/lib/roomCode";
 
 type AccentTheme = {
   hex: string;
@@ -99,9 +100,13 @@ export default function RoomScopedLayout({
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
-  const roomCode = useMemo(
+  const rawRoomCode = useMemo(
     () => String(params.roomCode || "").toUpperCase(),
     [params.roomCode],
+  );
+  const roomCode = useMemo(
+    () => canonicalRoomCode(rawRoomCode),
+    [rawRoomCode],
   );
   const [accentKey, setAccentKey] = useState<string>("teal");
   const [showBootOverlay, setShowBootOverlay] = useState(false);
@@ -123,7 +128,14 @@ export default function RoomScopedLayout({
   const bootProgressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!rawRoomCode || rawRoomCode === roomCode) return;
+    const suffix = pathname.replace(/^\/room\/[^/]+/i, "");
+    router.replace(`/room/${roomCode}${suffix}`);
+  }, [rawRoomCode, roomCode, pathname, router]);
+
+  useEffect(() => {
     if (loading || !user || !roomCode) return;
+    if (rawRoomCode !== roomCode) return;
     const membershipRef = doc(db, "rooms", roomCode, "players", user.uid);
     const forceToRoomGate = () => {
       if (redirectedRef.current) return;
@@ -149,7 +161,7 @@ export default function RoomScopedLayout({
       },
     );
     return () => unsub();
-  }, [loading, user, roomCode, router]);
+  }, [loading, user, roomCode, rawRoomCode, router]);
 
   useEffect(() => {
     if (!roomCode) return;

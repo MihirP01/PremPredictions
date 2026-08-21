@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { resolveSeasonKey } from "../../season";
+import { isValidRoomCode } from "@/lib/roomCode";
 import { ensureLeagueDraftGame } from "../league-game";
 
 type LeagueOpenBody = {
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     const uid = String(body.uid || "").trim();
     const seasonKey = resolveSeasonKey(body.seasonKey);
 
-    if (!/^[A-Z0-9]{4,8}$/.test(roomCode)) {
+    if (!isValidRoomCode(roomCode)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
     if (!Number.isFinite(gw) || gw < 1 || gw > 38) {

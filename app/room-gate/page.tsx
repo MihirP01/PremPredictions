@@ -8,13 +8,7 @@ import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
 import { resolveDisplayName } from "@/lib/displayNameResolver";
-
-function normalize(code: string) {
-  return code.trim().toUpperCase();
-}
-function valid(code: string) {
-  return /^[A-Z0-9]{4,8}$/.test(code);
-}
+import { ROOM_CODE_ERROR, canonicalRoomCode, isValidRoomCode, normalizeRoomCode } from "@/lib/roomCode";
 
 type MemberRoom = { roomCode: string; role: "leader" | "member" };
 
@@ -54,7 +48,7 @@ export default function RoomGatePage() {
       });
       setDisplayName(resolvedDisplayName);
 
-      const existing = String(data?.currentRoomCode || "").toUpperCase();
+      const existing = canonicalRoomCode(String(data?.currentRoomCode || ""));
       setCurrentRoomCode(existing);
       if (existing) setRoomCode(existing);
 
@@ -148,10 +142,10 @@ export default function RoomGatePage() {
 
   const joinRoom = async () => {
     if (!user) return;
-    const code = normalize(roomCode);
+    const code = normalizeRoomCode(roomCode);
 
-    if (!valid(code)) {
-      setError("Room code must be 4–8 letters/numbers.");
+    if (!isValidRoomCode(code)) {
+      setError(ROOM_CODE_ERROR);
       return;
     }
 
@@ -192,10 +186,10 @@ export default function RoomGatePage() {
 
   const createRoom = async () => {
     if (!user) return;
-    const code = normalize(roomCode);
+    const code = normalizeRoomCode(roomCode);
 
-    if (!valid(code)) {
-      setError("Room code must be 4–8 letters/numbers.");
+    if (!isValidRoomCode(code)) {
+      setError(ROOM_CODE_ERROR);
       return;
     }
 
@@ -372,6 +366,7 @@ export default function RoomGatePage() {
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value)}
                   placeholder="AB12"
+                  maxLength={24}
                 />
               </div>
             </div>

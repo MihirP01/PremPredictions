@@ -1,3 +1,5 @@
+import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+
 export type MatchInfoMiniTeam = {
   id: number | null;
   name: string;
@@ -80,8 +82,8 @@ export type MatchInfoData = {
   };
 };
 
-const TTL_MS = 10 * 60 * 1000;
-const STORAGE_PREFIX = "match-info:v4:";
+const TTL_MS = 90 * 1000;
+const STORAGE_PREFIX = "match-info:v5:";
 const memCache = new Map<string, { expiresAt: number; data: MatchInfoData }>();
 const pending = new Map<string, Promise<MatchInfoData>>();
 
@@ -137,38 +139,15 @@ function normalize(payload: unknown): MatchInfoData {
   };
 }
 
-function getStorage(key: string): MatchInfoData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt?: number;
-      data?: MatchInfoData;
-    };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return normalize(parsed.data);
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: MatchInfoData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore storage failures
-  }
+function getStorage(key: string): { expiresAt: number; data: MatchInfoData } | null {
+  const stored = readFreshSessionRecord<MatchInfoData>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  return { expiresAt: stored.expiresAt, data: normalize(stored.data) };
 }
 
 function setCached(key: string, data: MatchInfoData) {
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
-  setStorage(key, data);
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
+  memCache.set(key, { expiresAt, data });
 }
 
 export async function getMatchInfoCached(args: {
@@ -202,8 +181,8 @@ export async function getMatchInfoCached(args: {
     if (mem && mem.expiresAt > now) return mem.data;
     const stored = getStorage(key);
     if (stored) {
-      memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-      return stored;
+      memCache.set(key, stored);
+      return stored.data;
     }
   }
   const runFetch = async () => {

@@ -1,4 +1,8 @@
 import { primeCurrentGameweekCache } from "./currentGameweekClient";
+import {
+  readFreshSessionRecord,
+  writeSessionRecord,
+} from "./sessionCache";
 
 export type RoomBootstrapData = {
   ok: boolean;
@@ -15,8 +19,8 @@ export type RoomBootstrapData = {
   seasonOptions?: string[];
 };
 
-const TTL_MS = 5 * 60 * 1000;
-const STORAGE_PREFIX = "rb:v1:";
+const TTL_MS = 15 * 1000;
+const STORAGE_PREFIX = "rb:v2:";
 const memCache = new Map<
   string,
   { expiresAt: number; data: RoomBootstrapData }
@@ -29,38 +33,13 @@ function keyFor(roomCode: string) {
     .toUpperCase();
 }
 
-function getStorage(key: string): RoomBootstrapData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt?: number;
-      data?: RoomBootstrapData;
-    };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: RoomBootstrapData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore
-  }
+function getStorage(key: string): { expiresAt: number; data: RoomBootstrapData } | null {
+  return readFreshSessionRecord<RoomBootstrapData>(STORAGE_PREFIX, key);
 }
 
 function setCached(key: string, data: RoomBootstrapData) {
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
-  setStorage(key, data);
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
+  memCache.set(key, { expiresAt, data });
   primeCurrentGameweekCache({
     currentGameweek: data.currentGameweek,
     seasonKey: data.seasonKey,
@@ -90,12 +69,12 @@ export function peekRoomBootstrapCached(
   if (mem && mem.expiresAt > now) return mem.data;
   const stored = getStorage(key);
   if (!stored) return null;
-  memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
+  memCache.set(key, stored);
   primeCurrentGameweekCache({
-    currentGameweek: stored.currentGameweek,
-    seasonKey: stored.seasonKey,
+    currentGameweek: stored.data.currentGameweek,
+    seasonKey: stored.data.seasonKey,
   });
-  return stored;
+  return stored.data;
 }
 
 export async function getRoomBootstrapCached(

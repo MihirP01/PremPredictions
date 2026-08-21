@@ -7,8 +7,8 @@ import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
-import { getFixturesCached } from "@/lib/fixturesClient";
+import { getRoomBootstrapCached, refreshRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
@@ -178,7 +178,7 @@ export default function RoomScopedLayout({
     if (!roomCode) return;
     let cancelled = false;
     let overlayTimer: number | null = null;
-    const RESUME_WARM_COOLDOWN_MS = 2 * 60 * 1000;
+      const RESUME_WARM_COOLDOWN_MS = 15 * 1000;
 
     const warm = async () => {
       if (warmInFlightRef.current) {
@@ -198,7 +198,9 @@ export default function RoomScopedLayout({
       }
       const run = (async () => {
         try {
-          const bootstrap = await getRoomBootstrapCached(roomCode);
+          const bootstrap = bootedRef.current
+            ? await refreshRoomBootstrapCached(roomCode)
+            : await getRoomBootstrapCached(roomCode);
           if (
             bootstrap?.seasonKey &&
             Number.isFinite(bootstrap?.currentGameweek)
@@ -214,6 +216,9 @@ export default function RoomScopedLayout({
               warmedDataKeyRef.current = warmKey;
               void getFixturesCached(gw, season).catch(() => {});
               void getRoomGameStateCached(roomCode, season, gw).catch(() => {});
+            } else if (bootedRef.current) {
+              void refreshFixturesCached(gw, season).catch(() => {});
+            }
 
               const scheduleIdle = (fn: () => void) => {
                 const w = window as Window & {
@@ -236,7 +241,6 @@ export default function RoomScopedLayout({
                 void getTableCached(season).catch(() => {});
                 void getRoomPlayersCached(roomCode).catch(() => {});
               });
-            }
           }
           lastWarmAtRef.current = Date.now();
         } catch {
@@ -264,9 +268,11 @@ export default function RoomScopedLayout({
 
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      lastWarmAtRef.current = 0;
       void warm();
     };
     const onFocus = () => {
+      lastWarmAtRef.current = 0;
       void warm();
     };
 

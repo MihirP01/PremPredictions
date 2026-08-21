@@ -1,3 +1,5 @@
+import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+
 type CurrentGameweekResponse = {
   currentGameweek?: number;
   seasonKey?: string;
@@ -8,8 +10,8 @@ type CurrentGameweekData = {
   seasonKey: string;
 };
 
-const TTL_MS = 90 * 1000;
-const STORAGE_PREFIX = "cgw:v2:";
+const TTL_MS = 20 * 1000;
+const STORAGE_PREFIX = "cgw:v3:";
 const memCache = new Map<
   string,
   { expiresAt: number; data: CurrentGameweekData }
@@ -28,42 +30,13 @@ function normalize(data: CurrentGameweekResponse): CurrentGameweekData {
   };
 }
 
-function getStorage(key: string): CurrentGameweekData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt?: number;
-      data?: CurrentGameweekData;
-    };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: CurrentGameweekData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({
-        expiresAt: Date.now() + TTL_MS,
-        data,
-      }),
-    );
-  } catch {
-    // ignore storage write failures
-  }
+function getStorage(key: string): { expiresAt: number; data: CurrentGameweekData } | null {
+  return readFreshSessionRecord<CurrentGameweekData>(STORAGE_PREFIX, key);
 }
 
 function setCached(cacheKey: string, data: CurrentGameweekData) {
-  const expiresAt = Date.now() + TTL_MS;
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, cacheKey, data, TTL_MS);
   memCache.set(cacheKey, { expiresAt, data });
-  setStorage(cacheKey, data);
 }
 
 export function primeCurrentGameweekCache(data: CurrentGameweekData) {
@@ -82,8 +55,8 @@ function readCached(cacheKey: string, now: number): CurrentGameweekData | null {
 
   const stored = getStorage(cacheKey);
   if (stored) {
-    memCache.set(cacheKey, { expiresAt: now + TTL_MS, data: stored });
-    return stored;
+    memCache.set(cacheKey, stored);
+    return stored.data;
   }
 
   return null;

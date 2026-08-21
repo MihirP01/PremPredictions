@@ -1,3 +1,5 @@
+import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+
 export type TableRow = {
   position: number;
   team: {
@@ -23,8 +25,8 @@ export type TableData = {
   standingsAway: TableRow[];
 };
 
-const TTL_MS = 60 * 1000;
-const STORAGE_PREFIX = "tbl:v2:";
+const TTL_MS = 30 * 1000;
+const STORAGE_PREFIX = "tbl:v3:";
 const memCache = new Map<string, { expiresAt: number; data: TableData }>();
 const pending = new Map<string, Promise<TableData>>();
 
@@ -47,35 +49,13 @@ function normalize(payload: unknown): TableData {
   };
 }
 
-function getStorage(key: string): TableData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { expiresAt?: number; data?: TableData };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: TableData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore storage write failures
-  }
+function getStorage(key: string): { expiresAt: number; data: TableData } | null {
+  return readFreshSessionRecord<TableData>(STORAGE_PREFIX, key);
 }
 
 function setCached(key: string, data: TableData) {
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
-  setStorage(key, data);
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
+  memCache.set(key, { expiresAt, data });
 }
 
 export async function getTableCached(seasonKey: string): Promise<TableData> {
@@ -85,8 +65,8 @@ export async function getTableCached(seasonKey: string): Promise<TableData> {
   if (mem && mem.expiresAt > now) return mem.data;
   const stored = getStorage(key);
   if (stored) {
-    memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-    return stored;
+    memCache.set(key, stored);
+    return stored.data;
   }
   const existing = pending.get(key);
   if (existing) return existing;

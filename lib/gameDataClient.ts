@@ -1,5 +1,6 @@
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
 
 export type CachedPick = {
   uid: string;
@@ -27,8 +28,8 @@ export type CachedPowerup = {
   locked: boolean;
 };
 
-const TTL_MS = 30 * 1000;
-const STORAGE_PREFIX = "gdat:v2:";
+const TTL_MS = 8 * 1000;
+const STORAGE_PREFIX = "gdat:v3:";
 const memCache = new Map<string, { expiresAt: number; data: CachedGameData }>();
 const pending = new Map<string, Promise<CachedGameData>>();
 
@@ -36,44 +37,22 @@ function keyFor(roomCode: string, seasonKey: string, gw: number) {
   return `${String(roomCode || "").toUpperCase()}:${String(seasonKey || "")}:gw-${Number(gw)}`;
 }
 
-function getStorage(key: string): CachedGameData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt?: number;
-      data?: CachedGameData;
-    };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return {
-      picks: Array.isArray(parsed.data.picks) ? parsed.data.picks : [],
-      goldens: Array.isArray(parsed.data.goldens) ? parsed.data.goldens : [],
-      powerups: Array.isArray((parsed.data as Partial<CachedGameData>).powerups)
-        ? ((parsed.data as Partial<CachedGameData>).powerups as CachedPowerup[])
-        : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: CachedGameData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore
-  }
+function getStorage(key: string): { expiresAt: number; data: CachedGameData } | null {
+  const stored = readFreshSessionRecord<CachedGameData>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  return {
+    expiresAt: stored.expiresAt,
+    data: {
+      picks: Array.isArray(stored.data.picks) ? stored.data.picks : [],
+      goldens: Array.isArray(stored.data.goldens) ? stored.data.goldens : [],
+      powerups: Array.isArray(stored.data.powerups) ? stored.data.powerups : [],
+    },
+  };
 }
 
 function setCached(key: string, data: CachedGameData) {
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
-  setStorage(key, data);
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
+  memCache.set(key, { expiresAt, data });
 }
 
 export async function getGameDataCached(
@@ -93,8 +72,8 @@ export async function getGameDataCached(
   if (mem && mem.expiresAt > now) return mem.data;
   const stored = getStorage(key);
   if (stored) {
-    memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-    return stored;
+    memCache.set(key, stored);
+    return stored.data;
   }
   const existing = pending.get(key);
   if (existing) return existing;

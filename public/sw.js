@@ -1,4 +1,4 @@
-const CACHE_VERSION = "pl-predictions-v6";
+const CACHE_VERSION = "pl-predictions-v7";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -75,16 +75,30 @@ async function staleWhileRevalidate(request, cacheName) {
   return cached || networkPromise || Response.error();
 }
 
+async function networkFirst(request, cacheName) {
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+  } catch {
+    const cache = await caches.open(cacheName);
+    return (await cache.match(request)) || Response.error();
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Lightweight cache for high-frequency readonly API calls.
+  // Live scores / table / current GW must not be served stale.
   if (
     event.request.method === "GET" &&
     url.origin === self.location.origin &&
     API_CACHEABLE_PATHS.some((path) => url.pathname.startsWith(path))
   ) {
-    event.respondWith(staleWhileRevalidate(event.request, API_CACHE));
+    event.respondWith(networkFirst(event.request, API_CACHE));
     return;
   }
 

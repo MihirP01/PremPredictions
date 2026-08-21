@@ -1,3 +1,9 @@
+import {
+  readFreshSessionRecord,
+  readSessionRecord,
+  writeSessionRecord,
+} from "./sessionCache";
+
 export type FixtureItem = {
   fixtureId: number;
   gameweek: number;
@@ -23,8 +29,8 @@ export type FixturesCachedData = {
   generatedAt: string | null;
 };
 
-const TTL_MS = 60 * 1000;
-const STORAGE_PREFIX = "fx:v1:";
+const TTL_MS = 20 * 1000;
+const STORAGE_PREFIX = "fx:v2:";
 const memCache = new Map<
   string,
   { expiresAt: number; data: FixturesCachedData }
@@ -46,45 +52,12 @@ function normalize(data: unknown): FixturesCachedData {
   };
 }
 
-function getStorage(key: string): FixturesCachedData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt?: number;
-      data?: FixturesCachedData;
-    };
-    if (!parsed?.data || !parsed?.expiresAt) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
+function getStorage(key: string): { expiresAt: number; data: FixturesCachedData } | null {
+  return readFreshSessionRecord<FixturesCachedData>(STORAGE_PREFIX, key);
 }
 
 function getStorageStale(key: string): FixturesCachedData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { data?: FixturesCachedData };
-    return parsed?.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function setStorage(key: string, data: FixturesCachedData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore storage write failures
-  }
+  return readSessionRecord<FixturesCachedData>(STORAGE_PREFIX, key)?.data ?? null;
 }
 
 function mergeFixtureResults(
@@ -112,8 +85,8 @@ function mergeFixtureResults(
 function setCached(key: string, data: FixturesCachedData) {
   const previous = memCache.get(key)?.data ?? getStorageStale(key);
   const merged = mergeFixtureResults(previous, data);
-  memCache.set(key, { expiresAt: Date.now() + TTL_MS, data: merged });
-  setStorage(key, merged);
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, merged, TTL_MS);
+  memCache.set(key, { expiresAt, data: merged });
 }
 
 export async function getFixturesCached(
@@ -130,8 +103,8 @@ export async function getFixturesCached(
   const staleMem = mem?.data ?? null;
   const stored = getStorage(key);
   if (stored) {
-    memCache.set(key, { expiresAt: now + TTL_MS, data: stored });
-    return stored;
+    memCache.set(key, stored);
+    return stored.data;
   }
   const staleStorage = getStorageStale(key);
   const existing = pending.get(key);

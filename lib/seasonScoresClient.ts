@@ -2,6 +2,7 @@
 
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
 
 export type ScoreBreakdownItem = {
   base?: number;
@@ -34,8 +35,8 @@ export type SeasonScoresSnapshot = {
   gameWeeks: number[];
 };
 
-const STORAGE_PREFIX = "seasonScores:v2:";
-const TTL_MS = 45_000;
+const STORAGE_PREFIX = "seasonScores:v3:";
+const TTL_MS = 15_000;
 
 const memCache = new Map<
   string,
@@ -76,33 +77,12 @@ function keyFor(roomCode: string, seasonKey: string) {
   return `${String(roomCode || "").toUpperCase()}::${String(seasonKey || "")}`;
 }
 
-function getStorage(key: string): SeasonScoresSnapshot | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      expiresAt: number;
-      data: SeasonScoresSnapshot;
-    };
-    if (!parsed?.expiresAt || !parsed?.data) return null;
-    if (Date.now() > parsed.expiresAt) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
+function getStorage(key: string): { expiresAt: number; data: SeasonScoresSnapshot } | null {
+  return readFreshSessionRecord<SeasonScoresSnapshot>(STORAGE_PREFIX, key);
 }
 
 function setStorage(key: string, data: SeasonScoresSnapshot) {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify({ expiresAt: Date.now() + TTL_MS, data }),
-    );
-  } catch {
-    // ignore storage failures
-  }
+  writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
 }
 
 async function fetchSnapshot(
@@ -198,8 +178,8 @@ export async function getSeasonScoresSnapshotCached(
     if (mem && mem.expiresAt > Date.now()) return mem.data;
     const stored = getStorage(key);
     if (stored) {
-      memCache.set(key, { expiresAt: Date.now() + TTL_MS, data: stored });
-      return stored;
+      memCache.set(key, stored);
+      return stored.data;
     }
   }
 

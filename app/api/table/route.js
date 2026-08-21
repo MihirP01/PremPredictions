@@ -57,11 +57,11 @@ export async function GET(req) {
     [response, teamsResponse] = await Promise.all([
       fetch(url, {
         headers: { "X-Auth-Token": API_KEY },
-        next: { revalidate: 300 },
+        next: { revalidate: 45 },
       }),
       fetch(teamsUrl, {
         headers: { "X-Auth-Token": API_KEY },
-        next: { revalidate: 300 },
+        next: { revalidate: 45 },
       }),
     ]);
   } catch {
@@ -129,6 +129,6 @@ export async function GET(req) {
 
   return NextResponse.json(
     { seasonKey, standingsTotal, standingsHome, standingsAway },
-    { headers: { "Cache-Control": "s-maxage=300, stale-while-revalidate=60" } },
+    { headers: { "Cache-Control": "s-maxage=45, stale-while-revalidate=15" } },
   );
 }

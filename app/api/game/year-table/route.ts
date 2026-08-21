@@ -185,17 +185,17 @@ export async function GET(req: NextRequest) {
     }
 
     await assertMember(roomCode, uid);
-    const currentGw = await resolveCurrentGw(req, roomCode, seasonKey);
+    const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
+    const [currentGw, metaSnap, clubs, picksSnap] = await Promise.all([
+      resolveCurrentGw(req, roomCode, seasonKey),
+      metaRef.get(),
+      loadTableClubs(req, seasonKey).catch(() => [] as YearTableClub[]),
+      picksCol.get(),
+    ]);
     const open = currentGw <= YEAR_TABLE_LOCK_AFTER_GW;
     const scoringOpen =
       currentGw >= YEAR_TABLE_SCORE_AFTER_GW &&
       (await isGw38Complete(req, seasonKey));
-
-    const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
-    const [metaSnap, clubs] = await Promise.all([
-      metaRef.get(),
-      loadTableClubs(req, seasonKey).catch(() => [] as YearTableClub[]),
-    ]);
 
     const meta = metaSnap.data() as { teamKeys?: string[] } | undefined;
     const frozenKeys = Array.isArray(meta?.teamKeys)
@@ -214,15 +214,28 @@ export async function GET(req: NextRequest) {
         },
     );
 
-    await syncYearTableAcrossRooms({ uid, seasonKey, sourceRoomCode: roomCode });
-    const syncedPicks = await picksCol.get();
-    const picks = syncedPicks.docs.map((docSnap) =>
+    let picks = picksSnap.docs.map((docSnap) =>
       serializePick(
         docSnap.id,
         docSnap.data() as { order?: unknown; submittedAt?: unknown },
       ),
     );
-    const myPick = picks.find((pick) => pick.uid === uid) ?? null;
+    let myPick = picks.find((pick) => pick.uid === uid) ?? null;
+    if (!myPick || !isCompleteYearOrder(myPick.order)) {
+      await syncYearTableAcrossRooms({
+        uid,
+        seasonKey,
+        sourceRoomCode: roomCode,
+      });
+      const syncedPicks = await picksCol.get();
+      picks = syncedPicks.docs.map((docSnap) =>
+        serializePick(
+          docSnap.id,
+          docSnap.data() as { order?: unknown; submittedAt?: unknown },
+        ),
+      );
+      myPick = picks.find((pick) => pick.uid === uid) ?? null;
+    }
 
     return NextResponse.json({
       ok: true,

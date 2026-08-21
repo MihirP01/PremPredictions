@@ -7,17 +7,17 @@ export const ROOM_CODE_ALIASES: Record<string, string> = {
   PREM25: "KHUSHALSMELLS",
 };
 
-export function normalizeRoomCode(code: string) {
+export function normalizeRoomCode(code: unknown) {
   return String(code || "")
     .trim()
     .toUpperCase();
 }
 
-export function isValidRoomCode(code: string) {
+export function isValidRoomCode(code: unknown) {
   return ROOM_CODE_PATTERN.test(normalizeRoomCode(code));
 }
 
-export function canonicalRoomCode(code: string) {
+export function canonicalRoomCode(code: unknown) {
   const normalized = normalizeRoomCode(code);
   return ROOM_CODE_ALIASES[normalized] || normalized;
 }

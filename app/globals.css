@@ -1103,7 +1103,7 @@ select:-webkit-autofill:focus {
   top: 8px;
   bottom: 8px;
   left: 8px;
-  width: calc((100% - 16px) / 5);
+  width: var(--pill-width, 20%);
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: linear-gradient(
@@ -1114,14 +1114,9 @@ select:-webkit-autofill:focus {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 8px 18px rgba(2, 7, 18, 0.12);
-  transform: translateX(calc(var(--active, 0) * 100%));
+  transform: translate3d(var(--pill-x, 0px), 0, 0);
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.liquid-glass-pill--solo {
-  left: 8px;
-  width: calc(100% - 16px);
-  transform: none;
+  will-change: transform;
 }
 
 .liquid-glass-tab {

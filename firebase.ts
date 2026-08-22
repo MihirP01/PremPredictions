@@ -28,18 +28,22 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 let authInstance: Auth;
-try {
-  // PWA/iOS: explicit persistence order improves standalone session stability.
-  authInstance = initializeAuth(app, {
-    persistence: [
-      indexedDBLocalPersistence,
-      browserLocalPersistence,
-      inMemoryPersistence,
-    ],
-  });
-} catch {
-  // If auth is already initialized (HMR/re-entry), reuse existing instance.
+if (typeof window === "undefined") {
   authInstance = getAuth(app);
+} else {
+  try {
+    // Browser-only: IndexedDB is missing during SSR and would fall back to
+    // in-memory auth, so the next standalone launch looks logged out.
+    authInstance = initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        inMemoryPersistence,
+      ],
+    });
+  } catch {
+    authInstance = getAuth(app);
+  }
 }
 
 export const auth = authInstance;

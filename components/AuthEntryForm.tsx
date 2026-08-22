@@ -124,61 +124,19 @@ export default function AuthEntryForm() {
 
   return (
     <div className="min-h-[100dvh] bg-app px-5 py-6 sm:px-8 sm:py-8">
-      <div className="mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(160deg,rgba(9,18,34,0.96),rgba(10,27,46,0.94)_55%,rgba(14,45,63,0.92))] px-6 py-8 shadow-[0_28px_70px_rgba(3,8,20,0.42)] sm:px-8 sm:py-10">
-          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-          <div className="pointer-events-none absolute right-8 top-8 h-24 w-24 rounded-full bg-sky-300/8 blur-3xl" />
-          <div className="relative z-[1] flex h-full flex-col justify-between gap-10">
-            <div className="space-y-5">
-              <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/58">
-                Premium Match Hub
-              </div>
-              <div className="space-y-3">
-                <h1 className="max-w-xl font-display text-[clamp(2.8rem,7vw,5.4rem)] font-semibold leading-[0.92] text-foreground">
-                  A cleaner control room for every matchday.
-                </h1>
-                <p className="max-w-lg text-sm leading-7 text-white/62 sm:text-base">
-                  This concept reduces clutter, keeps room controls predictable,
-                  and makes the product feel like a polished SaaS dashboard
-                  instead of a raw utility.
-                </p>
-              </div>
-            </div>
+      <div className="mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-md flex-col justify-center gap-6">
+        <div className="space-y-2 text-center">
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            PL Predictions
+          </h1>
+          <p className="text-sm leading-6 text-white/58">
+            Sign in to your room
+          </p>
+        </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              {[
-                [
-                  "Room Access",
-                  "Sign in and return to the exact room context you left.",
-                ],
-                [
-                  "Stable Navigation",
-                  "Core routes stay visible and predictable across devices.",
-                ],
-                [
-                  "Low Friction",
-                  "The interface prioritizes the next useful action, not decoration.",
-                ],
-              ].map(([label, body]) => (
-                <div
-                  key={label}
-                  className="rounded-3xl border border-white/8 bg-white/[0.03] p-4"
-                >
-                  <div className="font-display text-sm font-semibold text-foreground">
-                    {label}
-                  </div>
-                  <div className="mt-2 text-xs leading-6 text-white/55">
-                    {body}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-5 shadow-[0_28px_70px_rgba(3,8,20,0.42)] sm:p-6 lg:p-8">
+        <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] p-5 shadow-[0_28px_70px_rgba(3,8,20,0.42)] sm:p-6">
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-          <div className="relative z-[1] flex h-full flex-col gap-5">
+          <div className="relative z-[1] flex flex-col gap-5">
             <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] p-1.5">
               {(
                 [
@@ -205,13 +163,12 @@ export default function AuthEntryForm() {
 
             <div className="space-y-2">
               <div className="font-display text-2xl font-semibold text-foreground">
-                {mode === "signin"
-                  ? "Access your room dashboard"
-                  : "Create your player profile"}
+                {mode === "signin" ? "Sign in" : "Create an account"}
               </div>
               <div className="text-sm leading-6 text-white/58">
-                Authentication, routing, and room membership stay the same. Only
-                the control surface changes.
+                {mode === "signin"
+                  ? "Use your email to get back to your room."
+                  : "Create a profile so you can join a room."}
               </div>
             </div>
 
@@ -275,7 +232,7 @@ export default function AuthEntryForm() {
               </div>
             ) : null}
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="grid gap-3">
               <button
                 onClick={submit}
                 disabled={busy}
@@ -284,8 +241,8 @@ export default function AuthEntryForm() {
                 {busy
                   ? "Please wait..."
                   : mode === "signin"
-                    ? "Enter Dashboard"
-                    : "Create Account"}
+                    ? "Sign in"
+                    : "Create account"}
               </button>
               <button
                 onClick={() =>

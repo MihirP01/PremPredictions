@@ -20,17 +20,14 @@ export default function RoomGatePage() {
   const [currentRoomCode, setCurrentRoomCode] = useState("");
   const [memberRooms, setMemberRooms] = useState<MemberRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [resolving, setResolving] = useState(true);
   const [roomCode, setRoomCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [kicked, setKicked] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const kickedFlag =
-      new URLSearchParams(window.location.search).get("kicked") === "1";
-    setKicked(kickedFlag);
-  }, []);
+  const [kicked] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("kicked") === "1";
+  });
 
   useEffect(() => {
     if (loading) return;
@@ -39,20 +36,34 @@ export default function RoomGatePage() {
       return;
     }
 
+    let cancelled = false;
+
     (async () => {
+      setResolving(true);
       const snap = await getDoc(doc(db, "users", user.uid));
       const data = snap.data();
       const resolvedDisplayName = await resolveDisplayName({
         uid: user.uid,
         email: user.email,
       });
+      if (cancelled) return;
       setDisplayName(resolvedDisplayName);
 
       const existing = canonicalRoomCode(String(data?.currentRoomCode || ""));
       setCurrentRoomCode(existing);
       if (existing) setRoomCode(existing);
 
-      if (existing) {
+      const enterRoom = async (code: string) => {
+        if (cancelled) return;
+        await setDoc(
+          doc(db, "users", user.uid),
+          { currentRoomCode: code },
+          { merge: true },
+        );
+        router.replace(`/room/${code}`);
+      };
+
+      if (existing && !kicked) {
         try {
           const existingMembership = await getDoc(
             doc(db, "rooms", existing, "players", user.uid),
@@ -65,7 +76,7 @@ export default function RoomGatePage() {
                 role: role === "leader" ? "leader" : "member",
               },
             ]);
-            router.replace(`/room/${existing}`);
+            await enterRoom(existing);
             return;
           }
         } catch {
@@ -102,21 +113,37 @@ export default function RoomGatePage() {
         const joinedRooms = checks
           .filter((r): r is MemberRoom => r !== null)
           .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
+        if (cancelled) return;
         setMemberRooms(joinedRooms);
 
-        if (existing && joinedRooms.some((r) => r.roomCode === existing)) {
-          router.replace(`/room/${existing}`);
+        if (!kicked && existing && joinedRooms.some((r) => r.roomCode === existing)) {
+          await enterRoom(existing);
+          return;
         }
+        if (!kicked && joinedRooms.length === 1) {
+          await enterRoom(joinedRooms[0].roomCode);
+          return;
+        }
+        if (!cancelled) setResolving(false);
       } catch {
-        setMemberRooms([]);
+        if (!cancelled) {
+          setMemberRooms([]);
+          setResolving(false);
+        }
       } finally {
-        setRoomsLoading(false);
+        if (!cancelled) setRoomsLoading(false);
       }
     })().catch(() => {
+      if (cancelled) return;
       setRoomsLoading(false);
+      setResolving(false);
       setError("Failed to load profile.");
     });
-  }, [loading, user, router]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, router, kicked]);
 
   const openJoinedRoom = async (targetRoomCode: string) => {
     if (!user) return;
@@ -238,7 +265,7 @@ export default function RoomGatePage() {
     }
   };
 
-  if (loading) {
+  if (loading || (user && resolving)) {
     return (
       <div className="min-h-screen bg-app px-6 py-8">
         <div className="mx-auto flex min-h-[40vh] max-w-xl items-center justify-center rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] text-sm text-white/65 shadow-[0_24px_56px_rgba(3,8,20,0.4)]">

@@ -229,6 +229,10 @@ type NavItem = {
   disabled?: boolean;
 };
 
+const NAV_MOTION_MS = 320;
+const NAV_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const PILL_INSET = 8;
+
 export default function RoomBottomNav() {
   const params = useParams<{ roomCode: string }>();
   const router = useRouter();
@@ -252,6 +256,8 @@ export default function RoomBottomNav() {
   const lastTouchHandledAtRef = useRef(0);
   const navRef = useRef<HTMLDivElement | null>(null);
   const expandResetTimerRef = useRef<number | null>(null);
+  const collapseLockUntilRef = useRef(0);
+  const [slotWidth, setSlotWidth] = useState(0);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -402,7 +408,9 @@ export default function RoomBottomNav() {
     cycle: affordanceCycle,
   } = useRoomScrollAffordance(pathname);
   const [expandedCycle, setExpandedCycle] = useState<number | null>(null);
-  const collapsed = showScrollAffordance && expandedCycle !== affordanceCycle;
+  const desiredCollapsed =
+    showScrollAffordance && expandedCycle !== affordanceCycle;
+  const [collapsed, setCollapsed] = useState(desiredCollapsed);
 
   const hideForActiveGamePhase =
     isLeagueMode === false &&
@@ -413,6 +421,35 @@ export default function RoomBottomNav() {
     0,
     items.findIndex((item) => item.key === activeItem.key),
   );
+
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const measure = () => {
+      const width = el.getBoundingClientRect().width;
+      const count = Math.max(items.length, 1);
+      setSlotWidth((width - PILL_INSET * 2) / count);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [items.length]);
+
+  useEffect(() => {
+    if (collapsed === desiredCollapsed) return;
+    const wait = Math.max(0, collapseLockUntilRef.current - Date.now());
+    const apply = () => {
+      setCollapsed(desiredCollapsed);
+      collapseLockUntilRef.current = Date.now() + NAV_MOTION_MS;
+    };
+    if (wait === 0) {
+      apply();
+      return;
+    }
+    const timer = window.setTimeout(apply, wait);
+    return () => window.clearTimeout(timer);
+  }, [collapsed, desiredCollapsed]);
 
   useEffect(() => {
     if (collapsed || !showScrollAffordance) return;
@@ -478,7 +515,7 @@ export default function RoomBottomNav() {
     expandResetTimerRef.current = window.setTimeout(() => {
       setExpandedCycle(null);
       expandResetTimerRef.current = null;
-    }, 180);
+    }, NAV_MOTION_MS);
   };
 
   const onNavClick = (
@@ -540,29 +577,38 @@ export default function RoomBottomNav() {
       }}
     >
       <div
-        ref={navRef}
-        className="liquid-glass-nav relative px-2 py-2 transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="overflow-hidden"
         style={{
-          width: collapsed ? "7.25rem" : "100%",
-          marginLeft: "auto",
-          transformOrigin: "right center",
+          clipPath:
+            slotWidth > 0
+              ? `inset(0 0 0 ${collapsed ? (items.length - 1) * slotWidth : 0}px)`
+              : undefined,
+          transition: `clip-path ${NAV_MOTION_MS}ms ${NAV_EASE}`,
         }}
+      >
+      <div
+        ref={navRef}
+        className="liquid-glass-nav relative w-full px-2 py-2"
       >
         <div
           aria-hidden="true"
-          className={[
-            "liquid-glass-pill",
-            collapsed ? "liquid-glass-pill--solo" : "",
-          ].join(" ")}
+          className="liquid-glass-pill"
           style={
-            collapsed
-              ? undefined
-              : ({
-                  ["--active" as string]: String(activeIndex),
-                } as React.CSSProperties)
+            {
+              ["--pill-width" as string]:
+                slotWidth > 0 ? `${slotWidth}px` : "20%",
+              ["--pill-x" as string]: `${(collapsed ? items.length - 1 : activeIndex) * (slotWidth || 0)}px`,
+            } as React.CSSProperties
           }
         />
-        <div className="relative z-[1] flex items-stretch">
+        <div
+          className="relative z-[1] flex items-stretch"
+          style={{
+            transform: `translate3d(${collapsed ? (items.length - 1 - activeIndex) * (slotWidth || 0) : 0}px,0,0)`,
+            transition: `transform ${NAV_MOTION_MS}ms ${NAV_EASE}`,
+            willChange: "transform",
+          }}
+        >
           {items.map((item) => {
             const Icon = item.icon;
             const itemCollapsed = collapsed && !item.active;
@@ -570,29 +616,12 @@ export default function RoomBottomNav() {
             return (
               <div
                 key={item.key}
-                className="relative min-w-0 overflow-hidden transition-[flex,width,opacity] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-                style={
-                  itemCollapsed
-                    ? {
-                        flex: "0 0 0px",
-                        width: 0,
-                        opacity: 0,
-                        pointerEvents: "none",
-                      }
-                    : collapsed
-                      ? {
-                          flex: "1 1 auto",
-                          width: "100%",
-                          opacity: 1,
-                          pointerEvents: item.disabled ? "none" : "auto",
-                        }
-                      : {
-                          flex: "1 1 0%",
-                          width: 0,
-                          opacity: 1,
-                          pointerEvents: item.disabled ? "none" : "auto",
-                        }
-                }
+                className="relative min-w-0"
+                style={{
+                  flex: "1 1 0%",
+                  width: 0,
+                  pointerEvents: itemCollapsed || item.disabled ? "none" : "auto",
+                }}
               >
                 <button
                   type="button"
@@ -631,6 +660,7 @@ export default function RoomBottomNav() {
             );
           })}
         </div>
+      </div>
       </div>
     </nav>
   );

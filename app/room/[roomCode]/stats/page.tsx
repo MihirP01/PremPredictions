@@ -700,68 +700,44 @@ export default function RoomStatsPage() {
 
         <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
           <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                    Stats desk
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                      Viewing profile
-                    </span>
-                    <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                      {selectedPlayer?.displayName || "No player"}
-                    </span>
-                  </div>
+            <SectionStack gap="tight">
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                  Stats desk
+                </div>
+                <div className="truncate font-display text-xl font-semibold leading-tight text-foreground">
+                  {selectedPlayer?.displayName || "No player"}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                  Performance ledger
-                </span>
-                <span className="font-display text-sm font-semibold text-foreground">
-                  {seasonLabel(seasonKey || "----")}
-                </span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Room Rank
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
+                    Rank
                   </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
                     #{roomRank}/{players.length || 1}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Standing in the selected scope.
-                  </div>
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Total Points
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
+                    Points
                   </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
                     {displayStats?.totalPoints ?? 0}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Points banked in this ledger.
-                  </div>
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Most Used
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
+                    Most used
                   </div>
-                  <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                  <div className="mt-0.5 truncate font-display text-[0.78rem] font-semibold text-foreground">
                     {displayStats
                       ? mostUsedPowerupLabel(displayStats.powerupUsage)
                       : "None"}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Preferred chip usage pattern.
-                  </div>
                 </div>
               </div>
-            </div>
+            </SectionStack>
           </div>
         </SectionCard>
 

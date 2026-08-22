@@ -153,49 +153,12 @@ type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
 type MatchInfoTab = "lineups" | "stats" | "h2h" | "form";
 
-type FixturesSelectFieldProps = {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-};
-
 type FixturesSummaryTileProps = {
   label: string;
   value: React.ReactNode;
   note: React.ReactNode;
   icon?: React.ReactNode;
 };
-
-function FixturesSelectField({
-  id,
-  label,
-  value,
-  onChange,
-  children,
-}: FixturesSelectFieldProps) {
-  return (
-    <label className="space-y-2">
-      <span className="block font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-        {label}
-      </span>
-      <div className="relative">
-        <select
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-12 w-full appearance-none rounded-2xl border border-white/8 bg-white/[0.035] px-4 pr-10 font-display text-sm font-semibold text-foreground outline-none backdrop-blur-sm"
-        >
-          {children}
-        </select>
-        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.72rem] text-white/45">
-          ▼
-        </span>
-      </div>
-    </label>
-  );
-}
 
 function FixturesSummaryTile({
   label,
@@ -934,13 +897,6 @@ export default function FixturesPage() {
     seededBoot ? seededGw : null,
   );
   const [seasonKey, setSeasonKey] = useState<string>(() => seededSeason);
-  const [seasonOptions, setSeasonOptions] = useState<string[]>(() =>
-    Array.isArray(seededBoot?.seasonOptions) && seededBoot.seasonOptions.length
-      ? seededBoot.seasonOptions
-      : seededSeason
-        ? [seededSeason]
-        : [],
-  );
   const [refreshingFixtures, setRefreshingFixtures] = useState(false);
   const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1406,15 +1362,11 @@ export default function FixturesPage() {
       try {
         const data = await getRoomBootstrapCached(roomCode);
         const current = Number(data.currentGameweek ?? 1);
-        const options = Array.isArray(data.seasonOptions)
-          ? data.seasonOptions
-          : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
           setGw(Number.isFinite(current) ? current : 1);
           setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
           setSeasonKey(season);
-          setSeasonOptions(options.length ? options : season ? [season] : []);
           if (data.gameModeStyle) setGameModeStyle(data.gameModeStyle);
         }
       } catch {
@@ -1678,26 +1630,6 @@ export default function FixturesPage() {
       ...prev,
       [fixtureId]: nextExpanded,
     }));
-  }
-
-  async function onSeasonChange(nextSeason: string) {
-    setSeasonKey(nextSeason);
-    if (!nextSeason) {
-      setGw(1);
-      return;
-    }
-    try {
-      const data = await getCurrentGameweekCached(
-        nextSeason,
-        gameweekModeFromStyle(gameModeStyle),
-      );
-      const current = Number(data.currentGameweek ?? 1);
-      setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
-      setGw(Number.isFinite(current) ? current : 1);
-    } catch {
-      setSeasonCurrentGw(1);
-      setGw(1);
-    }
   }
 
   useEffect(() => {
@@ -2274,65 +2206,20 @@ export default function FixturesPage() {
 
         {/* Fixtures */}
 
-        <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-1">
-          <div className="rounded-[24px] border border-white/6 bg-[linear-gradient(180deg,rgba(6,10,20,0.9),rgba(7,11,18,0.86))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,220px)] xl:items-start">
-              <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-                {!!seasonOptions.length ? (
-                  <FixturesSelectField
-                    id="fixtures-season-select"
-                    label="Season"
-                    value={seasonKey}
-                    onChange={onSeasonChange}
-                  >
-                    {seasonOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {seasonLabel(s)}
-                      </option>
-                    ))}
-                  </FixturesSelectField>
-                ) : (
-                  <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-3.5">
-                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                      Season
-                    </div>
-                    <div className="mt-2 font-display text-sm font-semibold text-foreground">
-                      {seasonLabel(seasonKey || "----")}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-                <div className="space-y-2">
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Matchweek selector
-                  </div>
-                  <GameweekNavigator
-                    value={gw}
-                    min={MIN_GW}
-                    max={MAX_GW}
-                    disabled={navLoading}
-                    onChange={setGw}
-                    buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
-                    selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
-                  />
-                </div>
-              </div>
-              <div className="w-full rounded-[20px] border border-white/7 bg-white/[0.02] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-                <div className="space-y-2">
-                  <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                    Predictions
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCompactModeValue(!compactMode)}
-                    className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70 transition hover:border-white/18 hover:text-foreground"
-                  >
-                    {compactMode ? "View All" : "Hide All"}
-                  </button>
-                </div>
-              </div>
+        <SectionCard className={standardSectionCardClass}>
+          <div className="space-y-2">
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Matchweek
             </div>
+            <GameweekNavigator
+              value={gw}
+              min={MIN_GW}
+              max={MAX_GW}
+              disabled={navLoading}
+              onChange={setGw}
+              buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
+              selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
+            />
           </div>
         </SectionCard>
         <SectionStack gap="fixture">
@@ -2797,9 +2684,19 @@ export default function FixturesPage() {
                       </div>
                     </div>
                     <span className="h-px flex-1 bg-[linear-gradient(90deg,rgba(255,255,255,0.02)_0%,rgba(var(--room-accent-rgb),0.22)_55%,rgba(255,255,255,0.02)_100%)]" />
-                    <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
-                      {section.items.length}
-                    </span>
+                    {sectionIdx === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCompactModeValue(!compactMode)}
+                        className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/70 transition hover:border-white/18 hover:text-foreground"
+                      >
+                        {compactMode ? "View all" : "Hide all"}
+                      </button>
+                    ) : (
+                      <span className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/34">
+                        {section.items.length}
+                      </span>
+                    )}
                   </div>
                   <div className="grid items-start gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {section.items.map((fixture, idx) =>

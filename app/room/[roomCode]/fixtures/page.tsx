@@ -34,30 +34,45 @@ import TeamBadge from "../../../../components/TeamBadge";
 import TeamLabel from "../../../../components/TeamLabel";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
-import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
-import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
+import { getCurrentGameweekCached, gameweekModeFromStyle } from "@/lib/currentGameweekClient";
+import {
+  getRoomBootstrapCached,
+  patchRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
+import {
+  getFixturesCached,
+  refreshFixturesCached,
+} from "@/lib/fixturesClient";
 import { getTableCached, type TableRow } from "@/lib/tableClient";
+import {
+  useCachedBootstrap,
+  useCachedFixtures,
+  useCachedGameData,
+  useCachedPlayers,
+} from "@/lib/useRoomCache";
 import {
   getMatchInfoCached,
   type MatchInfoData,
   type MatchInfoPlayer,
 } from "@/lib/matchInfoClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
+import ScoringKeyRow, {
+  LEAGUE_SCORING_ITEMS,
+  PREDICTION_TONE_ITEMS,
+} from "@/components/ScoringKeyRow";
 import {
   classifyPredictionTier,
   getBasePointsFromScores,
   getPowerupVisualState,
 } from "@/lib/powerupScoring";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { subscribeRoomMeta } from "@/lib/liveGameBus";
+import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
   formatDateTimeLabel,
   formatDateWithOrdinal,
   formatKickoffParts,
 } from "@/lib/dateDisplay";
 import { teamAbbr } from "@/lib/teamDisplay";
-import { collection, onSnapshot, query } from "firebase/firestore";
 
 type Fixture = {
   fixtureId: number;
@@ -97,7 +112,43 @@ type PowerupByUid = Record<
   string,
   { fixtureId: number; powerupType: "ALL_IN" | "SAFETY_NET"; locked: boolean }
 >;
-type RoomPlayerDoc = { displayName?: string; nickName?: string };
+function mapGameData(gameData: {
+  picks: { uid: string; fixtureId: number; score: string }[];
+  goldens: { uid: string; fixtureId: number; score: string }[];
+  powerups: {
+    uid: string;
+    fixtureId: number;
+    powerupType: string;
+    locked: boolean;
+  }[];
+}) {
+  const byFx: PicksByFixture = {};
+  for (const data of gameData.picks) {
+    const fixtureId = Number(data.fixtureId);
+    const uid = String(data.uid);
+    if (!byFx[fixtureId]) byFx[fixtureId] = {};
+    byFx[fixtureId][uid] = String(data.score);
+  }
+  const gByUid: GoldenByUid = {};
+  for (const data of gameData.goldens) {
+    gByUid[data.uid] = {
+      fixtureId: Number(data.fixtureId),
+      score: String(data.score),
+    };
+  }
+  const pByUid: PowerupByUid = {};
+  for (const data of gameData.powerups ?? []) {
+    const t = String(data.powerupType || "").toUpperCase();
+    if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
+    pByUid[data.uid] = {
+      fixtureId: Number(data.fixtureId),
+      powerupType: t as "ALL_IN" | "SAFETY_NET",
+      locked: Boolean(data.locked),
+    };
+  }
+  return { byFx, gByUid, pByUid };
+}
+
 type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
 type MatchInfoTab = "lineups" | "stats" | "h2h" | "form";
@@ -844,17 +895,52 @@ export default function FixturesPage() {
   );
   const router = useRouter();
   const { user, loading } = useAuth();
+  const cachedPlayers = useCachedPlayers(roomCode);
+  const players = useMemo<Player[]>(
+    () =>
+      cachedPlayers.map((player) => ({
+        uid: player.uid,
+        displayName:
+          String(player.nickName || "").trim() || player.displayName || "Player",
+      })),
+    [cachedPlayers],
+  );
+  const seededBoot = useCachedBootstrap(roomCode);
+  const seededGw = Number(seededBoot?.currentGameweek ?? 1);
+  const seededSeason = String(seededBoot?.seasonKey || "");
+  const seededGame = useCachedGameData(roomCode, seededSeason, seededGw, {
+    includeChips: seededBoot?.gameModeStyle !== "league",
+  });
+  const seededMapped = seededGame ? mapGameData(seededGame) : null;
+  const seededFixtures = useCachedFixtures(seededGw, seededSeason);
 
-  const [fixtures, setFixtures] = useState<Fixture[] | null>(null);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [picksByFixture, setPicksByFixture] = useState<PicksByFixture>({});
-  const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>({});
-  const [powerupByUid, setPowerupByUid] = useState<PowerupByUid>({});
+  const [fixtures, setFixtures] = useState<Fixture[] | null>(
+    () => (seededFixtures?.fixtures as Fixture[] | undefined) ?? null,
+  );
+  const [picksByFixture, setPicksByFixture] = useState<PicksByFixture>(
+    () => seededMapped?.byFx ?? {},
+  );
+  const [goldenByUid, setGoldenByUid] = useState<GoldenByUid>(
+    () => seededMapped?.gByUid ?? {},
+  );
+  const [powerupByUid, setPowerupByUid] = useState<PowerupByUid>(
+    () => seededMapped?.pByUid ?? {},
+  );
   const [error, setError] = useState<string | null>(null);
-  const [gw, setGw] = useState<number>(1);
-  const [seasonCurrentGw, setSeasonCurrentGw] = useState<number | null>(null);
-  const [seasonKey, setSeasonKey] = useState<string>("");
-  const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
+  const [gw, setGw] = useState<number>(() =>
+    Number.isFinite(seededGw) ? seededGw : 1,
+  );
+  const [seasonCurrentGw, setSeasonCurrentGw] = useState<number | null>(() =>
+    seededBoot ? seededGw : null,
+  );
+  const [seasonKey, setSeasonKey] = useState<string>(() => seededSeason);
+  const [seasonOptions, setSeasonOptions] = useState<string[]>(() =>
+    Array.isArray(seededBoot?.seasonOptions) && seededBoot.seasonOptions.length
+      ? seededBoot.seasonOptions
+      : seededSeason
+        ? [seededSeason]
+        : [],
+  );
   const [refreshingFixtures, setRefreshingFixtures] = useState(false);
   const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -867,15 +953,15 @@ export default function FixturesPage() {
   const [fixturesLoading, setFixturesLoading] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
   const [predictionKeyOpen, setPredictionKeyOpen] = useState(false);
-  const [displayModeOpen, setDisplayModeOpen] = useState(true);
+  const [leagueRestOpen, setLeagueRestOpen] = useState(false);
   const [expandedFixtures, setExpandedFixtures] = useState<
     Record<number, boolean>
   >({});
   const [gameDataEnabled, setGameDataEnabled] = useState(true);
   const [gameModeStyle, setGameModeStyle] = useState<
     "round_robin" | "sprint" | "captain" | "league"
-  >("sprint");
-  const [bootstrapped, setBootstrapped] = useState(false);
+  >(() => seededBoot?.gameModeStyle ?? "sprint");
+  const [bootstrapped, setBootstrapped] = useState(() => !!seededBoot);
   const [tableOpen, setTableOpen] = useState(false);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableMode, setTableMode] = useState<TableMode>("TOTAL");
@@ -945,7 +1031,6 @@ export default function FixturesPage() {
     if (typeof window === "undefined") return;
     if (window.matchMedia("(min-width: 640px)").matches) {
       setPredictionKeyOpen(true);
-      setDisplayModeOpen(true);
     }
   }, []);
 
@@ -1353,6 +1438,9 @@ export default function FixturesPage() {
       (roomMeta) => {
         if (roomMeta?.settings.gameModeStyle) {
           setGameModeStyle(roomMeta.settings.gameModeStyle);
+          patchRoomBootstrapCached(roomCode, {
+            gameModeStyle: roomMeta.settings.gameModeStyle,
+          });
         }
       },
       () => {},
@@ -1380,63 +1468,24 @@ export default function FixturesPage() {
 
   useEffect(() => {
     setGameDataEnabled(true);
-    setPicksByFixture({});
-    setGoldenByUid({});
-    setPowerupByUid({});
   }, [roomCode, gw, seasonKey]);
 
   useEffect(() => {
+    if (gameModeStyle !== "league") return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [gameModeStyle]);
+
+  useEffect(() => {
+    if (gameModeStyle === "league") return;
     if (refreshLockedUntil <= nowMs) return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, [refreshLockedUntil, nowMs]);
+  }, [gameModeStyle, refreshLockedUntil, nowMs]);
 
-  // Load room players (names)
   useEffect(() => {
-    let cancelled = false;
-    const q = query(collection(db, "rooms", roomCode, "players"));
-    (async () => {
-      try {
-        const cached = await getRoomPlayersCached(roomCode);
-        if (cancelled || !cached.length) return;
-        const seeded: Player[] = cached.map((p) => ({
-          uid: p.uid,
-          displayName:
-            String(p.nickName || "").trim() || p.displayName || "Player",
-        }));
-        setPlayers(seeded);
-      } catch {
-        // ignore
-      }
-    })();
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: Player[] = snap.docs
-          .map((d) => {
-            const data = d.data() as RoomPlayerDoc;
-            const nick = String(data.nickName || "").trim();
-            return {
-              uid: d.id,
-              displayName: nick || data.displayName || "Player",
-            };
-          })
-          .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, {
-              sensitivity: "base",
-            }),
-          );
-        setPlayers(list);
-      },
-      (e) =>
-        setError(
-          `Failed to load players: ${e?.message ?? "permission denied"}`,
-        ),
-    );
-    return () => {
-      cancelled = true;
-      unsub();
-    };
+    void getRoomPlayersCached(roomCode).catch(() => {});
+    return subscribeRoomPlayers(roomCode, () => {}, () => {});
   }, [roomCode]);
 
   const loadFixtures = useCallback(
@@ -1445,8 +1494,8 @@ export default function FixturesPage() {
       const showSpinner = opts?.showSpinner ?? true;
       const loadSeq = ++fixturesLoadSeqRef.current;
 
-      if (showSpinner) setFixtures(null);
-      setFixturesLoading(true);
+      if (showSpinner && !fixtures) setFixtures(null);
+      setFixturesLoading(!fixtures);
       setError(null);
 
       if (!seasonKey) {
@@ -1480,8 +1529,7 @@ export default function FixturesPage() {
   useEffect(() => {
     if (!bootstrapped) return;
     let cancelled = false;
-    setFixtures(null);
-    setFixturesLoading(true);
+    if (!fixtures) setFixturesLoading(true);
     if (fixturesLoadTimerRef.current) {
       window.clearTimeout(fixturesLoadTimerRef.current);
       fixturesLoadTimerRef.current = null;
@@ -1520,42 +1568,14 @@ export default function FixturesPage() {
     (async () => {
       if (!gameDataEnabled || !seasonKey) return;
       setError(null);
-      setPicksByFixture({});
-      setGoldenByUid({});
-      setPowerupByUid({});
-      const gameData = await getGameDataCached(roomCode, seasonKey, gw);
-
-      const byFx: PicksByFixture = {};
-      for (const data of gameData.picks) {
-        const fixtureId = Number(data.fixtureId);
-        const uid = String(data.uid);
-        const score = String(data.score);
-        if (!byFx[fixtureId]) byFx[fixtureId] = {};
-        byFx[fixtureId][uid] = score;
-      }
-
-      const gByUid: GoldenByUid = {};
-      for (const data of gameData.goldens) {
-        gByUid[data.uid] = {
-          fixtureId: Number(data.fixtureId),
-          score: String(data.score),
-        };
-      }
-      const pByUid: PowerupByUid = {};
-      for (const data of gameData.powerups ?? []) {
-        const t = String(data.powerupType || "").toUpperCase();
-        if (t !== "ALL_IN" && t !== "SAFETY_NET") continue;
-        pByUid[data.uid] = {
-          fixtureId: Number(data.fixtureId),
-          powerupType: t as "ALL_IN" | "SAFETY_NET",
-          locked: Boolean(data.locked),
-        };
-      }
-
+      const gameData = await getGameDataCached(roomCode, seasonKey, gw, {
+        includeChips: gameModeStyle !== "league",
+      });
+      const mapped = mapGameData(gameData);
       if (!cancelled) {
-        setPicksByFixture(byFx);
-        setGoldenByUid(gByUid);
-        setPowerupByUid(pByUid);
+        setPicksByFixture(mapped.byFx);
+        setGoldenByUid(mapped.gByUid);
+        setPowerupByUid(mapped.pByUid);
       }
     })().catch((e) => {
       const msg = String(e?.message ?? "");
@@ -1567,7 +1587,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [gameDataEnabled, roomCode, gw, seasonKey]);
+  }, [gameDataEnabled, roomCode, gw, seasonKey, gameModeStyle]);
 
   const isLoading = fixtures === null || fixturesLoading;
   const navLoading = !bootstrapped;
@@ -1667,7 +1687,10 @@ export default function FixturesPage() {
       return;
     }
     try {
-      const data = await getCurrentGameweekCached(nextSeason);
+      const data = await getCurrentGameweekCached(
+        nextSeason,
+        gameweekModeFromStyle(gameModeStyle),
+      );
       const current = Number(data.currentGameweek ?? 1);
       setSeasonCurrentGw(Number.isFinite(current) ? current : 1);
       setGw(Number.isFinite(current) ? current : 1);
@@ -1687,7 +1710,10 @@ export default function FixturesPage() {
     const syncCurrentGw = async () => {
       try {
         const prevCurrent = seasonCurrentGw;
-        const data = await getCurrentGameweekCached(seasonKey);
+        const data = await getCurrentGameweekCached(
+          seasonKey,
+          gameweekModeFromStyle(gameModeStyle),
+        );
         if (cancelled) return;
         const nextCurrent = Number(data.currentGameweek ?? 1);
         if (!Number.isFinite(nextCurrent)) return;
@@ -1768,7 +1794,7 @@ export default function FixturesPage() {
       if (hasLiveFixture) {
         liveRefreshInterval = window.setInterval(() => {
           void softRefreshLive();
-        }, 1000);
+        }, 12_000);
         return;
       }
 
@@ -1823,6 +1849,7 @@ export default function FixturesPage() {
     matchInfoOpen,
     tableOpen,
     fixtures,
+    gameModeStyle,
   ]);
 
   async function openTablePopup() {
@@ -1876,7 +1903,7 @@ export default function FixturesPage() {
       <SectionStack gap="page">
         <TopActionRow
             title="Fixtures"
-            subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}
+            subtitle={`${roomCode} • ${seasonLabel(seasonKey || seededBoot?.seasonKey || "----")}`}
             className="flex items-start justify-between gap-3 sm:items-end"
             actions={
               <div className="ml-auto flex gap-1">
@@ -1923,7 +1950,7 @@ export default function FixturesPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
                 <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                  Fixture ledger
+                  {finishedFixtureCount}/{fixtureList.length || 0} done
                 </span>
                 <span className="font-display text-sm font-semibold text-foreground">
                   {gw === seasonCurrentGw
@@ -1933,20 +1960,12 @@ export default function FixturesPage() {
                       : "Upcoming matchweek"}
                 </span>
               </div>
-              <div className="grid gap-1 sm:grid-cols-1">
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Completed
-                  </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                    {finishedFixtureCount} / {fixtureList.length || 0}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Finalised scorelines on this slate.
-                  </div>
-                </div>
-              </div>
+              {gameModeStyle === "league" ? (
+                <ScoringKeyRow items={LEAGUE_SCORING_ITEMS} />
+              ) : null}
 
+              {gameModeStyle === "league" ? null : (
+              <>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
@@ -1993,88 +2012,44 @@ export default function FixturesPage() {
                       : "opacity-0 translate-y-1",
                   ].join(" ")}
                 >
-                  <div className="grid grid-cols-1 gap-2.5 pt-1 lg:grid-cols-2 2xl:grid-cols-3">
-                    <div className="rounded-[20px] border border-emerald-300/18 bg-[linear-gradient(135deg,rgba(16,185,129,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                  <ScoringKeyRow items={PREDICTION_TONE_ITEMS} />
+                  <div className="mt-2 grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                    <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
                       <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-emerald-200 via-emerald-300 to-emerald-500/20" />
+                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
                         <div className="pl-3">
                           <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                            Correct Result
+                            Powerup Hit
                           </div>
                           <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            Winner or draw called correctly
-                            {gameModeStyle === "league" ? " · 1 point" : "."}
+                            Chip override landed.
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-[20px] border border-purple-300/18 bg-[linear-gradient(135deg,rgba(168,85,247,0.1),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-purple-200 via-purple-300 to-purple-500/20" />
-                        <div className="pl-3">
-                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                            Exact Score
-                          </div>
-                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            Full scoreline landed exactly
-                            {gameModeStyle === "league" ? " · 2 points" : "."}
-                          </div>
+                    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
+                      <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
+                        <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
+                          Chips
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
+                            Golden Pick
+                          </span>
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
+                            All-In
+                          </span>
+                          <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
+                            Safety Net
+                          </span>
                         </div>
                       </div>
                     </div>
-                    {gameModeStyle === "league" ? null : (
-                      <div className="rounded-[20px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.095),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                        <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                          <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-200 via-cyan-300 to-cyan-500/20" />
-                          <div className="pl-3">
-                            <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                              Powerup Hit
-                            </div>
-                            <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                              Chip override landed.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="rounded-[20px] border border-red-300/16 bg-[linear-gradient(135deg,rgba(248,113,113,0.085),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)]">
-                      <div className="relative overflow-hidden rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3">
-                        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b from-red-200/75 via-red-300/55 to-red-500/10" />
-                        <div className="pl-3">
-                          <div className="font-display text-[0.88rem] font-semibold text-foreground">
-                            Miss
-                          </div>
-                          <div className="mt-1 text-[0.72rem] leading-5 text-white/48">
-                            {gameModeStyle === "league"
-                              ? "Wrong result · 0 points"
-                              : "No points landed on the fixture."}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {gameModeStyle === "league" ? null : (
-                      <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(6,12,28,0.9))] p-[1px] shadow-[0_14px_32px_rgba(2,6,20,0.2)] lg:col-span-2 2xl:col-span-1">
-                        <div className="rounded-[19px] bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.014))] px-3.5 py-3">
-                          <div className="font-display text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-white/45">
-                            Chips
-                          </div>
-                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            <span className="inline-flex items-center justify-center rounded-[12px] border border-yellow-300/65 bg-yellow-300/[0.06] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(250,204,21,0.16)_inset]">
-                              Golden Pick
-                            </span>
-                            <span className="inline-flex items-center justify-center rounded-[12px] border border-amber-500/45 bg-amber-500/[0.035] px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(217,119,6,0.1)_inset]">
-                              All-In
-                            </span>
-                            <span className="inline-flex items-center justify-center rounded-[12px] border border-sky-600/45 bg-sky-950/30 px-2.5 py-1.5 font-display text-[0.82rem] text-foreground shadow-[0_0_0_1px_rgba(2,132,199,0.12)_inset]">
-                              Safety Net
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
+              </>
+              )}
             </SectionStack>
           </div>
         </SectionCard>
@@ -2086,11 +2061,21 @@ export default function FixturesPage() {
                 <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/48">
                   League scoring
                 </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  GW {gw} points
-                </div>
-                <div className="mt-1 text-sm text-muted">
-                  Exact score 2 points · correct result 1 point · miss 0.
+                <div className="mt-1 inline-flex items-center gap-1.5">
+                  <div className="font-display text-xl font-semibold text-foreground">
+                    GW {gw} points
+                  </div>
+                  {gw === seasonCurrentGw && liveFixtureCount > 0 ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/80" />
+                        <span className="relative h-2 w-2 rounded-full bg-emerald-400" />
+                      </span>
+                      <span className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-emerald-300">
+                        LIVE
+                      </span>
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -2103,30 +2088,179 @@ export default function FixturesPage() {
                 Waiting on finished fixtures to grade this gameweek.
               </div>
             ) : (
-              <div className="mt-4 space-y-2">
-                {leagueWeekScores.map((entry, index) => (
-                  <div
-                    key={entry.uid}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-display font-semibold text-foreground">
-                        {index + 1}. {entry.displayName}
-                        {entry.uid === user?.uid ? (
-                          <span className="ml-2 text-[0.62rem] uppercase tracking-[0.14em] text-white/45">
-                            You
-                          </span>
-                        ) : null}
+              <div className="mt-4 space-y-3">
+                {(() => {
+                  const first = leagueWeekScores[0];
+                  const second = leagueWeekScores[1];
+                  const third = leagueWeekScores[2];
+                  const rest = leagueWeekScores.slice(3);
+                  const youIndex = leagueWeekScores.findIndex(
+                    (entry) => entry.uid === user?.uid,
+                  );
+                  const youInRest =
+                    youIndex >= 3 ? leagueWeekScores[youIndex] : null;
+                  const placeCard = (
+                    entry: (typeof leagueWeekScores)[number],
+                    place: 1 | 2 | 3,
+                  ) => {
+                    const tone =
+                      place === 1
+                        ? {
+                            bar: "from-amber-200 via-yellow-300 to-amber-500/25",
+                            border: "border-amber-300/22",
+                            cls: "league-podium-card league-podium-card--first",
+                            type: "text-lg sm:text-xl",
+                            pad: "px-3 py-4",
+                          }
+                        : place === 2
+                          ? {
+                              bar: "from-slate-100 via-slate-300 to-slate-500/20",
+                              border: "border-white/14",
+                              cls: "league-podium-card league-podium-card--second",
+                              type: "text-base",
+                              pad: "px-3 py-3",
+                            }
+                          : {
+                              bar: "from-orange-200 via-amber-700 to-orange-900/20",
+                              border: "border-orange-300/18",
+                              cls: "league-podium-card league-podium-card--third",
+                              type: "text-base",
+                              pad: "px-3 py-3",
+                            };
+                    return (
+                      <div
+                        key={entry.uid}
+                        className={[
+                          "relative overflow-hidden rounded-2xl border bg-white/[0.03]",
+                          tone.border,
+                          tone.cls,
+                          tone.pad,
+                        ].join(" ")}
+                      >
+                        <div
+                          className={[
+                            "absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-gradient-to-b",
+                            tone.bar,
+                          ].join(" ")}
+                        />
+                        <div className="pl-2">
+                          <div className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                            {place === 1 ? "1st" : place === 2 ? "2nd" : "3rd"}
+                          </div>
+                          <div
+                            className={[
+                              "mt-1 truncate font-display font-semibold text-foreground",
+                              tone.type,
+                            ].join(" ")}
+                          >
+                            {entry.displayName}
+                            {entry.uid === user?.uid ? (
+                              <span className="ml-1 text-[0.58rem] uppercase tracking-[0.12em] text-white/45">
+                                You
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                            {entry.points}
+                          </div>
+                          <div className="mt-0.5 text-[0.62rem] text-muted">
+                            {entry.exacts} exact · {entry.results} result
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {entry.exacts} exact · {entry.results} result
-                      </div>
-                    </div>
-                    <div className="shrink-0 font-display text-lg font-semibold text-foreground">
-                      {entry.points}
-                    </div>
-                  </div>
-                ))}
+                    );
+                  };
+                  return (
+                    <>
+                      {leagueWeekScores.length >= 3 ? (
+                        <div className="league-podium grid grid-cols-3 items-end gap-2">
+                          {placeCard(second, 2)}
+                          {placeCard(first, 1)}
+                          {placeCard(third, 3)}
+                        </div>
+                      ) : (
+                        <div className="league-podium grid grid-cols-1 gap-2">
+                          {first ? placeCard(first, 1) : null}
+                          {second ? placeCard(second, 2) : null}
+                          {third ? placeCard(third, 3) : null}
+                        </div>
+                      )}
+                      {youInRest ? (
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                          <div className="min-w-0">
+                            <div className="font-display text-sm font-semibold text-foreground">
+                              {youIndex + 1}. {youInRest.displayName}
+                              <span className="ml-2 text-[0.62rem] uppercase tracking-[0.14em] text-white/45">
+                                You
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-xs text-muted">
+                              {youInRest.exacts} exact · {youInRest.results}{" "}
+                              result
+                            </div>
+                          </div>
+                          <div className="shrink-0 font-display text-base font-semibold text-foreground">
+                            {youInRest.points}
+                          </div>
+                        </div>
+                      ) : null}
+                      {rest.length ? (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setLeagueRestOpen((open) => !open)}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-1.5 font-display text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/72"
+                            aria-expanded={leagueRestOpen}
+                          >
+                            {leagueRestOpen ? "Hide rest" : "Show rest"}
+                            <ChevronDown
+                              size={14}
+                              className={[
+                                "transition-transform duration-200 ease-out",
+                                leagueRestOpen ? "rotate-180" : "",
+                              ].join(" ")}
+                            />
+                          </button>
+                          <div
+                            className={[
+                              "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ease-out",
+                              leagueRestOpen
+                                ? "mt-2 grid-rows-[1fr] opacity-100"
+                                : "mt-0 grid-rows-[0fr] opacity-0",
+                            ].join(" ")}
+                          >
+                            <div className="min-h-0 space-y-2">
+                              {rest.map((entry, restIndex) => (
+                                <div
+                                  key={entry.uid}
+                                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-display font-semibold text-foreground">
+                                      {restIndex + 4}. {entry.displayName}
+                                      {entry.uid === user?.uid ? (
+                                        <span className="ml-2 text-[0.62rem] uppercase tracking-[0.14em] text-white/45">
+                                          You
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <div className="mt-1 text-xs text-muted">
+                                      {entry.exacts} exact · {entry.results}{" "}
+                                      result
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 font-display text-lg font-semibold text-foreground">
+                                    {entry.points}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </SectionCard>
@@ -2247,8 +2381,7 @@ export default function FixturesPage() {
                     key={f.fixtureId}
                     className="fixture-card-enter space-y-[6px] sm:space-y-[8px] w-full"
                     style={{
-                      animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                      animationDuration: "520ms",
+                      animationDelay: `${Math.min(idx, 5) * 50}ms`,
                     }}
                   >
                     <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">
@@ -3685,7 +3818,6 @@ export default function FixturesPage() {
                 <table
                   key={`${tableMode}-${tableView}`}
                   className="w-full table-fixed text-sm fixture-card-enter"
-                  style={{ animationDuration: "240ms" }}
                 >
                   {tableView === "FULL" ? (
                     <colgroup>
@@ -3737,8 +3869,7 @@ export default function FixturesPage() {
                         key={`${tableMode}-${tableView}-${r.position}-${r.team.name}`}
                         className="border-b border-subtle last:border-0 fixture-card-enter"
                         style={{
-                          animationDelay: `${Math.min(idx, 12) * 35}ms`,
-                          animationDuration: "320ms",
+                          animationDelay: `${Math.min(idx, 5) * 50}ms`,
                         }}
                       >
                         <td className="py-2 px-1 text-foreground">

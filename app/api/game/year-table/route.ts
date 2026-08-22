@@ -7,6 +7,7 @@ import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
 import { getBaseUrl } from "../lock-window";
 import { canonicalRoomCode, isValidRoomCode } from "@/lib/roomCode";
+import { GET as getCurrentGameweek } from "../../current-gameweek/route";
 import {
   YEAR_TABLE_LOCK_AFTER_GW,
   YEAR_TABLE_SCORE_AFTER_GW,
@@ -94,7 +95,7 @@ async function resolveCurrentGw(req: Request, roomCode: string, seasonKey: strin
   const url = new URL("/api/current-gameweek", req.url);
   url.searchParams.set("seasonKey", seasonKey);
   if (style === "league") url.searchParams.set("mode", "league");
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await getCurrentGameweek(new NextRequest(url));
   if (!res.ok) throw new Error("Failed to resolve current gameweek");
   const data = (await res.json()) as { currentGameweek?: number };
   const gw = Number(data.currentGameweek ?? 1);
@@ -281,7 +282,7 @@ export async function POST(req: Request) {
     const currentGw = await resolveCurrentGw(req, roomCode, seasonKey);
     if (currentGw > YEAR_TABLE_LOCK_AFTER_GW) {
       return NextResponse.json(
-        { error: "Year predictions close before GW2." },
+        { error: "Year predictions close at the start of GW3." },
         { status: 400 },
       );
     }

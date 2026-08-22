@@ -868,8 +868,7 @@ export default function RevealPage() {
                   key={fid}
                   className="fixture-card-enter space-y-2 w-full"
                   style={{
-                    animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                    animationDuration: "520ms",
+                    animationDelay: `${Math.min(idx, 5) * 50}ms`,
                   }}
                 >
                   <div className="relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.018))] p-1 shadow-[0_20px_46px_rgba(3,8,20,0.24)]">

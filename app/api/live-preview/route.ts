@@ -1,48 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  getFotmobLeagueMatches,
+  type FotmobLeagueMatch,
+} from "@/lib/fotmobLeague";
 
-const FOTMOB_LEAGUE_ID = 47;
 const SEASON_START_MONTH_UTC = 7;
-const LIVE_PREVIEW_CACHE_MS = 250;
 
-type LivePreviewCacheEntry = {
-  season: string;
-  expiresAt: number;
-  matches: FotmobMatch[];
-};
-
-let livePreviewCache: LivePreviewCacheEntry | null = null;
-let livePreviewInFlight: Promise<FotmobMatch[]> | null = null;
-
-type FotmobStatus = {
-  utcTime?: string;
-  started?: boolean;
-  finished?: boolean;
-  awarded?: boolean;
-  cancelled?: boolean;
-  scoreStr?: string;
-  reason?: { short?: string };
-  liveTime?: {
-    short?: string;
-    basePeriod?: number;
-    addedTime?: number;
-  };
-  periodLength?: number;
-};
-
-type FotmobTeam = {
-  id?: number;
-  name?: string;
-  shortName?: string;
-};
-
-type FotmobMatch = {
-  id?: number;
-  round?: number | string;
-  roundName?: number | string;
-  home?: FotmobTeam;
-  away?: FotmobTeam;
-  status?: FotmobStatus;
-};
+type FotmobStatus = FotmobLeagueMatch["status"];
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
@@ -133,7 +97,10 @@ function overlayStatus(
   return String(providerStatus || "TIMED");
 }
 
-function mapMatchToOverlay(match: FotmobMatch, forcedGameweek: number | null) {
+function mapMatchToOverlay(
+  match: FotmobLeagueMatch,
+  forcedGameweek: number | null,
+) {
   const result = normalizeScoreStr(match?.status?.scoreStr);
   return {
     fixtureId: Number(match?.id || 0) || null,
@@ -172,53 +139,6 @@ function mapMatchToOverlay(match: FotmobMatch, forcedGameweek: number | null) {
   };
 }
 
-async function fetchFotmobMatches(season: string) {
-  const now = Date.now();
-  if (
-    livePreviewCache &&
-    livePreviewCache.season === season &&
-    livePreviewCache.expiresAt > now
-  ) {
-    return livePreviewCache.matches;
-  }
-
-  if (livePreviewInFlight) {
-    return livePreviewInFlight;
-  }
-
-  const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`;
-
-  livePreviewInFlight = (async () => {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      throw new Error(`FotMob fetch failed (${response.status})`);
-    }
-
-    const data = await response.json().catch(() => null);
-    const matches = Array.isArray(data?.fixtures?.allMatches)
-      ? (data.fixtures.allMatches as FotmobMatch[])
-      : [];
-
-    livePreviewCache = {
-      season,
-      expiresAt: Date.now() + LIVE_PREVIEW_CACHE_MS,
-      matches,
-    };
-
-    return matches;
-  })();
-
-  try {
-    return await livePreviewInFlight;
-  } finally {
-    livePreviewInFlight = null;
-  }
-}
-
 export async function GET(req: NextRequest) {
   const gameweekParam = req.nextUrl.searchParams.get("gameweek");
   const requestedSeason = req.nextUrl.searchParams.get("seasonKey");
@@ -229,7 +149,7 @@ export async function GET(req: NextRequest) {
     : null;
 
   try {
-    const matches = await fetchFotmobMatches(season);
+    const matches = await getFotmobLeagueMatches(season);
 
     const filtered =
       gameweek == null
@@ -247,7 +167,7 @@ export async function GET(req: NextRequest) {
       },
       {
         headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          "Cache-Control": "s-maxage=10, stale-while-revalidate=5",
         },
       },
     );

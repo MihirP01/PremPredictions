@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, X } from "lucide-react";
 import {
   ConfirmDialog,
   ModalHeader,
@@ -11,15 +11,19 @@ import SectionCard from "./SectionCard";
 import SectionStack from "./SectionStack";
 import StatusPill from "./StatusPill";
 import TeamBadge from "./TeamBadge";
+import ScoringKeyRow, { type ScoringKeyItem } from "./ScoringKeyRow";
 import type { TableRow } from "@/lib/tableClient";
 import {
   YEAR_TABLE_LOCK_AFTER_GW,
+  YEAR_TABLE_LOCK_GW,
   clubsFromTableRows,
   scoreYearTableOrder,
   yearTableTeamKey,
   yearTableTotal,
   type YearTableClub,
 } from "@/lib/yearTableScoring";
+import { getFixturesCached } from "@/lib/fixturesClient";
+import { getCountdownParts } from "@/app/room/[roomCode]/minigame/lock-utils";
 
 type Player = {
   uid: string;
@@ -55,15 +59,51 @@ type YearTableSectionProps = {
   players: Player[];
 };
 
-function displayNameFor(player: Player | undefined, uid: string) {
-  if (!player) return "Player";
-  return player.nickName
-    ? `(${player.nickName}) ${player.displayName}`
-    : player.displayName;
+function shortNameFor(player: Player | undefined) {
+  const nick = player?.nickName?.trim();
+  if (nick) return nick;
+  const name = player?.displayName?.trim() || "Player";
+  return name.split(/\s+/)[0] || name;
 }
 
-function clubLabel(club: YearTableClub | undefined, key: string) {
-  return club?.tla || club?.shortName || club?.name || key;
+function cellTone(points: number, scoringOpen: boolean) {
+  if (!scoringOpen) return "bg-white/[0.02]";
+  if (points === 3) return "bg-emerald-400/16 ring-1 ring-inset ring-emerald-300/25";
+  if (points === 1) return "bg-amber-400/14 ring-1 ring-inset ring-amber-300/20";
+  return "bg-white/[0.02] opacity-40";
+}
+
+const SLOT_COUNT = 20;
+
+const YEAR_TABLE_SCORING_ITEMS: ScoringKeyItem[] = [
+  { label: "Exact", value: "3", tone: "exact" },
+  { label: "Off by 1", value: "1", tone: "result" },
+  { label: "Miss", value: "0", tone: "miss" },
+];
+
+function formatLockCountdown(msLeft: number) {
+  const parts = getCountdownParts(msLeft);
+  return `${parts.days}d ${parts.hours}h ${parts.minutes}m ${parts.seconds}s`;
+}
+
+function emptyDraft() {
+  return Array.from({ length: SLOT_COUNT }, () => "");
+}
+
+function rankLabel(rank: number) {
+  const n = rank + 1;
+  const mod = n % 100;
+  const suffix =
+    mod >= 11 && mod <= 13
+      ? "th"
+      : n % 10 === 1
+        ? "st"
+        : n % 10 === 2
+          ? "nd"
+          : n % 10 === 3
+            ? "rd"
+            : "th";
+  return `${n}${suffix}`;
 }
 
 export default function YearTableSection({
@@ -83,10 +123,13 @@ export default function YearTableSection({
   const [picks, setPicks] = useState<YearPick[]>([]);
   const [enterOpen, setEnterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
-  const [draftOrder, setDraftOrder] = useState<string[]>([]);
+  const [draftOrder, setDraftOrder] = useState<string[]>(() => emptyDraft());
+  const [focusedRank, setFocusedRank] = useState(0);
+  const slotRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [submitBusy, setSubmitBusy] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
-  const [expandedUid, setExpandedUid] = useState<string | null>(null);
+  const [lockAtMs, setLockAtMs] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const playerByUid = useMemo(() => {
     const map = new Map<string, Player>();
@@ -146,48 +189,87 @@ export default function YearTableSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomCode, seasonKey, uid]);
 
+  useEffect(() => {
+    if (!seasonKey) return;
+    let cancelled = false;
+    void getFixturesCached(YEAR_TABLE_LOCK_GW, seasonKey)
+      .then((data) => {
+        const firstKickoff = (data.fixtures || [])
+          .map((fixture) => Date.parse(String(fixture.kickoff || "")))
+          .filter((ms) => Number.isFinite(ms))
+          .sort((a, b) => a - b)[0];
+        if (!cancelled) {
+          setLockAtMs(Number.isFinite(firstKickoff) ? firstKickoff : null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLockAtMs(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [seasonKey]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const rankedClubs = clubs.length ? clubs : fallbackClubs;
   const remainingClubs = useMemo(() => {
-    const taken = new Set(draftOrder);
+    const taken = new Set(draftOrder.filter(Boolean));
     return rankedClubs.filter((club) => !taken.has(club.key));
   }, [draftOrder, rankedClubs]);
+  const filledCount = draftOrder.filter(Boolean).length;
   const hasAnyPicks = picks.length > 0;
   const canEnter = open && !myPick && rankedClubs.length === 20;
-  const nextRank = draftOrder.length + 1;
 
   function openEnter() {
-    setDraftOrder([]);
+    setDraftOrder(emptyDraft());
+    setFocusedRank(0);
     setEnterOpen(true);
   }
 
   function pickClub(key: string) {
-    if (submitBusy || draftOrder.includes(key) || draftOrder.length >= 20)
-      return;
-    setDraftOrder((current) => [...current, key]);
+    if (submitBusy || draftOrder.includes(key)) return;
+    const next = [...draftOrder];
+    let idx = focusedRank;
+    if (next[idx]) {
+      next[idx] = key;
+    } else {
+      idx = next.findIndex((value, i) => i >= focusedRank && !value);
+      if (idx < 0) idx = next.findIndex((value) => !value);
+      if (idx < 0) return;
+      next[idx] = key;
+    }
+    setDraftOrder(next);
+    const nextEmpty = next.findIndex((value, i) => i > idx && !value);
+    setFocusedRank(nextEmpty >= 0 ? nextEmpty : idx);
   }
 
-  function removeClub(key: string) {
+  function removeClubAt(index: number) {
     if (submitBusy) return;
-    setDraftOrder((current) => current.filter((item) => item !== key));
+    const next = [...draftOrder];
+    next[index] = "";
+    setDraftOrder(next);
+    setFocusedRank(index);
   }
 
-  function moveClub(index: number, direction: -1 | 1) {
-    const next = index + direction;
-    if (next < 0 || next >= draftOrder.length || submitBusy) return;
-    setDraftOrder((current) => {
-      const copy = [...current];
-      const [item] = copy.splice(index, 1);
-      copy.splice(next, 0, item);
-      return copy;
+  useEffect(() => {
+    if (!enterOpen) return;
+    slotRefs.current[focusedRank]?.scrollIntoView({
+      behavior: "smooth",
+      inline: "start",
+      block: "nearest",
     });
-  }
+  }, [focusedRank, enterOpen]);
 
   function clubFor(key: string) {
     return clubByKey.get(key) || fallbackClubs.find((item) => item.key === key);
   }
 
   async function submitDraft() {
-    if (!uid || submitBusy) return;
+    if (!uid || submitBusy || filledCount !== SLOT_COUNT) return;
     setSubmitBusy(true);
     setError(null);
     try {
@@ -232,12 +314,13 @@ export default function YearTableSection({
         };
       })
       .sort((a, b) => {
-        if (scoringOpen && b.total !== a.total) return b.total - a.total;
-        const nameA = displayNameFor(playerByUid.get(a.pick.uid), a.pick.uid);
-        const nameB = displayNameFor(playerByUid.get(b.pick.uid), b.pick.uid);
+        if (uid && a.pick.uid === uid) return -1;
+        if (uid && b.pick.uid === uid) return 1;
+        const nameA = shortNameFor(playerByUid.get(a.pick.uid));
+        const nameB = shortNameFor(playerByUid.get(b.pick.uid));
         return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
       });
-  }, [picks, scoringOpen, actualPositionByKey, playerByUid]);
+  }, [picks, scoringOpen, actualPositionByKey, playerByUid, uid]);
 
   const statusLabel = myPick
     ? "Locked"
@@ -245,70 +328,83 @@ export default function YearTableSection({
       ? "Not entered"
       : "Closed";
   const statusTone = myPick ? "you" : open ? "waiting" : "neutral";
+  const lockMsLeft = lockAtMs != null ? lockAtMs - nowMs : null;
+  const showLockCountdown = lockMsLeft != null && lockMsLeft > 0 && open;
 
   return (
     <>
-      <SectionCard>
-        <SectionStack gap="tight">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                Season desk
+      <SectionCard className="rounded-[24px] border border-amber-200/16 bg-[linear-gradient(180deg,rgba(255,196,120,0.04),rgba(255,255,255,0.012))] p-1">
+        <div className="rounded-[24px] border border-amber-200/12 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.16),transparent_42%),linear-gradient(180deg,rgba(22,14,8,0.94),rgba(10,8,6,0.9))] px-4 py-4 sm:px-5 sm:py-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.12)]">
+          <SectionStack gap="tight">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-amber-100/55">
+                  Season side game
+                </div>
+                <div className="mt-1 font-display text-xl font-semibold leading-tight text-foreground">
+                  Year predictions
+                </div>
               </div>
-              <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                Year predictions
+              <StatusPill label={statusLabel} tone={statusTone} />
+            </div>
+
+            <ScoringKeyRow items={YEAR_TABLE_SCORING_ITEMS} />
+
+            {loading ? (
+              <div className="inline-flex items-center gap-2 text-sm text-muted">
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading year predictions…</span>
               </div>
-              <div className="mt-1 text-xs text-muted">
-                Rank 1–20 once. Exact 3pts, off by one 1pt, otherwise 0.
-                Scored after GW38.
+            ) : null}
+
+            {error ? (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-rose-300">
+                {error}
               </div>
+            ) : null}
+
+            <div className="space-y-1.5 text-xs text-muted">
+              <div>
+                {myPick
+                  ? "Your table is locked to this account. Open the room list to compare."
+                  : open
+                    ? `Locks at the first GW${YEAR_TABLE_LOCK_GW} kickoff.`
+                    : `Entries closed when GW${YEAR_TABLE_LOCK_GW} started.`}
+              </div>
+              <div>
+                One table for your account. Submit once and it follows you into
+                every room.
+              </div>
+              {showLockCountdown ? (
+                <div className="font-display text-sm font-semibold tracking-[0.04em] text-amber-100/80">
+                  Locks in {formatLockCountdown(lockMsLeft)}
+                </div>
+              ) : null}
             </div>
-            <StatusPill label={statusLabel} tone={statusTone} />
-          </div>
 
-          {loading ? (
-            <div className="inline-flex items-center gap-2 text-sm text-muted">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Loading year predictions…</span>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={openEnter}
+                disabled={!canEnter || loading}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {myPick ? "Submitted" : "Enter year predictions"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewOpen(true);
+                  void loadYearTable();
+                }}
+                disabled={!hasAnyPicks || loading}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                View all predictions
+              </button>
             </div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-rose-300">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="text-xs text-muted">
-            {myPick
-              ? "Your table is locked. Open the room list to compare."
-              : open
-                ? `Enter before GW${YEAR_TABLE_LOCK_AFTER_GW + 1}. You only get one submission.`
-                : "Entries closed from GW2."}
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={openEnter}
-              disabled={!canEnter || loading}
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {myPick ? "Submitted" : "Enter year predictions"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setViewOpen(true);
-                void loadYearTable();
-              }}
-              disabled={!hasAnyPicks || loading}
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              View all predictions
-            </button>
-          </div>
-        </SectionStack>
+          </SectionStack>
+        </div>
       </SectionCard>
 
       <ThemedSheetModal
@@ -323,128 +419,109 @@ export default function YearTableSection({
           closeButtonClassName="hidden sm:inline-flex"
         />
         <div className="text-sm text-muted">
-          Tap a club to fill the next place. Use up/down to shuffle a placed
-          club, or Remove to put it back in the list.
+          Swipe ranks, tap a club to fill the focused slot. Remove to put a
+          club back.
         </div>
-        <div className="max-h-[58dvh] space-y-4 overflow-y-auto no-scrollbar">
-          <div className="space-y-2">
-            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Your table · {draftOrder.length}/20
-            </div>
-            {draftOrder.length === 0 ? (
-              <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
-                Start with 1st place.
-              </div>
-            ) : (
-              draftOrder.map((key, index) => {
-                const club = clubFor(key);
-                return (
-                  <div
-                    key={key}
-                    className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2 sm:gap-3"
-                  >
-                    <div className="w-7 shrink-0 font-display text-sm font-semibold text-white/70 sm:w-8">
-                      {index + 1}
-                    </div>
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto no-scrollbar">
+          {draftOrder.map((key, index) => {
+            const club = key ? clubFor(key) : undefined;
+            const focused = focusedRank === index;
+            return (
+              <button
+                key={`slot-${index}`}
+                ref={(node) => {
+                  slotRefs.current[index] = node;
+                }}
+                type="button"
+                onClick={() => setFocusedRank(index)}
+                className={[
+                  "w-[82%] shrink-0 snap-start rounded-[22px] border px-4 py-4 text-left transition",
+                  focused
+                    ? "border-amber-200/28 bg-amber-400/[0.08]"
+                    : "border-white/8 bg-white/[0.02]",
+                ].join(" ")}
+              >
+                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                  {rankLabel(index)}
+                </div>
+                {club ? (
+                  <div className="mt-3 flex flex-col items-center gap-3">
                     <TeamBadge
-                      name={club?.name || key}
-                      tla={club?.tla}
-                      shortName={club?.shortName}
-                      badge={club?.badge}
-                      wrapperClassName="h-8 w-8"
-                      imageClassName="h-6 w-6 object-contain"
+                      name={club.name || key}
+                      tla={club.tla}
+                      shortName={club.shortName}
+                      badge={club.badge}
+                      wrapperClassName="h-16 w-16"
+                      imageClassName="h-14 w-14 object-contain"
                     />
-                    <div className="min-w-0 flex-1 font-display text-sm font-semibold text-foreground">
-                      {clubLabel(club, key)}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveClub(index, -1)}
-                        disabled={index === 0 || submitBusy}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
-                        aria-label="Move up"
-                      >
-                        <ChevronUp size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveClub(index, 1)}
-                        disabled={index === draftOrder.length - 1 || submitBusy}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground disabled:opacity-40"
-                        aria-label="Move down"
-                      >
-                        <ChevronDown size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeClub(key)}
-                        disabled={submitBusy}
-                        className="inline-flex h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.08em] text-white/70 transition hover:bg-white/[0.07] disabled:opacity-40"
-                        aria-label={`Remove ${clubLabel(club, key)}`}
-                      >
-                        <X size={12} />
-                        <span className="hidden sm:inline">Remove</span>
-                      </button>
-                    </div>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeClubAt(index);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          removeClubAt(index);
+                        }
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[0.68rem] font-display font-semibold uppercase tracking-[0.08em] text-white/70"
+                    >
+                      <X size={12} />
+                      Remove
+                    </span>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          {remainingClubs.length ? (
-            <div className="space-y-2">
-              <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                {nextRank <= 20
-                  ? `Pick ${nextRank}${
-                      nextRank === 1
-                        ? "st"
-                        : nextRank === 2
-                          ? "nd"
-                          : nextRank === 3
-                            ? "rd"
-                            : "th"
-                    }`
-                  : "Remaining clubs"}
-              </div>
-              {remainingClubs.map((club) => (
-                <button
-                  key={club.key}
-                  type="button"
-                  onClick={() => pickClub(club.key)}
-                  disabled={submitBusy || draftOrder.length >= 20}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-left transition hover:border-white/14 hover:bg-white/[0.055] disabled:opacity-50"
-                >
-                  <TeamBadge
-                    name={club.name}
-                    tla={club.tla}
-                    shortName={club.shortName}
-                    badge={club.badge}
-                    wrapperClassName="h-8 w-8"
-                    imageClassName="h-6 w-6 object-contain"
-                  />
-                  <div className="min-w-0 flex-1 font-display text-sm font-semibold text-foreground">
-                    {clubLabel(club, club.key)}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
-              All 20 clubs are placed. Shuffle with up/down, remove one to
-              pick again, or submit to lock.
-            </div>
-          )}
+                ) : (
+                  <div className="mt-3 text-sm text-muted">Tap a club below.</div>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <button
-          type="button"
-          onClick={() => setConfirmSubmitOpen(true)}
-          disabled={submitBusy || draftOrder.length !== 20}
-          className="w-full rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(56,189,248,0.14))] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:brightness-110 disabled:opacity-50"
-        >
-          {submitBusy ? "Locking…" : "Submit and lock"}
-        </button>
+        {remainingClubs.length ? (
+          <div className="grid max-h-[28dvh] grid-cols-5 gap-2 overflow-y-auto no-scrollbar">
+            {remainingClubs.map((club) => (
+              <button
+                key={club.key}
+                type="button"
+                onClick={() => pickClub(club.key)}
+                disabled={submitBusy}
+                aria-label={club.name || club.tla || club.key}
+                className="flex items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] p-2 transition hover:border-white/14 hover:bg-white/[0.055] disabled:opacity-50"
+              >
+                <TeamBadge
+                  name={club.name}
+                  tla={club.tla}
+                  shortName={club.shortName}
+                  badge={club.badge}
+                  wrapperClassName="h-11 w-11"
+                  imageClassName="h-9 w-9 object-contain"
+                />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+            All 20 clubs are placed. Swipe a slot and tap Remove to rewrite, or
+            submit to lock.
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <div className="shrink-0 font-display text-sm font-semibold text-white/70">
+            {filledCount}/20
+          </div>
+          <button
+            type="button"
+            onClick={() => setConfirmSubmitOpen(true)}
+            disabled={submitBusy || filledCount !== SLOT_COUNT}
+            className="w-full rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(56,189,248,0.14))] px-4 py-3 text-sm font-display font-semibold text-foreground transition hover:brightness-110 disabled:opacity-50"
+          >
+            {submitBusy ? "Locking…" : "Submit and lock"}
+          </button>
+        </div>
       </ThemedSheetModal>
 
       <ConfirmDialog
@@ -454,7 +531,7 @@ export default function YearTableSection({
           void submitDraft();
         }}
         title="Lock year predictions"
-        body="This ranks the Premier League 1–20 for the season. You cannot edit after submitting."
+        body="This ranks the Premier League 1–20 for the season. It locks to your account and shows in every room. You cannot edit after submitting."
         confirmLabel={submitBusy ? "Locking…" : "Confirm lock"}
         confirming={submitBusy}
       />
@@ -473,100 +550,97 @@ export default function YearTableSection({
         <div className="text-sm text-muted">
           {scoringOpen
             ? "Final 3 / 1 / 0 scoring against the finished table."
-            : "Lists are visible as people submit. Points are awarded after GW38."}
+            : "Compare every locked table. Points are awarded after GW38."}
         </div>
-        <div className="max-h-[62dvh] space-y-2 overflow-y-auto no-scrollbar">
-          {viewRows.length === 0 ? (
-            <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
-              Nobody has locked a year table yet.
-            </div>
-          ) : (
-            viewRows.map(({ pick, scored, total }) => {
-              const isYou = pick.uid === uid;
-              const expanded = expandedUid === pick.uid;
-              return (
-                <div
-                  key={pick.uid}
-                  className={[
-                    "rounded-[22px] border px-3 py-3",
-                    isYou
-                      ? "border-white/14 bg-white/[0.045]"
-                      : "border-white/8 bg-white/[0.02]",
-                  ].join(" ")}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedUid((current) =>
-                        current === pick.uid ? null : pick.uid,
-                      )
-                    }
-                    className="flex w-full items-center justify-between gap-3 text-left"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-display text-sm font-semibold text-foreground">
-                        {displayNameFor(playerByUid.get(pick.uid), pick.uid)}
+        {viewRows.length === 0 ? (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+            Nobody has locked a year table yet.
+          </div>
+        ) : (
+          <div className="max-h-[62dvh] overflow-auto no-scrollbar">
+            <table className="border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-20 w-[72px] min-w-[72px] bg-[#0a1220] px-1 pb-2 text-left text-[0.58rem] font-display font-semibold uppercase tracking-[0.12em] text-white/40">
+                    Player
+                  </th>
+                  {Array.from({ length: SLOT_COUNT }, (_, index) => (
+                    <th
+                      key={`rank-${index}`}
+                      className="sticky top-0 z-10 min-w-[40px] bg-[#0a1220] px-0.5 pb-2 text-center font-display text-[0.58rem] font-semibold uppercase tracking-[0.04em] text-white/48"
+                    >
+                      {rankLabel(index)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {viewRows.map(({ pick, scored, total }) => {
+                  const isYou = pick.uid === uid;
+                  const scoredByPos = new Map(
+                    scored.map((row) => [row.predictedPos, row]),
+                  );
+                  return (
+                    <tr key={pick.uid}>
+                      <th
+                        className={[
+                          "sticky left-0 z-10 w-[72px] min-w-[72px] bg-[#0a1220] py-1.5 pr-2 text-left align-middle",
+                          isYou ? "text-foreground" : "text-white/80",
+                        ].join(" ")}
+                      >
+                        <div className="truncate font-display text-[0.72rem] font-semibold leading-tight">
+                          {shortNameFor(playerByUid.get(pick.uid))}
+                        </div>
                         {isYou ? (
-                          <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-white/48">
+                          <div className="text-[0.52rem] font-display font-semibold uppercase tracking-[0.12em] text-white/45">
                             You
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {scoringOpen ? `${total} pts` : "Locked in"}
-                      </div>
-                    </div>
-                    {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  {expanded ? (
-                    <div className="mt-3 space-y-1.5">
-                      {scored.map((row) => {
-                        const club = clubByKey.get(row.key);
-                        return (
-                          <div
-                            key={`${pick.uid}-${row.key}`}
-                            className="flex items-center gap-2 rounded-xl border border-white/6 bg-black/10 px-2 py-1.5"
-                          >
-                            <div className="w-6 text-center font-display text-xs font-semibold text-white/70">
-                              {row.predictedPos}
-                            </div>
-                            <TeamBadge
-                              name={club?.name || row.key}
-                              tla={club?.tla}
-                              shortName={club?.shortName}
-                              badge={club?.badge}
-                              wrapperClassName="h-6 w-6"
-                              imageClassName="h-4 w-4 object-contain"
-                            />
-                            <div className="min-w-0 flex-1 truncate text-xs text-foreground">
-                              {clubLabel(club, row.key)}
-                            </div>
-                            {scoringOpen ? (
-                              <div className="shrink-0 text-[11px] font-semibold text-white/70">
-                                {row.actualPos != null ? `P${row.actualPos}` : "—"}{" "}
-                                <span
-                                  className={
-                                    row.points === 3
-                                      ? "text-emerald-200"
-                                      : row.points === 1
-                                        ? "text-amber-200"
-                                        : "text-white/35"
-                                  }
-                                >
-                                  +{row.points}
-                                </span>
-                              </div>
-                            ) : null}
                           </div>
+                        ) : null}
+                        {scoringOpen ? (
+                          <div className="text-[0.58rem] text-white/50">
+                            {total} pts
+                          </div>
+                        ) : null}
+                      </th>
+                      {Array.from({ length: SLOT_COUNT }, (_, index) => {
+                        const row = scoredByPos.get(index + 1);
+                        const club = row
+                          ? clubByKey.get(row.key) || clubFor(row.key)
+                          : undefined;
+                        return (
+                          <td
+                            key={`${pick.uid}-${index}`}
+                            className="px-0.5 py-1.5 align-middle"
+                          >
+                            <div
+                              className={[
+                                "flex h-10 w-10 items-center justify-center rounded-[12px]",
+                                row
+                                  ? cellTone(row.points, scoringOpen)
+                                  : "bg-white/[0.015]",
+                              ].join(" ")}
+                            >
+                              {club ? (
+                                <TeamBadge
+                                  name={club.name || row?.key || ""}
+                                  tla={club.tla}
+                                  shortName={club.shortName}
+                                  badge={club.badge}
+                                  wrapperClassName="h-10 w-10 border-0 bg-transparent"
+                                  imageClassName="h-8 w-8 object-contain"
+                                />
+                              ) : null}
+                            </div>
+                          </td>
                         );
                       })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })
-          )}
-        </div>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </ThemedSheetModal>
     </>
   );

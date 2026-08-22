@@ -563,47 +563,14 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes topActionRowIn {
+@keyframes riseIn {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.99);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes topActionRowInAlt {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes sectionCardIn {
-  from {
-    opacity: 0;
-    transform: translateY(22px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes sectionCardInAlt {
-  from {
-    opacity: 0;
-    transform: translateY(22px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -757,17 +724,6 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes fixtureCardIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes keyChipGlow {
   0%,
   100% {
@@ -874,10 +830,13 @@ select:-webkit-autofill:focus {
   animation: pageActionsIn 260ms ease-out both;
 }
 
+.rise-in,
 .top-action-row-enter,
-.section-card-enter {
+.section-card-enter,
+.fixture-card-enter {
   opacity: 0;
   will-change: opacity, transform;
+  animation: riseIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .page-shell-enter {
@@ -935,7 +894,6 @@ select:-webkit-autofill:focus {
 }
 
 .fixture-card-enter {
-  animation: fixtureCardIn 320ms ease-out both;
   contain: layout paint;
   backface-visibility: hidden;
 }
@@ -1057,114 +1015,131 @@ select:-webkit-autofill:focus {
   animation: bottomNavIn 260ms ease-out both;
 }
 
+.league-podium {
+  perspective: 900px;
+}
+
+.league-podium-card {
+  transform-style: preserve-3d;
+  animation: leaguePodiumRise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.league-podium-card--first {
+  animation-delay: 0ms;
+}
+
+.league-podium-card--second {
+  animation-delay: 90ms;
+}
+
+.league-podium-card--third {
+  animation-delay: 160ms;
+}
+
+@keyframes leaguePodiumRise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) translateZ(-36px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateZ(0);
+  }
+}
+
 .liquid-glass-nav {
   position: relative;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(12, 18, 32, 0.42) 46%,
+      rgba(8, 12, 22, 0.5) 100%
+    );
+  box-shadow:
+    0 18px 36px rgba(2, 7, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
 
 .liquid-glass-nav::before {
-  content: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 8%,
+      rgba(255, 255, 255, 0.2) 50%,
+      transparent 92%
+    );
+  height: 1px;
+  top: 0;
 }
 
 .liquid-glass-nav::after {
-  content: none;
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.35) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.liquid-glass-pill {
+  pointer-events: none;
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: calc((100% - 16px) / 5);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(var(--room-accent-rgb), 0.12) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 18px rgba(2, 7, 18, 0.12);
+  transform: translateX(calc(var(--active, 0) * 100%));
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.liquid-glass-pill--solo {
+  left: 8px;
+  width: calc(100% - 16px);
+  transform: none;
 }
 
 .liquid-glass-tab {
   position: relative;
-  border: 1px solid transparent;
-  background:
-    radial-gradient(
-      140% 100% at 50% 0%,
-      rgba(255, 255, 255, 0.1),
-      rgba(255, 255, 255, 0) 74%
-    ),
-    rgba(255, 255, 255, 0.01);
-  transition:
-    transform 140ms ease,
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
+  z-index: 1;
+  min-height: 56px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  transition: color 180ms ease, opacity 140ms ease;
 }
 
 .liquid-glass-tab:active {
-  transform: scale(0.98);
+  opacity: 0.82;
 }
 
 .liquid-glass-tab-active {
-  border-color: rgba(255, 255, 255, 0.55);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.26) 0%,
-    rgba(255, 255, 255, 0.14) 74%,
-    rgba(255, 255, 255, 0.09) 100%
-  );
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.2) inset,
-    0 8px 16px rgba(25, 14, 31, 0.28);
-}
-
-.liquid-glass-track {
-  border-radius: 9999px;
-  border: 1px solid rgba(var(--room-accent-rgb), 0.34);
-  padding: 4px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.14) 0%,
-      rgba(255, 255, 255, 0.04) 100%
-    ),
-    rgba(var(--room-accent-rgb), 0.14);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.2) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.12) inset,
-    0 10px 20px rgba(var(--room-accent-rgb), 0.22);
-  backdrop-filter: blur(18px) saturate(135%);
-  -webkit-backdrop-filter: blur(18px) saturate(135%);
-}
-
-.liquid-glass-track-inner {
-  min-height: 56px;
-}
-
-.liquid-glass-selector {
-  z-index: 10;
-  pointer-events: none;
-  border: 1px solid rgba(var(--room-accent-rgb), 0.62);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.28) 0%,
-    rgba(var(--room-accent-rgb), 0.16) 72%,
-    rgba(var(--room-accent-rgb), 0.1) 100%
-  );
-  box-shadow:
-    0 0 0 1px rgba(var(--room-accent-rgb), 0.2) inset,
-    0 12px 24px rgba(var(--room-accent-rgb), 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.18);
-  transition:
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 220ms ease;
-}
-
-.liquid-glass-fab {
-  border-color: rgba(var(--room-accent-rgb), 0.42) !important;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.06) 100%
-    ),
-    rgba(var(--room-accent-rgb), 0.12);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.2) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.12) inset,
-    0 10px 20px rgba(var(--room-accent-rgb), 0.24) !important;
-  backdrop-filter: blur(18px) saturate(135%);
-  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  color: #fff;
 }
 
 .room-bottom-nav button,
@@ -1412,6 +1387,7 @@ select:-webkit-autofill:focus {
   .page-actions-enter,
   .page-shell-enter,
   .page-shell-enter > *,
+  .rise-in,
   .top-action-row-enter,
   .section-card-enter,
   .page-action-btn,

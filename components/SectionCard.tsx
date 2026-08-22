@@ -23,19 +23,14 @@ export default function SectionCard({
     indexRef.current = motion?.nextIndex ? motion.nextIndex() : 0;
   }
 
-  const delayMs = 240 + indexRef.current * 120;
-  const animationName =
-    sequence % 2 === 0 ? "sectionCardIn" : "sectionCardInAlt";
+  const delayMs = Math.min(indexRef.current, 5) * 70;
 
   return (
     <div
+      key={sequence}
       className="section-card-enter"
       style={{
-        animationName,
-        animationDuration: "560ms",
-        animationTimingFunction: "cubic-bezier(0.2,0,0,1)",
         animationDelay: `${delayMs}ms`,
-        animationFillMode: "both",
       }}
     >
       <Panel className={className}>{children}</Panel>

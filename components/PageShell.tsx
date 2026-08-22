@@ -26,8 +26,11 @@ export default function PageShell({
   const pathname = usePathname();
   const [sequence, setSequence] = useState(0);
   const counterRef = useRef(0);
+  const prevPathRef = useRef(pathname);
 
   useEffect(() => {
+    if (prevPathRef.current === pathname) return;
+    prevPathRef.current = pathname;
     counterRef.current = 0;
     setSequence((s) => s + 1);
   }, [pathname]);
@@ -39,6 +42,9 @@ export default function PageShell({
         const idx = counterRef.current;
         counterRef.current += 1;
         return idx;
+      },
+      resetIndex: () => {
+        counterRef.current = 0;
       },
     }),
     [sequence],

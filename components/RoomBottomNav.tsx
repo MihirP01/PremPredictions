@@ -1,9 +1,7 @@
 "use client";
 
 import React, {
-  useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,6 +14,8 @@ import {
   refreshRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { subscribeRoomGameDoc } from "@/lib/liveGameBus";
+import { peekRoomGameStateCached } from "@/lib/gameStateClient";
+import { useCachedBootstrap } from "@/lib/useRoomCache";
 import { useAuth } from "./AuthProvider";
 import useRoomScrollAffordance from "./useRoomScrollAffordance";
 
@@ -60,13 +60,49 @@ function isLeaguePredictionsBlocked(
   return lockAt != null && Date.now() >= lockAt;
 }
 
+function readLeagueBlocked(
+  roomCode: string,
+  uid: string | undefined,
+): boolean | null {
+  const boot = peekRoomBootstrapCached(roomCode);
+  if (!boot) return null;
+  if (boot.gameModeStyle !== "league") return false;
+  const game = peekRoomGameStateCached(
+    roomCode,
+    boot.seasonKey,
+    boot.currentGameweek,
+  );
+  if (!game) return null;
+  return isLeaguePredictionsBlocked(game, uid);
+}
+
 export function useLeaguePredictionsBlocked(roomCode: string) {
   const { user } = useAuth();
-  const [blocked, setBlocked] = useState(false);
+  const bootstrap = useCachedBootstrap(roomCode);
+  const [isLeague, setIsLeague] = useState<boolean | null>(() =>
+    bootstrap ? bootstrap.gameModeStyle === "league" : null,
+  );
+  const [blocked, setBlocked] = useState<boolean | null>(() =>
+    bootstrap ? readLeagueBlocked(roomCode, user?.uid) : null,
+  );
   const [watch, setWatch] = useState<{
     seasonKey: string;
     gw: number;
   } | null>(null);
+
+  const gameModeStyle = bootstrap?.gameModeStyle ?? null;
+
+  useEffect(() => {
+    if (!gameModeStyle) return;
+    const league = gameModeStyle === "league";
+    setIsLeague(league);
+    if (!league) setBlocked(false);
+  }, [gameModeStyle]);
+
+  useEffect(() => {
+    if (watch) return;
+    setBlocked(readLeagueBlocked(roomCode, user?.uid));
+  }, [roomCode, user?.uid, watch]);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -77,10 +113,12 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
         let current = await getRoomBootstrapCached(roomCode);
         if (cancelled) return;
         if (current.gameModeStyle !== "league") {
+          setIsLeague(false);
           setWatch(null);
           setBlocked(false);
           return;
         }
+        setIsLeague(true);
         current = await refreshRoomBootstrapCached(roomCode);
         if (cancelled) return;
         const seasonKey = String(current.seasonKey || "");
@@ -90,7 +128,6 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
       } catch {
         if (!cancelled) {
           setWatch(null);
-          setBlocked(false);
         }
       }
     })();
@@ -123,7 +160,7 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
             seasonKey: String(next.seasonKey || watch.seasonKey),
             gw: nextGw,
           });
-          setBlocked(false);
+          setBlocked(readLeagueBlocked(roomCode, user?.uid));
           return;
         }
         if (attempt < 8) {
@@ -169,7 +206,7 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
         }
       },
       () => {
-        if (!cancelled) setBlocked(false);
+        // Keep the last known lock. A listener blip must not reopen Predictions.
       },
     );
 
@@ -180,7 +217,7 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
     };
   }, [roomCode, watch, user?.uid]);
 
-  return blocked;
+  return isLeague === false ? false : blocked !== false;
 }
 
 type NavItem = {
@@ -198,26 +235,23 @@ export default function RoomBottomNav() {
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
   const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
+  const bootstrap = useCachedBootstrap(roomCode);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
-  const [isLeagueMode, setIsLeagueMode] = useState(false);
-  const [activeBubble, setActiveBubble] = useState<{
-    left: number;
-    width: number;
-    visible: boolean;
-  }>({ left: 0, width: 0, visible: false });
+  const [isLeagueMode, setIsLeagueMode] = useState<boolean | null>(() =>
+    bootstrap ? bootstrap.gameModeStyle === "league" : null,
+  );
+
+  const gameModeStyle = bootstrap?.gameModeStyle ?? null;
+
+  useEffect(() => {
+    if (!gameModeStyle) return;
+    setIsLeagueMode(gameModeStyle === "league");
+  }, [gameModeStyle]);
+
   const lastTouchHandledAtRef = useRef(0);
   const navRef = useRef<HTMLDivElement | null>(null);
-  const buttonRefs = useRef<
-    Partial<Record<NavItem["key"], HTMLButtonElement | null>>
-  >({});
   const expandResetTimerRef = useRef<number | null>(null);
-  const bubbleHoldTimerRef = useRef<number | null>(null);
-  const previousCollapsedRef = useRef(false);
-  const bubblePinnedToTrackRef = useRef(false);
-  const collapsedBubbleRectRef = useRef<{ left: number; width: number } | null>(
-    null,
-  );
 
   useEffect(() => {
     if (!roomCode) return;
@@ -290,6 +324,7 @@ export default function RoomBottomNav() {
             setPredictionsDisabled(false);
           },
           () => {
+            if (leagueMode) return;
             setPredictionsHref(`/room/${roomCode}/minigame`);
             setPredictionsDisabled(false);
           },
@@ -325,9 +360,10 @@ export default function RoomBottomNav() {
         active:
           pathname === `/room/${roomCode}/minigame` ||
           pathname.startsWith(`/room/${roomCode}/minigame/`),
-        disabled: isLeagueMode
-          ? leaguePredictionsBlocked
-          : predictionsDisabled,
+        disabled:
+          isLeagueMode === false
+            ? predictionsDisabled
+            : leaguePredictionsBlocked,
       },
       {
         key: "home",
@@ -369,77 +405,14 @@ export default function RoomBottomNav() {
   const collapsed = showScrollAffordance && expandedCycle !== affordanceCycle;
 
   const hideForActiveGamePhase =
-    !isLeagueMode &&
+    isLeagueMode === false &&
     (pathname === `/room/${roomCode}/minigame/play` ||
       pathname === `/room/${roomCode}/minigame/golden` ||
       pathname === `/room/${roomCode}/minigame/powerups`);
-
-  const syncActiveBubble = useCallback(() => {
-    const nav = navRef.current;
-    const activeButton = activeItem ? buttonRefs.current[activeItem.key] : null;
-    if (!nav || !activeButton) {
-      setActiveBubble((current) =>
-        current.visible ? { ...current, visible: false } : current,
-      );
-      return;
-    }
-
-    const navRect = nav.getBoundingClientRect();
-    const liveButtonRect = activeButton.getBoundingClientRect();
-    if (collapsed) {
-      collapsedBubbleRectRef.current = {
-        left: liveButtonRect.left - navRect.left,
-        width: liveButtonRect.width,
-      };
-    }
-
-    const storedRect = collapsedBubbleRectRef.current;
-    const nextLeft =
-      bubblePinnedToTrackRef.current && storedRect
-        ? storedRect.left
-        : liveButtonRect.left - navRect.left;
-    const nextWidth =
-      bubblePinnedToTrackRef.current && storedRect
-        ? storedRect.width
-        : liveButtonRect.width;
-
-    setActiveBubble({
-      left: nextLeft,
-      width: nextWidth,
-      visible: true,
-    });
-  }, [activeItem, collapsed]);
-
-  useEffect(() => {
-    const wasCollapsed = previousCollapsedRef.current;
-    previousCollapsedRef.current = collapsed;
-
-    if (bubbleHoldTimerRef.current) {
-      window.clearTimeout(bubbleHoldTimerRef.current);
-      bubbleHoldTimerRef.current = null;
-    }
-
-    if (collapsed) {
-      bubblePinnedToTrackRef.current = true;
-      window.requestAnimationFrame(syncActiveBubble);
-      return;
-    }
-
-    if (wasCollapsed) {
-      bubblePinnedToTrackRef.current = true;
-      window.requestAnimationFrame(syncActiveBubble);
-      bubbleHoldTimerRef.current = window.setTimeout(() => {
-        bubblePinnedToTrackRef.current = false;
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(syncActiveBubble);
-        });
-        bubbleHoldTimerRef.current = null;
-      }, 240);
-      return;
-    }
-
-    bubblePinnedToTrackRef.current = false;
-  }, [collapsed, syncActiveBubble]);
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.key === activeItem.key),
+  );
 
   useEffect(() => {
     if (collapsed || !showScrollAffordance) return;
@@ -462,45 +435,12 @@ export default function RoomBottomNav() {
       if (expandResetTimerRef.current) {
         window.clearTimeout(expandResetTimerRef.current);
       }
-      if (bubbleHoldTimerRef.current) {
-        window.clearTimeout(bubbleHoldTimerRef.current);
-      }
     };
   }, []);
 
   useEffect(() => {
     items.forEach((item) => router.prefetch(item.href));
   }, [items, router]);
-
-  useLayoutEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(syncActiveBubble);
-    });
-    const onResize = () => {
-      window.requestAnimationFrame(syncActiveBubble);
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [syncActiveBubble]);
-
-  useEffect(() => {
-    const nav = navRef.current;
-    const activeButton = activeItem ? buttonRefs.current[activeItem.key] : null;
-    if (!nav || !activeButton || typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => {
-      window.requestAnimationFrame(syncActiveBubble);
-    });
-
-    observer.observe(nav);
-    observer.observe(activeButton);
-    return () => observer.disconnect();
-  }, [activeItem, collapsed, syncActiveBubble]);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -552,6 +492,8 @@ export default function RoomBottomNav() {
       return;
     }
     if (active || disabled) return;
+    if (_key === "predictions" && isLeagueMode && leaguePredictionsBlocked)
+      return;
     if (_key === "predictions") {
       const cachedBootstrap = peekRoomBootstrapCached(roomCode);
       const immediateHref =
@@ -599,77 +541,28 @@ export default function RoomBottomNav() {
     >
       <div
         ref={navRef}
-        className="relative overflow-hidden rounded-[30px] px-2 py-2 transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="liquid-glass-nav relative px-2 py-2 transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         style={{
-          isolation: "isolate",
           width: collapsed ? "7.25rem" : "100%",
           marginLeft: "auto",
           transformOrigin: "right center",
         }}
       >
         <div
-          className="absolute inset-0 rounded-[31px] border"
-          style={{
-            borderColor: "rgba(255,255,255,0.08)",
-            background:
-              "linear-gradient(180deg, rgba(9,14,26,0.78) 0%, rgba(8,12,22,0.82) 100%)",
-            boxShadow:
-              "0 18px 36px rgba(2,7,18,0.24), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.03)",
-            backdropFilter: "blur(24px) saturate(175%)",
-            WebkitBackdropFilter: "blur(24px) saturate(175%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-x-10 top-0 h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-x-8 bottom-0 h-px"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
-          }}
-        />
-        <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-2 rounded-[24px] transition-[left,width,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-          style={{
-            left: `${activeBubble.left}px`,
-            width: `${activeBubble.width}px`,
-            opacity: activeBubble.visible ? 1 : 0,
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(var(--room-accent-rgb),0.14) 100%)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            boxShadow:
-              "0 8px 18px rgba(2,7,18,0.14), inset 0 1px 0 rgba(255,255,255,0.16), 0 0 0 1px rgba(var(--room-accent-rgb),0.08)",
-            backdropFilter: "blur(18px) saturate(150%)",
-            WebkitBackdropFilter: "blur(18px) saturate(150%)",
-          }}
-        >
-          <div
-            className="absolute inset-[1px] rounded-[23px]"
-            style={{
-              background:
-                "radial-gradient(circle at top center, rgba(255,255,255,0.12), transparent 52%), linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01))",
-            }}
-          />
-          <div
-            className="absolute left-[22%] right-[22%] top-0 h-px"
-            style={{
-              background:
-                "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)",
-            }}
-          />
-        </div>
-        <div
           className={[
-            "relative z-[1]",
-            collapsed ? "flex items-stretch gap-0" : "flex items-stretch gap-1",
+            "liquid-glass-pill",
+            collapsed ? "liquid-glass-pill--solo" : "",
           ].join(" ")}
-        >
+          style={
+            collapsed
+              ? undefined
+              : ({
+                  ["--active" as string]: String(activeIndex),
+                } as React.CSSProperties)
+          }
+        />
+        <div className="relative z-[1] flex items-stretch">
           {items.map((item) => {
             const Icon = item.icon;
             const itemCollapsed = collapsed && !item.active;
@@ -677,14 +570,13 @@ export default function RoomBottomNav() {
             return (
               <div
                 key={item.key}
-                className="relative min-w-0 overflow-hidden transition-[flex,width,opacity,transform] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="relative min-w-0 overflow-hidden transition-[flex,width,opacity] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={
                   itemCollapsed
                     ? {
                         flex: "0 0 0px",
                         width: 0,
                         opacity: 0,
-                        transform: "scale(0.92)",
                         pointerEvents: "none",
                       }
                     : collapsed
@@ -692,48 +584,43 @@ export default function RoomBottomNav() {
                           flex: "1 1 auto",
                           width: "100%",
                           opacity: 1,
-                          transform: "scale(1)",
                           pointerEvents: item.disabled ? "none" : "auto",
                         }
                       : {
                           flex: "1 1 0%",
                           width: 0,
                           opacity: 1,
-                          transform: "scale(1)",
                           pointerEvents: item.disabled ? "none" : "auto",
                         }
                 }
               >
                 <button
-                  ref={(node) => {
-                    buttonRefs.current[item.key] = node;
-                  }}
                   type="button"
                   onPointerDown={(event) => onNavPointerDown(event, item)}
                   onClick={() => {
-                    if (performance.now() - lastTouchHandledAtRef.current < 450) return;
+                    if (performance.now() - lastTouchHandledAtRef.current < 450)
+                      return;
                     onNavClick(item.key, item.href, item.active, item.disabled);
                   }}
                   disabled={item.disabled}
                   aria-disabled={item.disabled ? "true" : undefined}
                   className={[
-                    "relative flex w-full min-w-0 min-h-[56px] touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5 transition-colors duration-250 ease-out",
+                    "liquid-glass-tab flex w-full min-w-0 touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5",
                     item.disabled
-                      ? "pointer-events-none text-muted opacity-50 cursor-not-allowed"
+                      ? "pointer-events-none cursor-not-allowed opacity-50"
                       : "pointer-events-auto",
-                    item.active && !item.disabled ? "text-foreground" : "",
-                    !item.active && !item.disabled ? "text-muted" : "",
+                    item.active && !item.disabled ? "liquid-glass-tab-active" : "",
                   ].join(" ")}
                 >
                   <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
                     <Icon
                       size={16}
-                      className={[item.active ? "text-white" : "text-white/64"].join(" ")}
+                      className={item.active ? "text-white" : "text-white/64"}
                     />
                   </span>
                   <span
                     className={[
-                      "truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em] transition-colors duration-250 ease-out",
+                      "truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]",
                       item.active ? "text-white" : "text-white/68",
                     ].join(" ")}
                   >

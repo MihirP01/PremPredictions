@@ -6,6 +6,8 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { writeRoomGameStateCached } from "./gameStateClient";
+import { writeRoomPlayersCached } from "./roomPlayersClient";
 
 type GameDocLike = Record<string, unknown> | null;
 type PickLike = { uid: string; fixtureId: number; score: string };
@@ -95,13 +97,13 @@ function attachGameListener(
   );
   ch.firestoreUnsub = onSnapshot(
     ref,
-    (snap) =>
-      emitData(
-        ch,
-        snap.exists()
-          ? ((snap.data() as Record<string, unknown>) ?? null)
-          : null,
-      ),
+    (snap) => {
+      const data = snap.exists()
+        ? ((snap.data() as Record<string, unknown>) ?? null)
+        : null;
+      writeRoomGameStateCached(roomCode, seasonKey, gw, data);
+      emitData(ch, data);
+    },
     (e) => emitErr(ch, e),
   );
 }
@@ -347,6 +349,7 @@ function attachRoomPlayersListener(
             sensitivity: "base",
           }),
         );
+      writeRoomPlayersCached(roomCode, players);
       emitData(ch, players);
     },
     (e) => emitErr(ch, e),

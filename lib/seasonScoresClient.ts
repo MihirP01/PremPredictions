@@ -2,7 +2,12 @@
 
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
-import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+import { notifyRoomCache } from "./cacheStore";
+import {
+  peekSessionRecord,
+  readFreshSessionRecord,
+  writeSessionRecord,
+} from "./sessionCache";
 
 export type ScoreBreakdownItem = {
   base?: number;
@@ -167,6 +172,19 @@ async function fetchSnapshot(
   };
 }
 
+export function peekSeasonScoresSnapshotCached(
+  roomCode: string,
+  seasonKey: string,
+): SeasonScoresSnapshot | null {
+  const key = keyFor(roomCode, seasonKey);
+  const mem = memCache.get(key);
+  if (mem) return mem.data;
+  const stored = peekSessionRecord<SeasonScoresSnapshot>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  memCache.set(key, { expiresAt: stored.expiresAt, data: stored.data });
+  return stored.data;
+}
+
 export async function getSeasonScoresSnapshotCached(
   roomCode: string,
   seasonKey: string,
@@ -191,6 +209,7 @@ export async function getSeasonScoresSnapshotCached(
       const data = await fetchSnapshot(roomCode, seasonKey);
       memCache.set(key, { expiresAt: Date.now() + TTL_MS, data });
       setStorage(key, data);
+      notifyRoomCache();
       return data;
     } finally {
       pending.delete(key);

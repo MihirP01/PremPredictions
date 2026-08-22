@@ -16,14 +16,16 @@ import {
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
+import { StaggerReset } from "../../../../components/PageShellMotionContext";
 import SectionCard from "../../../../components/SectionCard";
 import SectionGrid from "../../../../components/SectionGrid";
 import SectionStack from "../../../../components/SectionStack";
 import TopActionRow from "../../../../components/TopActionRow";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getCurrentGameweekCached, gameweekModeFromStyle } from "@/lib/currentGameweekClient";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { useCachedBootstrap, useCachedPlayers } from "@/lib/useRoomCache";
 import {
   getSeasonScoresSnapshotCached,
   type SeasonScoresSnapshot,
@@ -280,13 +282,39 @@ export default function RoomStatsPage() {
   );
   const router = useRouter();
   const { user, loading } = useAuth();
-
-  const [players, setPlayers] = useState<Player[]>([]);
+  const bootstrap = useCachedBootstrap(roomCode);
+  const cachedPlayers = useCachedPlayers(roomCode);
+  const players = useMemo<Player[]>(
+    () =>
+      cachedPlayers
+        .map((player) => ({
+          uid: player.uid,
+          displayName:
+            String(player.nickName || "").trim() ||
+            player.displayName ||
+            "Player",
+        }))
+        .sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, undefined, {
+            sensitivity: "base",
+          }),
+        ),
+    [cachedPlayers],
+  );
   const [selectedUid, setSelectedUid] = useState<string>("");
   const [selectedGwFilter, setSelectedGwFilter] = useState<string>("all");
-  const [currentGw, setCurrentGw] = useState<number>(1);
-  const [seasonKey, setSeasonKey] = useState<string>("");
-  const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
+  const currentGw = bootstrap ? Number(bootstrap.currentGameweek) || 1 : 1;
+  const [seasonKey, setSeasonKey] = useState(
+    () => String(bootstrap?.seasonKey || ""),
+  );
+  const gameModeStyle = String(bootstrap?.gameModeStyle || "");
+  const [seasonOptions, setSeasonOptions] = useState<string[]>(() => {
+    const options = Array.isArray(bootstrap?.seasonOptions)
+      ? bootstrap.seasonOptions
+      : [];
+    const season = String(bootstrap?.seasonKey || "");
+    return options.length ? options : season ? [season] : [];
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seasonSnapshot, setSeasonSnapshot] =
@@ -304,21 +332,16 @@ export default function RoomStatsPage() {
     (async () => {
       try {
         const data = await getRoomBootstrapCached(roomCode);
-        const n = Number(data.currentGameweek ?? 1);
         const options = Array.isArray(data.seasonOptions)
           ? data.seasonOptions
           : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
-          setCurrentGw(Number.isFinite(n) ? n : 1);
-          setSeasonKey(season);
+          if (season && !seasonKey) setSeasonKey(season);
           setSeasonOptions(options.length ? options : season ? [season] : []);
         }
       } catch {
-        if (!cancelled) {
-          setCurrentGw(1);
-          setSeasonKey("");
-        }
+        // keep cached season
       }
     })();
     return () => {
@@ -335,64 +358,22 @@ export default function RoomStatsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getCurrentGameweekCached(seasonKey);
-        const n = Number(data.currentGameweek ?? 1);
-        if (!cancelled) setCurrentGw(Number.isFinite(n) ? n : 1);
+        await getCurrentGameweekCached(
+          seasonKey,
+          gameweekModeFromStyle(gameModeStyle),
+        );
       } catch {
-        if (!cancelled) setCurrentGw(1);
+        // keep cached GW
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [seasonKey]);
+  }, [seasonKey, gameModeStyle]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cached = await getRoomPlayersCached(roomCode);
-        if (cancelled || !cached?.length) return;
-        const seeded: Player[] = cached
-          .map((p) => ({
-            uid: p.uid,
-            displayName:
-              String(p.nickName || "").trim() || p.displayName || "Player",
-          }))
-          .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, {
-              sensitivity: "base",
-            }),
-          );
-        setPlayers(seeded);
-      } catch {
-        // ignore
-      }
-    })();
-    const unsub = subscribeRoomPlayers(
-      roomCode,
-      (livePlayers) => {
-        const list = livePlayers
-          .map((player) => {
-            const nick = String(player.nickName || "").trim();
-            return {
-              uid: player.uid,
-              displayName: nick || player.displayName || "Player",
-            } satisfies Player;
-          })
-          .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, {
-              sensitivity: "base",
-            }),
-          );
-        setPlayers(list);
-      },
-      () => setError("Failed to load room players."),
-    );
-    return () => {
-      cancelled = true;
-      unsub();
-    };
+    void getRoomPlayersCached(roomCode).catch(() => {});
+    return subscribeRoomPlayers(roomCode, () => {});
   }, [roomCode]);
 
   const effectiveSelectedUid = useMemo(() => {
@@ -403,16 +384,12 @@ export default function RoomStatsPage() {
   }, [players, selectedUid, user]);
 
   useEffect(() => {
-    if (!seasonKey) {
-      setSeasonSnapshot(null);
-      setLastUpdated(null);
-      return;
-    }
+    if (!seasonKey) return;
 
     let cancelled = false;
     (async () => {
       if (!cancelled) {
-        setBusy(true);
+        if (!seasonSnapshot) setBusy(true);
         setError(null);
       }
       const snapshot = await getSeasonScoresSnapshotCached(roomCode, seasonKey);
@@ -714,6 +691,7 @@ export default function RoomStatsPage() {
       contentClassName="relative z-[1]"
     >
       <SectionStack gap="page">
+        <StaggerReset token={busy ? "loading" : "ready"} />
         <TopActionRow
           title="Player Stats"
           subtitle={`${roomCode} • ${seasonLabel(seasonKey || "----")}`}

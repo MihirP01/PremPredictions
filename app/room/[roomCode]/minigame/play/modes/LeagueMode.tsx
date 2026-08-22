@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Save } from "lucide-react";
 import SectionCard from "@/components/SectionCard";
+import ScoringKeyRow, { LEAGUE_SCORING_ITEMS } from "@/components/ScoringKeyRow";
 import TeamBadge from "@/components/TeamBadge";
 import TeamLabel from "@/components/TeamLabel";
 
@@ -154,9 +155,9 @@ export default function LeagueMode({
             <div className="mt-2 max-w-2xl text-sm text-muted">
               Your entry is independent from the rest of the room. Every
               eligible fixture is required. Submitting locks your gameweek, and
-              the whole room locks 30 minutes before the first kickoff. Scoring
-              is 2 points for an exact score and 1 point for the correct result.
+              the whole room locks 30 minutes before the first kickoff.
             </div>
+            <ScoringKeyRow className="mt-3 max-w-md" items={LEAGUE_SCORING_ITEMS} />
           </div>
           <div className="shrink-0 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-foreground">
             <div className="inline-flex items-center gap-2 font-display font-semibold">
@@ -168,7 +169,7 @@ export default function LeagueMode({
         {fairPlayEnabled ? (
           <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-100/90">
             Fair Play is on. A player who misses the entire gameweek receives
-            the room median as a clearly labelled Fair Play bye.
+            half the room median as a clearly labelled Fair Play bye.
           </div>
         ) : null}
       </SectionCard>
@@ -197,6 +198,7 @@ export default function LeagueMode({
                     shortName={fixture.home.shortName}
                     showFullName={false}
                     wrapperClassName="mt-1 w-full text-center"
+                    abbrClassName="font-ui block text-[0.78rem] font-semibold"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -237,6 +239,7 @@ export default function LeagueMode({
                     shortName={fixture.away.shortName}
                     showFullName={false}
                     wrapperClassName="mt-1 w-full text-center"
+                    abbrClassName="font-ui block text-[0.78rem] font-semibold"
                   />
                 </div>
               </div>

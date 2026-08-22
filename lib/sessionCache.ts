@@ -33,6 +33,18 @@ export function readFreshSessionRecord<T>(
   return record;
 }
 
+export function peekSessionRecord<T>(
+  prefix: string,
+  key: string,
+): (SessionCacheRecord<T> & { fresh: boolean }) | null {
+  const record = readSessionRecord<T>(prefix, key);
+  if (!record) return null;
+  return {
+    ...record,
+    fresh: Date.now() <= record.expiresAt,
+  };
+}
+
 export function writeSessionRecord<T>(
   prefix: string,
   key: string,

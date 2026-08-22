@@ -1,4 +1,4 @@
-const CACHE_VERSION = "pl-predictions-v7";
+const CACHE_VERSION = "pl-predictions-v3.3.1";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;

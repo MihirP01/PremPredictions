@@ -206,6 +206,11 @@ export default function InputFocusScrollLock() {
       if (!isTouchDevice) return;
       syncState();
     };
+    const onResume = () => {
+      setKeyboardOpen(false);
+      unlock();
+      syncState();
+    };
     const onTouchMove = (event: TouchEvent) => {
       if (!lockedRef.current) return;
       event.preventDefault();
@@ -220,6 +225,8 @@ export default function InputFocusScrollLock() {
     document.addEventListener("focusout", onFocusOut);
     document.addEventListener("touchmove", onTouchMove, { passive: false });
     document.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
     window.visualViewport?.addEventListener("resize", onViewportChange);
     window.visualViewport?.addEventListener("scroll", onViewportChange);
     syncState();
@@ -230,6 +237,8 @@ export default function InputFocusScrollLock() {
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("wheel", onWheel);
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
       window.visualViewport?.removeEventListener("resize", onViewportChange);
       window.visualViewport?.removeEventListener("scroll", onViewportChange);
       setKeyboardOpen(false);

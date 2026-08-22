@@ -1,6 +1,7 @@
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
-import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+import { notifyRoomCache } from "./cacheStore";
+import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
 export type CachedRoomPlayer = {
   uid: string;
@@ -9,7 +10,7 @@ export type CachedRoomPlayer = {
   role?: "leader" | "member";
 };
 
-const TTL_MS = 15 * 1000;
+const TTL_MS = 60 * 1000;
 const STORAGE_PREFIX = "rplayers:v2:";
 const memCache = new Map<
   string,
@@ -23,31 +24,36 @@ function keyFor(roomCode: string) {
     .toUpperCase();
 }
 
-function getStorage(key: string): { expiresAt: number; data: CachedRoomPlayer[] } | null {
-  return readFreshSessionRecord<CachedRoomPlayer[]>(STORAGE_PREFIX, key);
+function peekCached(
+  key: string,
+): { expiresAt: number; data: CachedRoomPlayer[] } | null {
+  const mem = memCache.get(key);
+  if (mem) return mem;
+  const stored = peekSessionRecord<CachedRoomPlayer[]>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  const entry = { expiresAt: stored.expiresAt, data: stored.data };
+  memCache.set(key, entry);
+  return entry;
 }
 
 function setCached(key: string, data: CachedRoomPlayer[]) {
   const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
   memCache.set(key, { expiresAt, data });
+  notifyRoomCache();
 }
 
-export async function getRoomPlayersCached(
+export function writeRoomPlayersCached(
   roomCode: string,
-): Promise<CachedRoomPlayer[]> {
+  data: CachedRoomPlayer[],
+) {
   const key = keyFor(roomCode);
-  if (!key) return [];
-  const now = Date.now();
-  const mem = memCache.get(key);
-  if (mem && mem.expiresAt > now) return mem.data;
-  const stored = getStorage(key);
-  if (stored) {
-    memCache.set(key, stored);
-    return stored.data;
-  }
+  if (!key) return;
+  setCached(key, data);
+}
+
+function fetchPlayers(key: string): Promise<CachedRoomPlayer[]> {
   const existing = pending.get(key);
   if (existing) return existing;
-
   const req = (async () => {
     const snap = await getDocs(collection(db, "rooms", key, "players"));
     const list = snap.docs
@@ -72,7 +78,28 @@ export async function getRoomPlayersCached(
     setCached(key, list);
     return list;
   })().finally(() => pending.delete(key));
-
   pending.set(key, req);
   return req;
+}
+
+export function peekRoomPlayersCached(
+  roomCode: string,
+): CachedRoomPlayer[] | null {
+  const key = keyFor(roomCode);
+  if (!key) return null;
+  return peekCached(key)?.data ?? null;
+}
+
+export async function getRoomPlayersCached(
+  roomCode: string,
+): Promise<CachedRoomPlayer[]> {
+  const key = keyFor(roomCode);
+  if (!key) return [];
+  const cached = peekCached(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  if (cached) {
+    void fetchPlayers(key).catch(() => {});
+    return cached.data;
+  }
+  return fetchPlayers(key);
 }

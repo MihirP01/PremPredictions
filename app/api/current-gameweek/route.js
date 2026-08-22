@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "../../../firebase-admin";
+import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
 
 const LEAGUE = "PL";
-const FOTMOB_LEAGUE_ID = 47;
 const SEASON_START_MONTH_UTC = 7; // Aug
 const LEAGUE_TIME_ZONE = "Europe/London";
 
@@ -121,7 +121,7 @@ function zonedDateTimeToUtc(parts, timeZone) {
   return guess + (desiredAsUtc - actualAsUtc);
 }
 
-function nextLocalMidnightMs(baseMs, timeZone) {
+function nextLocalNoonMs(baseMs, timeZone) {
   const local = zonedParts(baseMs, timeZone);
   const nextDayProbe = Date.UTC(
     local.year,
@@ -138,7 +138,7 @@ function nextLocalMidnightMs(baseMs, timeZone) {
       year: nextLocal.year,
       month: nextLocal.month,
       day: nextLocal.day,
-      hour: 0,
+      hour: 12,
       minute: 0,
       second: 0,
     },
@@ -146,35 +146,12 @@ function nextLocalMidnightMs(baseMs, timeZone) {
   );
 }
 
-function selectLeagueGameweek(byMd, nowMs) {
-  const matchdays = [...byMd.keys()].sort((a, b) => a - b);
-  const nextOpen = matchdays.find((md) => {
-    const earliest = byMd.get(md)?.earliestKickoffMs;
-    return Number.isFinite(earliest) && earliest > nowMs;
-  });
-
-  if (Number.isFinite(nextOpen)) {
-    return {
-      currentGameweek: clampGW(Number(nextOpen)),
-      matchdaysSeen: matchdays.length,
-    };
-  }
-
-  const latestMd = matchdays.length ? Math.max(...matchdays) : 1;
-  return {
-    currentGameweek: clampGW(latestMd + 1),
-    matchdaysSeen: matchdays.length,
-  };
-}
-
-function selectGameweek(byMd, nowMs, mode) {
-  return mode === "league"
-    ? selectLeagueGameweek(byMd, nowMs)
-    : selectCurrentGameweek(byMd, nowMs);
+function selectGameweek(byMd, nowMs) {
+  return selectCurrentGameweek(byMd, nowMs);
 }
 
 function leagueSelectedBy(source) {
-  return `next-gw-at-first-kickoff-${source}`;
+  return `next-gw-at-next-day-noon-${source}`;
 }
 
 function selectCurrentGameweek(byMd, nowMs) {
@@ -195,7 +172,7 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!prev) {
       nextOpen = nextUpcomingMd;
     } else {
-      const rolloverAtMs = nextLocalMidnightMs(
+      const rolloverAtMs = nextLocalNoonMs(
         prev.latestKickoffMs,
         LEAGUE_TIME_ZONE,
       );
@@ -207,7 +184,7 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!latest) {
       nextOpen = latestMd;
     } else {
-      const rolloverAtMs = nextLocalMidnightMs(
+      const rolloverAtMs = nextLocalNoonMs(
         latest.latestKickoffMs,
         LEAGUE_TIME_ZONE,
       );
@@ -329,18 +306,12 @@ async function buildSnapshotCurrentGameweek(seasonKey, now, mode) {
 async function buildFotmobFallback(seasonKey, now, mode) {
   const season = seasonStartYearFromKey(seasonKey);
   const fotmobSeason = fotmobSeasonFromStartYear(season);
-  const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(fotmobSeason)}`;
-
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    next: { revalidate: 30 },
-  });
-  if (!res.ok) return null;
-
-  const data = await res.json().catch(() => null);
-  const matches = Array.isArray(data?.fixtures?.allMatches)
-    ? data.fixtures.allMatches
-    : [];
+  let matches = [];
+  try {
+    matches = await getFotmobLeagueMatches(fotmobSeason);
+  } catch {
+    return null;
+  }
   const byMd = new Map();
   const nowMs = now.getTime();
 

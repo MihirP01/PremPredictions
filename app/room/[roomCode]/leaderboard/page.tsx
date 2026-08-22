@@ -18,11 +18,12 @@ import SectionStack from "../../../../components/SectionStack";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
 import { db } from "../../../../firebase";
-import { getCurrentGameweekCached } from "@/lib/currentGameweekClient";
+import { getCurrentGameweekCached, gameweekModeFromStyle } from "@/lib/currentGameweekClient";
 import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
+import { useCachedBootstrap, useCachedPlayers } from "@/lib/useRoomCache";
 import { collection, onSnapshot } from "firebase/firestore";
 
 type Player = { uid: string; displayName: string };
@@ -173,11 +174,37 @@ export default function LeaderboardMatrixPage() {
   );
   const router = useRouter();
   const { user, loading } = useAuth();
-
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [currentGw, setCurrentGw] = useState<number>(1);
-  const [seasonKey, setSeasonKey] = useState<string>("");
-  const [seasonOptions, setSeasonOptions] = useState<string[]>([]);
+  const bootstrap = useCachedBootstrap(roomCode);
+  const cachedPlayers = useCachedPlayers(roomCode);
+  const players = useMemo<Player[]>(
+    () =>
+      cachedPlayers
+        .map((player) => ({
+          uid: player.uid,
+          displayName:
+            String(player.nickName || "").trim() ||
+            player.displayName ||
+            "Player",
+        }))
+        .sort((a, b) =>
+          a.displayName.localeCompare(b.displayName, undefined, {
+            sensitivity: "base",
+          }),
+        ),
+    [cachedPlayers],
+  );
+  const [seasonKey, setSeasonKey] = useState(
+    () => String(bootstrap?.seasonKey || ""),
+  );
+  const currentGw = bootstrap ? Number(bootstrap.currentGameweek) || 1 : 1;
+  const gameModeStyle = String(bootstrap?.gameModeStyle || "");
+  const [seasonOptions, setSeasonOptions] = useState<string[]>(() => {
+    const options = Array.isArray(bootstrap?.seasonOptions)
+      ? bootstrap.seasonOptions
+      : [];
+    const season = String(bootstrap?.seasonKey || "");
+    return options.length ? options : season ? [season] : [];
+  });
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,12 +214,15 @@ export default function LeaderboardMatrixPage() {
   const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [scoredGameweeks, setScoredGameweeks] = useState<number[]>([]);
-  const [selectedTableGw, setSelectedTableGw] = useState<number>(1);
+  const [selectedTableGw, setSelectedTableGw] = useState<number>(
+    () => Number(bootstrap?.currentGameweek) || 1,
+  );
   const [topView, setTopView] = useState<"overall" | "current" | "previous">(
     "current",
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
   const seasonGwSyncPrimedRef = useRef(false);
+  const hasScoreRowsRef = useRef(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // matrix: userUid -> gw -> points (read only from score docs)
@@ -224,8 +254,7 @@ export default function LeaderboardMatrixPage() {
           : [];
         const season = String(data.seasonKey || "");
         if (!cancelled) {
-          setCurrentGw(Number.isFinite(n) ? n : 1);
-          setSeasonKey(season);
+          if (season && !seasonKey) setSeasonKey(season);
           setSeasonOptions(options.length ? options : season ? [season] : []);
         }
       } catch {
@@ -254,64 +283,28 @@ export default function LeaderboardMatrixPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await getCurrentGameweekCached(seasonKey);
+        const data = await getCurrentGameweekCached(
+          seasonKey,
+          gameweekModeFromStyle(gameModeStyle),
+        );
         const n = Number(data.currentGameweek ?? 1);
-        if (!cancelled) setCurrentGw(Number.isFinite(n) ? n : 1);
+        // Cache write updates bootstrap / current GW; no local default.
       } catch {
-        if (!cancelled) setCurrentGw(1);
+        // keep last cached GW
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [seasonKey]);
+  }, [seasonKey, gameModeStyle]);
 
   useEffect(() => {
     setSelectedTableGw(currentGw);
   }, [currentGw]);
 
-  // live players list
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cached = await getRoomPlayersCached(roomCode);
-        if (cancelled || !cached.length) return;
-        const seeded: Player[] = cached
-          .map((p) => ({
-            uid: p.uid,
-            displayName:
-              String(p.nickName || "").trim() || p.displayName || "Player",
-          }))
-          .sort(byName);
-        setPlayers(seeded);
-      } catch {
-        // ignore
-      }
-    })();
-    const unsub = subscribeRoomPlayers(
-      roomCode,
-      (livePlayers) => {
-        const list: Player[] = livePlayers
-          .map((player) => {
-            const nick = String(player.nickName || "").trim();
-            return {
-              uid: player.uid,
-              displayName: nick || player.displayName || "Player",
-            };
-          })
-          .sort(byName);
-        setPlayers(list);
-      },
-      (e) =>
-        setError(
-          `Failed to load players: ${e?.message ?? "permission denied"}`,
-        ),
-    );
-    return () => {
-      cancelled = true;
-      unsub();
-    };
+    void getRoomPlayersCached(roomCode).catch(() => {});
+    return subscribeRoomPlayers(roomCode, () => {});
   }, [roomCode]);
 
   useEffect(() => {
@@ -324,7 +317,7 @@ export default function LeaderboardMatrixPage() {
     async (opts?: { force?: boolean }) => {
       if (players.length === 0 || !seasonKey) return;
 
-      setBusy(true);
+      if (!hasScoreRowsRef.current) setBusy(true);
       setError(null);
 
       const matrix: Record<string, Record<number, number>> = {};
@@ -395,6 +388,7 @@ export default function LeaderboardMatrixPage() {
         }
 
         const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
+        hasScoreRowsRef.current = true;
         setPointsByUserByGw(matrix);
         setHasPredByUserByGw(predMatrix);
         setFairPlayByUserByGw(fairPlayMatrix);
@@ -659,9 +653,6 @@ export default function LeaderboardMatrixPage() {
   const leadingHasPred = leadingPlayer
     ? hasPredForTopView(leadingPlayer.uid)
     : false;
-  const leadingHasFairPlay = leadingPlayer
-    ? hasFairPlayForTopView(leadingPlayer.uid)
-    : false;
   const standardSectionCardClass =
     "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const headerActions = (
@@ -709,70 +700,43 @@ export default function LeaderboardMatrixPage() {
 
         <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
           <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-1.5">
-                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                    Leaderboard desk
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                      Viewing board
-                    </span>
-                    <span className="font-display text-[1.35rem] font-semibold text-foreground sm:text-[1.65rem]">
-                      {topViewLabel}
-                    </span>
-                  </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                  Leaderboard desk
+                </div>
+                <div className="font-display text-xl font-semibold leading-tight text-foreground">
+                  {topViewLabel}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                  Table board
-                </span>
-                <span className="font-display text-sm font-semibold text-foreground">
-                  {topView === "overall"
-                    ? "Season ladder"
-                    : topView === "current"
-                      ? `Current GW ${currentGw}`
-                      : `Previous GW ${medalsGw}`}
-                </span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
                     Leader
                   </div>
-                  <div className="mt-1 font-display text-lg font-semibold text-foreground">
+                  <div className="mt-0.5 truncate font-display text-[0.78rem] font-semibold text-foreground">
                     {leadingPlayer ? leadingPlayer.displayName : "—"}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
+                  <div className="mt-0.5 text-[0.62rem] leading-tight text-muted">
                     {leadingPlayer
-                      ? `${scoreLabel(leadingScore, leadingHasPred)} points in ${topViewLabel.toLowerCase()}${leadingHasFairPlay ? (topView === "overall" ? " • includes Fair Play" : " • Fair Play bye") : ""}`
-                      : "No scored entries yet"}
+                      ? `${scoreLabel(leadingScore, leadingHasPred)} pts`
+                      : "None yet"}
                   </div>
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Current Week
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
+                    Week
                   </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
                     GW{currentGw}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {scoredGameweeks.includes(currentGw)
-                      ? "Score docs saved for this round."
-                      : "Waiting on saved score docs."}
-                  </div>
                 </div>
-                <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
-                    Last Scored
+                <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
+                    Last scored
                   </div>
-                  <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                  <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
                     GW{medalsGw}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    Used as the previous podium comparison.
                   </div>
                 </div>
               </div>

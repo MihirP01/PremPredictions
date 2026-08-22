@@ -1,4 +1,5 @@
-import { readFreshSessionRecord, writeSessionRecord } from "./sessionCache";
+import { notifyRoomCache } from "./cacheStore";
+import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
 export type TableRow = {
   position: number;
@@ -25,7 +26,7 @@ export type TableData = {
   standingsAway: TableRow[];
 };
 
-const TTL_MS = 30 * 1000;
+const TTL_MS = 2 * 60 * 1000;
 const STORAGE_PREFIX = "tbl:v3:";
 const memCache = new Map<string, { expiresAt: number; data: TableData }>();
 const pending = new Map<string, Promise<TableData>>();
@@ -49,28 +50,31 @@ function normalize(payload: unknown): TableData {
   };
 }
 
-function getStorage(key: string): { expiresAt: number; data: TableData } | null {
-  return readFreshSessionRecord<TableData>(STORAGE_PREFIX, key);
+function peekCached(
+  key: string,
+): { expiresAt: number; data: TableData } | null {
+  const mem = memCache.get(key);
+  if (mem) return mem;
+  const stored = peekSessionRecord<TableData>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  const entry = { expiresAt: stored.expiresAt, data: stored.data };
+  memCache.set(key, entry);
+  return entry;
 }
 
 function setCached(key: string, data: TableData) {
   const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
   memCache.set(key, { expiresAt, data });
+  notifyRoomCache();
 }
 
-export async function getTableCached(seasonKey: string): Promise<TableData> {
-  const key = keyFor(seasonKey);
-  const now = Date.now();
-  const mem = memCache.get(key);
-  if (mem && mem.expiresAt > now) return mem.data;
-  const stored = getStorage(key);
-  if (stored) {
-    memCache.set(key, stored);
-    return stored.data;
-  }
+export function peekTableCached(seasonKey: string): TableData | null {
+  return peekCached(keyFor(seasonKey))?.data ?? null;
+}
+
+function fetchTable(key: string): Promise<TableData> {
   const existing = pending.get(key);
   if (existing) return existing;
-
   const req = (async () => {
     const seasonParam = key ? `?seasonKey=${encodeURIComponent(key)}` : "";
     const res = await fetch(`/api/table${seasonParam}`, { cache: "no-store" });
@@ -86,4 +90,15 @@ export async function getTableCached(seasonKey: string): Promise<TableData> {
   })().finally(() => pending.delete(key));
   pending.set(key, req);
   return req;
+}
+
+export async function getTableCached(seasonKey: string): Promise<TableData> {
+  const key = keyFor(seasonKey);
+  const cached = peekCached(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  if (cached) {
+    void fetchTable(key).catch(() => {});
+    return cached.data;
+  }
+  return fetchTable(key);
 }

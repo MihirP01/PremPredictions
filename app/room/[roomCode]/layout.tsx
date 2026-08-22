@@ -7,7 +7,7 @@ import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
-import { getRoomBootstrapCached, refreshRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import { getRoomBootstrapCached, peekRoomBootstrapCached, refreshRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
@@ -157,7 +157,7 @@ export default function RoomScopedLayout({
         forceToRoomGate();
       },
       () => {
-        forceToRoomGate();
+        // Transient Firestore errors after a long background must not kick.
       },
     );
     return () => unsub();
@@ -180,27 +180,46 @@ export default function RoomScopedLayout({
     let overlayTimer: number | null = null;
       const RESUME_WARM_COOLDOWN_MS = 15 * 1000;
 
-    const warm = async () => {
-      if (warmInFlightRef.current) {
-        await warmInFlightRef.current;
-        return;
+    const WARM_TIMEOUT_MS = 4000;
+    const withTimeout = async <T,>(promise: Promise<T>, ms: number) => {
+      let timer: number | null = null;
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((_, reject) => {
+            timer = window.setTimeout(
+              () => reject(new Error("warm-timeout")),
+              ms,
+            );
+          }),
+        ]);
+      } finally {
+        if (timer != null) window.clearTimeout(timer);
       }
+    };
+
+    const warm = async (isResume = false) => {
+      if (warmInFlightRef.current) return;
       if (
         bootedRef.current &&
         Date.now() - lastWarmAtRef.current < RESUME_WARM_COOLDOWN_MS
       ) {
         return;
       }
-      if (!bootedRef.current) {
+      const hasStale = !!peekRoomBootstrapCached(roomCode);
+      if (!bootedRef.current && !isResume && !hasStale) {
         overlayTimer = window.setTimeout(() => {
           if (!cancelled) setShowBootOverlay(true);
         }, 150);
       }
       const run = (async () => {
         try {
-          const bootstrap = bootedRef.current
-            ? await refreshRoomBootstrapCached(roomCode)
-            : await getRoomBootstrapCached(roomCode);
+          const bootstrap = await withTimeout(
+            bootedRef.current || isResume
+              ? refreshRoomBootstrapCached(roomCode)
+              : getRoomBootstrapCached(roomCode),
+            WARM_TIMEOUT_MS,
+          );
           if (
             bootstrap?.seasonKey &&
             Number.isFinite(bootstrap?.currentGameweek)
@@ -237,7 +256,9 @@ export default function RoomScopedLayout({
               };
 
               scheduleIdle(() => {
-                void getGameDataCached(roomCode, season, gw).catch(() => {});
+                void getGameDataCached(roomCode, season, gw, {
+                  includeChips: bootstrap.gameModeStyle !== "league",
+                }).catch(() => {});
                 void getTableCached(season).catch(() => {});
                 void getRoomPlayersCached(roomCode).catch(() => {});
               });
@@ -264,20 +285,26 @@ export default function RoomScopedLayout({
       if (warmInFlightRef.current === run) warmInFlightRef.current = null;
     };
 
-    void warm();
+    void warm(false);
 
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      setShowBootOverlay(false);
       lastWarmAtRef.current = 0;
-      void warm();
+      void warm(true);
     };
     const onFocus = () => {
+      setShowBootOverlay(false);
       lastWarmAtRef.current = 0;
-      void warm();
+      void warm(true);
+    };
+    const onPageShow = () => {
+      setShowBootOverlay(false);
     };
 
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       cancelled = true;
       if (overlayTimer != null) window.clearTimeout(overlayTimer);
@@ -295,6 +322,7 @@ export default function RoomScopedLayout({
       idleTasksRef.current = [];
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, [roomCode]);
 
@@ -447,17 +475,19 @@ export default function RoomScopedLayout({
       <div id="room-scroll-root" className="room-scroll-root min-h-0 flex-1 overflow-y-auto">
         {children}
       </div>
-      {!hideBottomNav ? (
-        <div
-          ref={navDockRef}
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-[80] flex justify-center px-3"
-          style={{
-            paddingBottom: "max(0.18rem, env(safe-area-inset-bottom))",
-          }}
-        >
-          <RoomBottomNav />
-        </div>
-      ) : null}
+      <div
+        ref={navDockRef}
+        className={[
+          "pointer-events-none absolute inset-x-0 bottom-0 z-[80] flex justify-center px-3",
+          hideBottomNav ? "invisible" : "",
+        ].join(" ")}
+        style={{
+          paddingBottom: "max(0.18rem, env(safe-area-inset-bottom))",
+        }}
+        aria-hidden={hideBottomNav ? true : undefined}
+      >
+        <RoomBottomNav />
+      </div>
       <ScrollToTopButton />
     </div>
   );

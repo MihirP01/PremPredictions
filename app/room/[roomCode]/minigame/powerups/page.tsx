@@ -970,8 +970,7 @@ export default function PowerupsPage() {
                         key={fid}
                         className="fixture-card-enter [contain:none] space-y-2 w-full"
                         style={{
-                          animationDelay: `${120 + Math.min(idx, 12) * 110}ms`,
-                          animationDuration: "520ms",
+                          animationDelay: `${Math.min(idx, 5) * 50}ms`,
                         }}
                       >
                         <button

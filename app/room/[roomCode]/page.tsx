@@ -7,8 +7,6 @@ import { useParams, useRouter } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
-  ChevronDown,
-  ChevronUp,
   Gamepad2,
   Loader2,
   Trophy,
@@ -38,13 +36,19 @@ import {
   peekRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { getTableCached, type TableRow } from "@/lib/tableClient";
+import { getTableCached } from "@/lib/tableClient";
+import {
+  useCachedBootstrap,
+  useCachedPlayers,
+  useCachedTable,
+} from "@/lib/useRoomCache";
 import {
   ROOM_CODE_ERROR,
   isValidRoomCode,
   normalizeRoomCode,
 } from "@/lib/roomCode";
 import YearTableSection from "../../../components/YearTableSection";
+import { APP_VERSION_LABEL } from "@/lib/appVersion";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -161,9 +165,28 @@ export default function RoomPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
+  const bootstrap = useCachedBootstrap(roomCode);
+  const cachedPlayers = useCachedPlayers(roomCode);
+  const seasonKey = String(bootstrap?.seasonKey || "");
+  const currentGw = bootstrap
+    ? Number(bootstrap.currentGameweek) || 1
+    : 1;
+  const gameModeStyle = bootstrap?.gameModeStyle ?? "round_robin";
+  const leaderUid = bootstrap?.leaderUid ?? null;
+  const table = useCachedTable(seasonKey);
+  const players = useMemo<Player[]>(
+    () =>
+      cachedPlayers.map((player) => ({
+        uid: player.uid,
+        displayName: player.displayName || "Player",
+        nickName:
+          typeof player.nickName === "string" ? player.nickName.trim() : "",
+        role: player.role || "member",
+      })),
+    [cachedPlayers],
+  );
+  const tableRows = table?.standingsTotal ?? [];
 
-  const [leaderUid, setLeaderUid] = useState<string | null>(null);
-  const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [roomSwitcherOpen, setRoomSwitcherOpen] = useState(false);
@@ -176,13 +199,18 @@ export default function RoomPage() {
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [showKickControls, setShowKickControls] = useState(false);
-  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(false);
-  const [powerupsEnabled, setPowerupsEnabled] = useState(false);
-  const [gameModeStyle, setGameModeStyle] = useState<
-    "round_robin" | "sprint" | "captain" | "league"
-  >("round_robin");
-  const [leagueFairPlayEnabled, setLeagueFairPlayEnabled] = useState(false);
-  const [themeAccent, setThemeAccent] = useState<string>("teal");
+  const [allowIdenticalPicks, setAllowIdenticalPicks] = useState(
+    () => peekRoomBootstrapCached(roomCode)?.allowIdenticalPicks === true,
+  );
+  const [powerupsEnabled, setPowerupsEnabled] = useState(
+    () => peekRoomBootstrapCached(roomCode)?.powerupsEnabled === true,
+  );
+  const [leagueFairPlayEnabled, setLeagueFairPlayEnabled] = useState(
+    () => peekRoomBootstrapCached(roomCode)?.leagueFairPlayEnabled === true,
+  );
+  const [themeAccent, setThemeAccent] = useState(
+    () => peekRoomBootstrapCached(roomCode)?.themeAccent || "teal",
+  );
   const [hasPassword, setHasPassword] = useState(false);
   const [roomSettingsBusy, setRoomSettingsBusy] = useState(false);
   const [roomRulesOpen, setRoomRulesOpen] = useState(false);
@@ -192,15 +220,11 @@ export default function RoomPage() {
   const [currentPasswordDraft, setCurrentPasswordDraft] = useState("");
   const [newPasswordDraft, setNewPasswordDraft] = useState("");
   const [confirmPasswordDraft, setConfirmPasswordDraft] = useState("");
-  const [nicknameExpanded, setNicknameExpanded] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [createCode, setCreateCode] = useState("");
   const [nickNameDraft, setNickNameDraft] = useState("");
   const [nickNameBusy, setNickNameBusy] = useState(false);
-  const [seasonKey, setSeasonKey] = useState("");
-  const [currentGw, setCurrentGw] = useState(1);
   const [recalcBusy, setRecalcBusy] = useState(false);
-  const [tableRows, setTableRows] = useState<TableRow[]>([]);
   const [tableLoading, setTableLoading] = useState(false);
   const [tableError, setTableError] = useState<string | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement | null>(null);
@@ -217,37 +241,12 @@ export default function RoomPage() {
     let unsubPlayers: (() => void) | null = null;
 
     (async () => {
-      // players listener
       try {
-        const cached = await getRoomPlayersCached(roomCode);
-        if (cached.length) {
-          const seeded: Player[] = cached.map((p) => ({
-            uid: p.uid,
-            displayName: p.displayName || "Player",
-            nickName: typeof p.nickName === "string" ? p.nickName.trim() : "",
-            role: p.role || "member",
-          }));
-          setPlayers(seeded);
-        }
+        await getRoomPlayersCached(roomCode);
       } catch {
         // no-op
       }
-      unsubPlayers = subscribeRoomPlayers(roomCode, (livePlayers) => {
-        const list: Player[] = livePlayers
-          .map((player) => ({
-            uid: player.uid,
-            displayName: player.displayName || "Player",
-            nickName:
-              typeof player.nickName === "string" ? player.nickName.trim() : "",
-            role: player.role || "member",
-          }))
-          .sort((a, b) =>
-            a.displayName.localeCompare(b.displayName, undefined, {
-              sensitivity: "base",
-            }),
-          );
-        setPlayers(list);
-      });
+      unsubPlayers = subscribeRoomPlayers(roomCode, () => {});
     })().catch(() => setError("Failed to load room."));
 
     return () => {
@@ -294,24 +293,16 @@ export default function RoomPage() {
 
     (async () => {
       try {
-        const bootstrap = await getRoomBootstrapCached(roomCode);
+        const next = await getRoomBootstrapCached(roomCode);
         if (cancelled) return;
-        const season = String(bootstrap?.seasonKey || "");
-        const nextGw = Number(bootstrap?.currentGameweek ?? 1);
-        setSeasonKey(season);
-        setCurrentGw(Number.isFinite(nextGw) ? nextGw : 1);
+        const season = String(next?.seasonKey || "");
         if (!season) return;
-        setTableLoading(true);
+        if (!table) setTableLoading(true);
         setTableError(null);
         try {
-          const table = await getTableCached(season);
-          if (cancelled) return;
-          setTableRows(
-            Array.isArray(table?.standingsTotal) ? table.standingsTotal : [],
-          );
+          await getTableCached(season);
         } catch (e) {
           if (!cancelled) {
-            setTableRows([]);
             setTableError(
               e instanceof Error ? e.message : "Failed to load table.",
             );
@@ -321,8 +312,6 @@ export default function RoomPage() {
         }
       } catch {
         if (!cancelled) {
-          setSeasonKey("");
-          setTableRows([]);
           setTableError("Failed to load table.");
           setTableLoading(false);
         }
@@ -400,11 +389,6 @@ export default function RoomPage() {
   }, [settingsOpen, roomRulesOpen]);
 
   useEffect(() => {
-    if (settingsOpen) return;
-    setNicknameExpanded(false);
-  }, [settingsOpen]);
-
-  useEffect(() => {
     return () => {
       if (settingsModalTimerRef.current != null) {
         window.clearTimeout(settingsModalTimerRef.current);
@@ -417,9 +401,17 @@ export default function RoomPage() {
       roomCode,
       (roomMeta) => {
         if (!roomMeta) return;
-        setLeaderUid(roomMeta.leaderUid);
         const style = roomMeta.settings.gameModeStyle;
-        setGameModeStyle(style);
+        patchRoomBootstrapCached(roomCode, {
+          leaderUid: roomMeta.leaderUid,
+          gameModeStyle: style,
+          allowIdenticalPicks:
+            style === "sprint" ? true : !roomMeta.settings.sameResultLock,
+          powerupsEnabled: roomMeta.settings.powerupsEnabled === true,
+          leagueFairPlayEnabled:
+            roomMeta.settings.leagueFairPlayEnabled === true,
+          themeAccent: roomMeta.settings.themeAccent,
+        });
         setAllowIdenticalPicks(
           style === "sprint" ? true : !roomMeta.settings.sameResultLock,
         );
@@ -884,10 +876,6 @@ export default function RoomPage() {
     }
   }
 
-  function toggleNicknameSection() {
-    setNicknameExpanded((prev) => !prev);
-  }
-
   const sortedPlayers = [...players].sort((a, b) =>
     a.displayName.localeCompare(b.displayName, undefined, {
       sensitivity: "base",
@@ -895,12 +883,18 @@ export default function RoomPage() {
   );
   const resultLockSubtext =
     gameModeStyle === "league"
-      ? `League • Fair Play ${leagueFairPlayEnabled ? "ON" : "OFF"}`
+      ? `Fair Play ${leagueFairPlayEnabled ? "ON" : "OFF"}`
       : gameModeStyle === "sprint"
-        ? "Sprint • Allow Identical Picks OFF"
-        : gameModeStyle === "captain"
-          ? `Captain • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`
-          : `Round-Robin • Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
+        ? "Allow Identical Picks OFF"
+        : `Allow Identical Picks ${allowIdenticalPicks ? "ON" : "OFF"}`;
+  const gameModeLabel =
+    gameModeStyle === "round_robin"
+      ? "Round-Robin"
+      : gameModeStyle === "captain"
+        ? "Captain"
+        : gameModeStyle === "league"
+          ? "League"
+          : "Sprint";
   const standardSectionCardClass =
     "rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5";
   const sharedButtonClass =
@@ -938,45 +932,29 @@ export default function RoomPage() {
                     Settings
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
-                        Nickname
-                      </div>
-                      <button
-                        type="button"
-                        onClick={toggleNicknameSection}
-                        className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.68rem] font-display font-semibold text-foreground transition hover:bg-white/[0.06]"
-                      >
-                        {nicknameExpanded ? "Collapse" : "Expand"}
-                        {nicknameExpanded ? (
-                          <ChevronUp size={14} />
-                        ) : (
-                          <ChevronDown size={14} />
-                        )}
-                      </button>
+                    <div className="font-display text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/48">
+                      Nickname
                     </div>
-                    {nicknameExpanded && (
-                      <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
-                        <input
-                          value={nickNameDraft}
-                          onChange={(e) => setNickNameDraft(e.target.value)}
-                          maxLength={20}
-                          placeholder="Nickname"
-                          className={sharedInputClass}
-                        />
-                        <button
-                          onClick={saveNickName}
-                          disabled={nickNameBusy}
-                          className={sharedButtonClass}
-                        >
-                          {nickNameBusy ? "Saving..." : "Save"}
-                        </button>
-                        <div className="text-xs text-muted">
-                          Nickname shows across the room. Leave blank to use
-                          your name.
-                        </div>
+                    <div className="space-y-2 rounded-[20px] border border-white/8 bg-white/[0.025] p-3">
+                      <input
+                        value={nickNameDraft}
+                        onChange={(e) => setNickNameDraft(e.target.value)}
+                        maxLength={20}
+                        placeholder="Nickname"
+                        className={sharedInputClass}
+                      />
+                      <button
+                        onClick={saveNickName}
+                        disabled={nickNameBusy}
+                        className={sharedButtonClass}
+                      >
+                        {nickNameBusy ? "Saving..." : "Save"}
+                      </button>
+                      <div className="text-xs text-muted">
+                        Nickname shows across the room. Leave blank to use
+                        your name.
                       </div>
-                    )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <SpecialBreak className="mt-2" />
@@ -1008,7 +986,7 @@ export default function RoomPage() {
                       </div>
                     )}
                     <div className="pt-1 text-center text-[0.68rem] font-semibold tracking-[0.14em] text-white/32">
-                      v3.1.0
+                      {APP_VERSION_LABEL}
                     </div>
                   </div>
                 </SettingsDropdownPanel>
@@ -1025,55 +1003,31 @@ export default function RoomPage() {
           <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-1">
             <div className="rounded-[24px] border border-white/6 bg-[radial-gradient(circle_at_top_right,rgba(var(--room-accent-rgb),0.1),transparent_38%),linear-gradient(180deg,rgba(5,10,22,0.92),rgba(7,10,18,0.88))] px-4 py-4 sm:px-5 sm:py-5">
               <SectionStack gap="tight">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="space-y-1.5">
-                    <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
-                      Room desk
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/72">
-                        Active room
-                      </span>
-                      <span className="font-display text-[1.5rem] font-semibold text-foreground sm:text-[1.75rem]">
-                        {roomCode}
-                      </span>
-                    </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="font-display text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-white/42">
+                    Room desk
+                  </div>
+                  <div className="font-display text-xl font-semibold leading-tight text-foreground">
+                    {roomCode}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
-                  <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                    Control centre
-                  </span>
-                  <span className="font-display text-sm font-semibold text-foreground">
-                    Welcome, Lets GO!
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
                       Players
                     </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
+                    <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
                       {players.length}
                     </div>
-                    <div className="mt-1 text-xs text-muted">
-                      Registered in this room right now.
-                    </div>
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                    <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/38">
+                  <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    <div className="font-display text-[0.56rem] font-semibold uppercase tracking-[0.12em] text-white/52">
                       Mode
                     </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                      {gameModeStyle === "round_robin"
-                        ? "Round-Robin"
-                        : gameModeStyle === "captain"
-                          ? "Captain"
-                          : gameModeStyle === "league"
-                            ? "League"
-                            : "Sprint"}
+                    <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
+                      {gameModeLabel}
                     </div>
-                    <div className="mt-1 text-xs text-muted">
+                    <div className="mt-0.5 text-[0.62rem] leading-tight text-muted">
                       {resultLockSubtext}
                     </div>
                   </div>
@@ -1135,62 +1089,6 @@ export default function RoomPage() {
             </SectionCard>
           </div>
 
-          <SectionCard className={standardSectionCardClass}>
-            <SectionStack gap="tight">
-              <div>
-                <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                  Your seat
-                </div>
-                <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                  Room identity
-                </div>
-              </div>
-              <SectionGrid gap="tight" className="sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                    Display
-                  </div>
-                  <div className="mt-2 font-display text-lg font-semibold text-foreground">
-                    {myNickName
-                      ? `${myNickName} • ${myDisplayName}`
-                      : myDisplayName}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                    Role
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <StatusPill
-                      label={isLeader ? "Leader" : "Member"}
-                      tone="neutral"
-                    />
-                    {user?.uid ? (
-                      <StatusPill
-                        label="You"
-                        tone="you"
-                        className="text-[10px] py-0.5"
-                      />
-                    ) : null}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                  <div className="text-xs uppercase tracking-[0.14em] text-white/46">
-                    Security
-                  </div>
-                  <div className="mt-2 font-display text-sm font-semibold text-foreground">
-                    {hasPassword ? "Private room" : "Open room"}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {hasPassword
-                      ? "Password is enabled for new joins."
-                      : "Members can join without a password."}
-                  </div>
-                </div>
-              </SectionGrid>
-            </SectionStack>
-          </SectionCard>
-
           {user ? (
             <YearTableSection
               roomCode={roomCode}
@@ -1206,23 +1104,17 @@ export default function RoomPage() {
             <SectionCard className={standardSectionCardClass}>
               <SectionStack gap="tight">
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-                      Premier League table
-                    </div>
-                    <div className="mt-1 font-display text-xl font-semibold text-foreground">
-                      Live standings
-                    </div>
-                    <div className="mt-1 text-xs text-muted">
+                  <div className="font-display text-[0.64rem] font-semibold uppercase leading-tight tracking-[0.18em] text-white/48">
+                    Premier League table
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-display text-sm font-semibold leading-tight text-foreground">
                       {seasonKey ? seasonLabel(seasonKey) : "Current season"}
                     </div>
+                    {tableLoading ? (
+                      <Loader2 size={12} className="animate-spin text-muted" />
+                    ) : null}
                   </div>
-                  {tableLoading ? (
-                    <span className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-muted">
-                      <Loader2 size={12} className="animate-spin" />
-                      <span>Loading…</span>
-                    </span>
-                  ) : null}
                 </div>
                 {tableError ? (
                   <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-rose-300">
@@ -1235,7 +1127,7 @@ export default function RoomPage() {
                 ) : (
                   <div className="max-h-[460px] overflow-auto no-scrollbar rounded-[22px] border border-white/8 bg-white/[0.02]">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-black/10 text-muted">
+                      <thead className="sticky top-0 z-[1] bg-[#0a1220] text-muted">
                         <tr className="border-b border-white/8">
                           <th className="px-3 py-2 text-left">#</th>
                           <th className="px-3 py-2 text-left">Club</th>
@@ -1316,28 +1208,28 @@ export default function RoomPage() {
                       key={p.uid}
                       className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.02] px-3 py-2.5"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-display text-sm font-semibold text-foreground">
-                          <span className="block truncate">
-                            {p.nickName
-                              ? `(${p.nickName}) ${p.displayName}`
-                              : p.displayName}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center gap-2">
-                          {p.uid === user?.uid ? (
-                            <StatusPill
-                              label="You"
-                              tone="you"
-                              className="shrink-0 text-[10px] py-0.5"
-                            />
-                          ) : null}
-                          {p.role === "leader" ? (
-                            <StatusPill label="Leader" tone="neutral" />
-                          ) : null}
-                        </div>
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="truncate font-display text-sm font-semibold text-foreground">
+                          {p.nickName
+                            ? `(${p.nickName}) ${p.displayName}`
+                            : p.displayName}
+                        </span>
+                        {p.role === "leader" ? (
+                          <StatusPill
+                            label="Leader"
+                            tone="neutral"
+                            className="shrink-0"
+                          />
+                        ) : null}
                       </div>
-                      <div className="ml-2 flex h-8 items-center justify-end">
+                      <div className="ml-auto flex h-8 shrink-0 items-center justify-end gap-2">
+                        {p.uid === user?.uid ? (
+                          <StatusPill
+                            label="You"
+                            tone="you"
+                            className="shrink-0 text-[10px] py-0.5"
+                          />
+                        ) : null}
                         {isLeader && showKickControls && p.uid !== user?.uid ? (
                           <StatusPill
                             label="Kick"
@@ -1591,8 +1483,8 @@ export default function RoomPage() {
               >
                 <div className={modalSectionTitleClass}>League Fair Play</div>
                 <div className="mt-1 text-sm text-muted">
-                  If a player misses the whole gameweek, award the room median
-                  as a labelled Fair Play bye.
+                  If a player misses the whole gameweek, award half the room
+                  median as a labelled Fair Play bye.
                 </div>
                 <button
                   onClick={toggleLeagueFairPlay}

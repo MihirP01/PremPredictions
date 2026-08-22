@@ -1,4 +1,5 @@
-export const YEAR_TABLE_LOCK_AFTER_GW = 1;
+export const YEAR_TABLE_LOCK_AFTER_GW = 2;
+export const YEAR_TABLE_LOCK_GW = YEAR_TABLE_LOCK_AFTER_GW + 1;
 export const YEAR_TABLE_SCORE_AFTER_GW = 38;
 
 export type YearTableClub = {

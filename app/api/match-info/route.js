@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
+import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const FOTMOB_LEAGUE_ID = 47;
 const DEFAULT_HEADERS = {
   "User-Agent": "Mozilla/5.0",
   Accept: "text/html,application/json;q=0.9,*/*;q=0.8",
@@ -471,10 +470,8 @@ export async function GET(req) {
 
   try {
     const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
-    const leagueData = await fetchJson(
-      `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`,
-    );
-    const leagueIndex = buildLeagueIndex(leagueData?.fixtures?.allMatches);
+    const leagueMatches = await getFotmobLeagueMatches(season);
+    const leagueIndex = buildLeagueIndex(leagueMatches);
     const leagueMatch = findLeagueMatch(leagueIndex, {
       kickoff,
       homeTeam: { name: homeName, tla: homeTla, shortName: homeShortName },

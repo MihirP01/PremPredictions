@@ -1,0 +1,21 @@
+---
+description: Bump the v3 app version when shipping user-facing changes
+alwaysApply: true
+---
+
+# App version
+
+The product line is **v3**. Source of truth is [lib/appVersion.ts](lib/appVersion.ts).
+
+When you ship user-facing work, bump it in the same change:
+
+- **patch** (`3.2.1`) — bug fix or polish
+- **minor** (`3.3.0`) — new feature
+- **major** — only if the user asks for a product reset
+
+Also update:
+
+- `package.json` `"version"` to the same number
+- `public/sw.js` `CACHE_VERSION` to `pl-predictions-v{number}` so the PWA drops the old shell
+
+Show the label with `APP_VERSION_LABEL` (`v3.2.0`). Do not hardcode `v3.x.x` in UI.

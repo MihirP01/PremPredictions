@@ -1371,7 +1371,7 @@ export default function MiniGameLobbyPage() {
               {
                 key: "league" as const,
                 title: "League",
-                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Exact score is 2 points, correct result is 1 point. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek the room median as a labelled bye.",
+                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Exact score is 2 points, correct result is 1 point. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek half the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure
@@ -1524,8 +1524,8 @@ export default function MiniGameLobbyPage() {
               League Fair Play
             </div>
             <div className="mt-1 text-sm text-muted">
-              Give a player who submits no scores the room median for that
-              gameweek as a clearly labelled Fair Play bye.
+              Give a player who submits no scores half the room median for
+              that gameweek as a clearly labelled Fair Play bye.
             </div>
             <button
               onClick={toggleLeagueFairPlay}

@@ -21,18 +21,13 @@ export default function TopActionRow({
 }: TopActionRowProps) {
   const motion = useContext(PageShellMotionContext);
   const sequence = motion?.sequence ?? 0;
-  const animationName =
-    sequence % 2 === 0 ? "topActionRowIn" : "topActionRowInAlt";
 
   return (
     <div
+      key={sequence}
       className="top-action-row-enter relative z-[140] overflow-visible"
       style={{
-        animationName,
-        animationDuration: "500ms",
-        animationTimingFunction: "cubic-bezier(0.2,0,0,1)",
-        animationDelay: "60ms",
-        animationFillMode: "both",
+        animationDelay: "0ms",
       }}
     >
       <PageHeader

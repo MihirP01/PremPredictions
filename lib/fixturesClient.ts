@@ -1,3 +1,4 @@
+import { notifyRoomCache } from "./cacheStore";
 import {
   readFreshSessionRecord,
   readSessionRecord,
@@ -29,7 +30,7 @@ export type FixturesCachedData = {
   generatedAt: string | null;
 };
 
-const TTL_MS = 20 * 1000;
+const TTL_MS = 45 * 1000;
 const STORAGE_PREFIX = "fx:v2:";
 const memCache = new Map<
   string,
@@ -87,6 +88,23 @@ function setCached(key: string, data: FixturesCachedData) {
   const merged = mergeFixtureResults(previous, data);
   const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, merged, TTL_MS);
   memCache.set(key, { expiresAt, data: merged });
+  notifyRoomCache();
+}
+
+export function peekFixturesCached(
+  gameweek: number,
+  seasonKey: string,
+): FixturesCachedData | null {
+  const gw = Number(gameweek);
+  const sk = String(seasonKey || "");
+  if (!Number.isFinite(gw) || !sk) return null;
+  const key = keyFor(gw, sk);
+  const mem = memCache.get(key);
+  if (mem) return mem.data;
+  const stored = readSessionRecord<FixturesCachedData>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  memCache.set(key, { expiresAt: stored.expiresAt, data: stored.data });
+  return stored.data;
 }
 
 export async function getFixturesCached(
@@ -107,6 +125,27 @@ export async function getFixturesCached(
     return stored.data;
   }
   const staleStorage = getStorageStale(key);
+  const stale = staleMem || staleStorage;
+  if (stale) {
+    const existing = pending.get(key);
+    if (!existing) {
+      const req = (async () => {
+        const res = await fetch(
+          `/api/fixtures?gameweek=${encodeURIComponent(String(gw))}&seasonKey=${encodeURIComponent(sk)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          if (stale) return stale;
+          throw new Error(`fixtures ${res.status}`);
+        }
+        const data = normalize(await res.json());
+        setCached(key, data);
+        return data;
+      })().finally(() => pending.delete(key));
+      pending.set(key, req);
+    }
+    return stale;
+  }
   const existing = pending.get(key);
   if (existing) return existing;
 

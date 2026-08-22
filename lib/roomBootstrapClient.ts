@@ -1,6 +1,7 @@
+import { notifyRoomCache } from "./cacheStore";
 import { primeCurrentGameweekCache } from "./currentGameweekClient";
 import {
-  readFreshSessionRecord,
+  peekSessionRecord,
   writeSessionRecord,
 } from "./sessionCache";
 
@@ -19,7 +20,7 @@ export type RoomBootstrapData = {
   seasonOptions?: string[];
 };
 
-const TTL_MS = 15 * 1000;
+const TTL_MS = 2 * 60 * 1000;
 const STORAGE_PREFIX = "rb:v2:";
 const memCache = new Map<
   string,
@@ -33,17 +34,29 @@ function keyFor(roomCode: string) {
     .toUpperCase();
 }
 
-function getStorage(key: string): { expiresAt: number; data: RoomBootstrapData } | null {
-  return readFreshSessionRecord<RoomBootstrapData>(STORAGE_PREFIX, key);
+function peekCached(
+  key: string,
+): { expiresAt: number; data: RoomBootstrapData } | null {
+  const mem = memCache.get(key);
+  if (mem) return mem;
+  const stored = peekSessionRecord<RoomBootstrapData>(STORAGE_PREFIX, key);
+  if (!stored) return null;
+  const entry = { expiresAt: stored.expiresAt, data: stored.data };
+  memCache.set(key, entry);
+  return entry;
 }
 
 function setCached(key: string, data: RoomBootstrapData) {
   const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
   memCache.set(key, { expiresAt, data });
-  primeCurrentGameweekCache({
-    currentGameweek: data.currentGameweek,
-    seasonKey: data.seasonKey,
-  });
+  notifyRoomCache();
+  primeCurrentGameweekCache(
+    {
+      currentGameweek: data.currentGameweek,
+      seasonKey: data.seasonKey,
+    },
+    data.gameModeStyle === "league" ? "league" : "live",
+  );
 }
 
 export function patchRoomBootstrapCached(
@@ -64,25 +77,20 @@ export function peekRoomBootstrapCached(
   roomCode: string,
 ): RoomBootstrapData | null {
   const key = keyFor(roomCode);
-  const now = Date.now();
-  const mem = memCache.get(key);
-  if (mem && mem.expiresAt > now) return mem.data;
-  const stored = getStorage(key);
-  if (!stored) return null;
-  memCache.set(key, stored);
-  primeCurrentGameweekCache({
-    currentGameweek: stored.data.currentGameweek,
-    seasonKey: stored.data.seasonKey,
-  });
-  return stored.data;
+  const cached = peekCached(key);
+  return cached?.data ?? null;
 }
 
 export async function getRoomBootstrapCached(
   roomCode: string,
 ): Promise<RoomBootstrapData> {
   const key = keyFor(roomCode);
-  const cached = peekRoomBootstrapCached(roomCode);
-  if (cached) return cached;
+  const cached = peekCached(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  if (cached) {
+    void refreshRoomBootstrapCached(roomCode).catch(() => {});
+    return cached.data;
+  }
   const existing = pending.get(key);
   if (existing) return existing;
 

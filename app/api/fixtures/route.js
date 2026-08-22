@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
 
 const LEAGUE = "PL";
-const FOTMOB_LEAGUE_ID = 47;
 const SEASON_START_MONTH_UTC = 7; // Aug
 
 function inferSeasonKey(now = new Date()) {
@@ -322,24 +322,19 @@ export async function GET(req) {
   const url = gameweek
     ? `https://api.football-data.org/v4/competitions/${LEAGUE}/matches?season=${season}&matchday=${gameweek}`
     : `https://api.football-data.org/v4/competitions/${LEAGUE}/matches?season=${season}`;
-  const fotmobUrl = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(fotmobSeason)}`;
-
   let response;
-  let fotmobResponse;
+  let fotmobMatches = [];
   try {
-    [response, fotmobResponse] = await Promise.all([
+    [response, fotmobMatches] = await Promise.all([
       fetch(url, {
         headers: { "X-Auth-Token": API_KEY },
         ...(forceRefresh
           ? { cache: "no-store" }
           : { next: { revalidate: 60 } }),
       }),
-      fetch(fotmobUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-        ...(forceRefresh
-          ? { cache: "no-store" }
-          : { next: { revalidate: 30 } }),
-      }).catch(() => null),
+      getFotmobLeagueMatches(fotmobSeason, { force: forceRefresh }).catch(
+        () => [],
+      ),
     ]);
   } catch {
     // Network/DNS/etc
@@ -349,19 +344,7 @@ export async function GET(req) {
     );
   }
 
-  let fotmobData = null;
-  let fotmobIndex = new Map();
-  if (fotmobResponse?.ok) {
-    try {
-      fotmobData = await fotmobResponse.json();
-      fotmobIndex = buildFotmobIndex(fotmobData?.fixtures?.allMatches);
-    } catch (error) {
-      console.warn("FotMob parse error:", error);
-    }
-  }
-  const fotmobMatches = Array.isArray(fotmobData?.fixtures?.allMatches)
-    ? fotmobData.fixtures.allMatches
-    : [];
+  const fotmobIndex = buildFotmobIndex(fotmobMatches);
   const selectedFotmobMatches = gameweek
     ? fotmobMatches.filter(
         (match) =>

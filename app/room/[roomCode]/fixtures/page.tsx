@@ -152,6 +152,34 @@ function mapGameData(gameData: {
 type TableMode = "HOME" | "TOTAL" | "AWAY";
 type TableView = "SHORT" | "FULL";
 type MatchInfoTab = "lineups" | "stats" | "h2h" | "form";
+type PlayerPillMode = "pos" | "rating" | "fpl";
+
+const PLAYER_PILL_STORAGE_KEY = "match-info-pill-mode";
+const PLAYER_PILL_OPTIONS: Array<{ value: PlayerPillMode; label: string }> = [
+  { value: "pos", label: "Pos" },
+  { value: "rating", label: "Rating" },
+  { value: "fpl", label: "FPL" },
+];
+
+function readSavedPlayerPillMode(): PlayerPillMode | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const value = window.sessionStorage.getItem(PLAYER_PILL_STORAGE_KEY);
+    return value === "pos" || value === "rating" || value === "fpl"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedPlayerPillMode(mode: PlayerPillMode) {
+  try {
+    window.sessionStorage.setItem(PLAYER_PILL_STORAGE_KEY, mode);
+  } catch {
+    // Ignore quota / private-mode failures.
+  }
+}
 
 type FixturesSummaryTileProps = {
   label: string;
@@ -492,9 +520,26 @@ function isFixtureStartedForLineups(status?: string | null) {
   return true;
 }
 
-function playerMetaValue(player: MatchInfoPlayer, showRating: boolean) {
-  if (showRating && player.rating != null) return player.rating.toFixed(1);
+function playerMetaValue(player: MatchInfoPlayer, mode: PlayerPillMode) {
+  if (mode === "rating") {
+    return player.rating != null ? player.rating.toFixed(1) : "—";
+  }
+  if (mode === "fpl") {
+    return player.fplPoints != null ? String(Math.round(player.fplPoints)) : "—";
+  }
   return player.positionLabel || "—";
+}
+
+function playerPillTone(mode: PlayerPillMode, isMotm = false) {
+  if (mode === "rating") {
+    return isMotm
+      ? "border-sky-400/80 bg-sky-400/10 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
+      : "border-sky-400/40 bg-sky-400/10 text-sky-100";
+  }
+  if (mode === "fpl") {
+    return "border-[color:rgba(var(--room-accent-rgb),0.55)] bg-[color:rgba(var(--room-accent-rgb),0.12)] text-foreground";
+  }
+  return "border-subtle bg-surface-2 text-foreground";
 }
 
 function substitutionSummary(player: MatchInfoPlayer) {
@@ -667,13 +712,13 @@ function formationFanOffsetPx(
 
 function PitchMarker({
   player,
-  showLiveRatings,
+  pillMode,
   isManOfTheMatch = false,
   crowded = false,
   size = "mobile",
 }: {
   player: MatchInfoPlayer;
-  showLiveRatings: boolean;
+  pillMode: PlayerPillMode;
   isManOfTheMatch?: boolean;
   crowded?: boolean;
   size?: "mobile" | "desktop";
@@ -737,15 +782,13 @@ function PitchMarker({
         <span
           className={[
             `absolute ${ratingPillPosClass} inline-flex items-center justify-center rounded-full border px-1.5 py-0.5 font-display text-[9px] font-semibold tabular-nums`,
-            isManOfTheMatch && showLiveRatings
-              ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
-              : "border-subtle bg-surface-2 text-foreground",
+            playerPillTone(pillMode, isManOfTheMatch && pillMode === "rating"),
             valueMinWidth,
           ].join(" ")}
         >
           <span className="relative inline-flex items-center justify-center overflow-visible">
-            {playerMetaValue(player, showLiveRatings)}
-            {isManOfTheMatch && showLiveRatings ? (
+            {playerMetaValue(player, pillMode)}
+            {isManOfTheMatch && pillMode === "rating" ? (
               <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
                 <Crown size={8} strokeWidth={2.2} />
               </span>
@@ -957,6 +1000,8 @@ export default function FixturesPage() {
   const [matchInfoByFixture, setMatchInfoByFixture] = useState<
     Record<number, MatchInfoData>
   >({});
+  const [savedPlayerPillMode, setSavedPlayerPillMode] =
+    useState<PlayerPillMode | null>(null);
   const initialFixturesLoadDoneRef = useRef(false);
   const fixturesLoadSeqRef = useRef(0);
   const fixturesLoadTimerRef = useRef<number | null>(null);
@@ -1059,6 +1104,16 @@ export default function FixturesPage() {
         : null,
     [fixtures, matchInfoFixtureId],
   );
+
+  useEffect(() => {
+    setSavedPlayerPillMode(readSavedPlayerPillMode());
+  }, []);
+
+  const selectPlayerPillMode = useCallback((mode: PlayerPillMode) => {
+    setSavedPlayerPillMode(mode);
+    writeSavedPlayerPillMode(mode);
+  }, []);
+
   const refreshMatchInfoFixture = useCallback(
     async (
       fixture: Fixture,
@@ -2810,14 +2865,13 @@ export default function FixturesPage() {
                     const showLiveRatings =
                       lineupPhase === "confirmed" &&
                       isFixtureStartedForLineups(selectedMatchFixture?.status);
-                    const lineupHeading =
-                      lineupPhase === "predicted"
-                        ? "Predicted Lineup"
-                        : "Confirmed Lineup";
-                    const startingXiHeading =
+                    const playerPillMode =
+                      savedPlayerPillMode ??
+                      (showLiveRatings ? "rating" : "pos");
+                    const lineupCaption =
                       lineupPhase === "predicted"
                         ? "Predicted XI"
-                        : "Starting XI";
+                        : "Confirmed XI";
                     const emptyLineupLabel =
                       lineupPhase === "predicted"
                         ? "No predicted lineup available yet."
@@ -2859,13 +2913,17 @@ export default function FixturesPage() {
                       : null;
                     return (
                       <div className="space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="inline-flex items-center rounded-full border border-[color:rgba(var(--room-accent-rgb),0.55)] bg-[color:rgba(var(--room-accent-rgb),0.08)] px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                            {lineupHeading}
-                          </div>
+                        <div className="space-y-2">
                           <div className="font-display text-[11px] uppercase tracking-wide text-muted">
-                            {startingXiHeading}
+                            {lineupCaption}
                           </div>
+                          <SliderSwitch
+                            options={PLAYER_PILL_OPTIONS}
+                            value={playerPillMode}
+                            onChange={selectPlayerPillMode}
+                            className="relative grid overflow-hidden rounded-[22px] border border-white/10 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                            buttonClassName="font-display relative z-10 rounded-[16px] px-3 py-2.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white/55 transition-colors"
+                          />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -2960,9 +3018,7 @@ export default function FixturesPage() {
                                                 >
                                                   <PitchMarker
                                                     player={player}
-                                                    showLiveRatings={
-                                                      showLiveRatings
-                                                    }
+                                                    pillMode={playerPillMode}
                                                     isManOfTheMatch={
                                                       motmRating != null &&
                                                       Number.isFinite(
@@ -3014,9 +3070,7 @@ export default function FixturesPage() {
                                                   >
                                                     <PitchMarker
                                                       player={player}
-                                                      showLiveRatings={
-                                                        showLiveRatings
-                                                      }
+                                                      pillMode={playerPillMode}
                                                       isManOfTheMatch={
                                                         motmRating != null &&
                                                         Number.isFinite(
@@ -3074,9 +3128,7 @@ export default function FixturesPage() {
                                                 >
                                                   <PitchMarker
                                                     player={player}
-                                                    showLiveRatings={
-                                                      showLiveRatings
-                                                    }
+                                                    pillMode={playerPillMode}
                                                     isManOfTheMatch={
                                                       motmRating != null &&
                                                       Number.isFinite(
@@ -3125,9 +3177,7 @@ export default function FixturesPage() {
                                                   >
                                                     <PitchMarker
                                                       player={player}
-                                                      showLiveRatings={
-                                                        showLiveRatings
-                                                      }
+                                                      pillMode={playerPillMode}
                                                       isManOfTheMatch={
                                                         motmRating != null &&
                                                         Number.isFinite(
@@ -3203,21 +3253,22 @@ export default function FixturesPage() {
                                             <span
                                               className={[
                                                 "inline-flex min-w-[48px] items-center justify-center rounded-full border px-2 py-0.5 font-display text-[10px] font-semibold tabular-nums",
-                                                motmRating != null &&
-                                                Number.isFinite(
-                                                  Number(player.rating),
-                                                ) &&
-                                                Number(player.rating) ===
-                                                  motmRating &&
-                                                showLiveRatings
-                                                  ? "border-sky-400/80 bg-surface-2 text-foreground shadow-[0_0_10px_rgba(56,189,248,0.35)]"
-                                                  : "border-subtle bg-surface-2 text-foreground",
+                                                playerPillTone(
+                                                  playerPillMode,
+                                                  motmRating != null &&
+                                                    Number.isFinite(
+                                                      Number(player.rating),
+                                                    ) &&
+                                                    Number(player.rating) ===
+                                                      motmRating &&
+                                                    playerPillMode === "rating",
+                                                ),
                                               ].join(" ")}
                                             >
                                               <span className="relative inline-flex items-center justify-center overflow-visible">
                                                 {playerMetaValue(
                                                   player,
-                                                  showLiveRatings,
+                                                  playerPillMode,
                                                 )}
                                                 {motmRating != null &&
                                                 Number.isFinite(
@@ -3225,7 +3276,7 @@ export default function FixturesPage() {
                                                 ) &&
                                                 Number(player.rating) ===
                                                   motmRating &&
-                                                showLiveRatings ? (
+                                                playerPillMode === "rating" ? (
                                                   <span className="absolute -right-2 top-1/2 -translate-y-1/2 text-sky-200">
                                                     <Crown
                                                       size={9}

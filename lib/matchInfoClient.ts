@@ -35,6 +35,7 @@ export type MatchInfoPlayer = {
   } | null;
   positionLabel?: string | null;
   rating?: number | null;
+  fplPoints?: number | null;
   goalCount?: number | null;
   ownGoalCount?: number | null;
   assistCount?: number | null;
@@ -83,12 +84,24 @@ export type MatchInfoData = {
 };
 
 const TTL_MS = 90 * 1000;
-const STORAGE_PREFIX = "match-info:v5:";
+const STORAGE_PREFIX = "match-info:v6:";
 const memCache = new Map<string, { expiresAt: number; data: MatchInfoData }>();
 const pending = new Map<string, Promise<MatchInfoData>>();
 
 function keyFor(fixtureId: number, seasonKey: string) {
   return `${String(seasonKey || "")}:fx:${String(fixtureId)}`;
+}
+
+function normalizePlayer(player: MatchInfoPlayer): MatchInfoPlayer {
+  const points = Number(player?.fplPoints);
+  return {
+    ...player,
+    fplPoints: Number.isFinite(points) ? points : null,
+  };
+}
+
+function normalizePlayers(list: MatchInfoPlayer[] | undefined) {
+  return Array.isArray(list) ? list.map(normalizePlayer) : [];
 }
 
 function normalize(payload: unknown): MatchInfoData {
@@ -106,13 +119,9 @@ function normalize(payload: unknown): MatchInfoData {
           ? String(p.lineups.home.formation)
           : null,
         coach: p.lineups?.home?.coach ? String(p.lineups.home.coach) : null,
-        starters: Array.isArray(p.lineups?.home?.starters)
-          ? p.lineups!.home.starters
-          : [],
-        subs: Array.isArray(p.lineups?.home?.subs) ? p.lineups!.home.subs : [],
-        unavailable: Array.isArray(p.lineups?.home?.unavailable)
-          ? p.lineups!.home.unavailable
-          : [],
+        starters: normalizePlayers(p.lineups?.home?.starters),
+        subs: normalizePlayers(p.lineups?.home?.subs),
+        unavailable: normalizePlayers(p.lineups?.home?.unavailable),
       },
       away: {
         id: Number(p.lineups?.away?.id ?? 0) || null,
@@ -121,13 +130,9 @@ function normalize(payload: unknown): MatchInfoData {
           ? String(p.lineups.away.formation)
           : null,
         coach: p.lineups?.away?.coach ? String(p.lineups.away.coach) : null,
-        starters: Array.isArray(p.lineups?.away?.starters)
-          ? p.lineups!.away.starters
-          : [],
-        subs: Array.isArray(p.lineups?.away?.subs) ? p.lineups!.away.subs : [],
-        unavailable: Array.isArray(p.lineups?.away?.unavailable)
-          ? p.lineups!.away.unavailable
-          : [],
+        starters: normalizePlayers(p.lineups?.away?.starters),
+        subs: normalizePlayers(p.lineups?.away?.subs),
+        unavailable: normalizePlayers(p.lineups?.away?.unavailable),
       },
     },
     stats: Array.isArray(p.stats) ? p.stats : [],

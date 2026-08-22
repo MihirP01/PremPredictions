@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
+import { attachFplPointsToLineups } from "@/lib/fplPoints";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -320,6 +321,7 @@ function mapPlayer(player) {
     yellowCardCount,
     redCardCount,
     countryCode: player?.countryCode ? String(player.countryCode) : null,
+    fplPoints: null,
     statusTags: tags,
     substitutionEvents: Array.isArray(player?.performance?.substitutionEvents)
       ? player.performance.substitutionEvents.map((event) => ({
@@ -469,6 +471,14 @@ export async function GET(req) {
   }
 
   try {
+    void attachFplPointsToLineups(
+      {
+        home: { name: homeName, starters: [], subs: [], unavailable: [] },
+        away: { name: awayName, starters: [], subs: [], unavailable: [] },
+      },
+      { kickoff, homeName, awayName },
+    ).catch(() => null);
+
     const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
     const leagueMatches = await getFotmobLeagueMatches(season).catch(() => []);
     const leagueIndex = buildLeagueIndex(leagueMatches);
@@ -529,10 +539,20 @@ export async function GET(req) {
       ? content.h2h.matches.slice(0, 5).map(toMiniMatch)
       : [];
 
-    const lineups = {
+    const mappedLineups = {
       phase: deriveLineupPhase(kickoff),
       home: mapLineupTeam(content?.lineup?.homeTeam),
       away: mapLineupTeam(content?.lineup?.awayTeam),
+    };
+    const linedUp = await attachFplPointsToLineups(mappedLineups, {
+      kickoff,
+      homeName: mappedLineups.home.name || homeName,
+      awayName: mappedLineups.away.name || awayName,
+    });
+    const lineups = {
+      ...mappedLineups,
+      home: linedUp.home,
+      away: linedUp.away,
     };
 
     const liveWidgetUrl = isLiveLeagueStatus(leagueMatch?.status)

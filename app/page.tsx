@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../components/AuthProvider";
 import AuthEntryForm from "../components/AuthEntryForm";
+import { peekLastRoomCode } from "@/lib/lastRoom";
 
 function LoadingDeck() {
   return (
@@ -25,7 +26,10 @@ export default function Page() {
 
   useEffect(() => {
     if (loading) return;
-    if (user) router.replace("/room-gate");
+    if (user) {
+      const lastRoom = peekLastRoomCode();
+      router.replace(lastRoom ? `/room/${lastRoom}` : "/room-gate");
+    }
   }, [loading, user, router]);
 
   if (loading) return <LoadingDeck />;

@@ -14,6 +14,7 @@ import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { canonicalRoomCode } from "@/lib/roomCode";
+import { clearLastRoomCode, rememberLastRoomCode } from "@/lib/lastRoom";
 
 type AccentTheme = {
   hex: string;
@@ -152,8 +153,10 @@ export default function RoomScopedLayout({
       (snap) => {
         if (snap.exists()) {
           redirectedRef.current = false;
+          rememberLastRoomCode(roomCode);
           return;
         }
+        clearLastRoomCode();
         forceToRoomGate();
       },
       () => {

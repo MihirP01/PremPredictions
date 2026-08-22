@@ -4,10 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import LogoutButton from "../../components/LogoutButton";
-import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
 import { db } from "../../firebase";
-import { resolveDisplayName } from "@/lib/displayNameResolver";
+import { peekLastRoomCode, rememberLastRoomCode } from "@/lib/lastRoom";
+import { fetchMemberRooms } from "@/lib/memberRoomsClient";
 import { ROOM_CODE_ERROR, canonicalRoomCode, isValidRoomCode, normalizeRoomCode } from "@/lib/roomCode";
 
 type MemberRoom = { roomCode: string; role: "leader" | "member" };
@@ -29,24 +30,38 @@ export default function RoomGatePage() {
     return new URLSearchParams(window.location.search).get("kicked") === "1";
   });
 
+  const userUid = user?.uid ?? "";
+  const userEmail = user?.email ?? null;
+
   useEffect(() => {
     if (loading) return;
-    if (!user) {
+    if (!userUid) {
       router.replace("/");
       return;
     }
 
+    if (!kicked) {
+      const last = peekLastRoomCode();
+      if (last) {
+        router.replace(`/room/${last}`);
+        return;
+      }
+    }
+
     let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled) setResolving(false);
+    }, 8000);
 
     (async () => {
       setResolving(true);
-      const snap = await getDoc(doc(db, "users", user.uid));
+      const snap = await getDoc(doc(db, "users", userUid));
       const data = snap.data();
-      const resolvedDisplayName = await resolveDisplayName({
-        uid: user.uid,
-        email: user.email,
-      });
       if (cancelled) return;
+      const resolvedDisplayName =
+        String(data?.displayName || "").trim() ||
+        String(userEmail || "").split("@")[0] ||
+        "Player";
       setDisplayName(resolvedDisplayName);
 
       const existing = canonicalRoomCode(String(data?.currentRoomCode || ""));
@@ -55,18 +70,21 @@ export default function RoomGatePage() {
 
       const enterRoom = async (code: string) => {
         if (cancelled) return;
-        await setDoc(
-          doc(db, "users", user.uid),
-          { currentRoomCode: code },
-          { merge: true },
-        );
+        rememberLastRoomCode(code);
+        if (code !== existing) {
+          await setDoc(
+            doc(db, "users", userUid),
+            { currentRoomCode: code },
+            { merge: true },
+          );
+        }
         router.replace(`/room/${code}`);
       };
 
       if (existing && !kicked) {
         try {
           const existingMembership = await getDoc(
-            doc(db, "rooms", existing, "players", user.uid),
+            doc(db, "rooms", existing, "players", userUid),
           );
           if (existingMembership.exists()) {
             const role = String(existingMembership.data()?.role || "member");
@@ -86,33 +104,7 @@ export default function RoomGatePage() {
 
       setRoomsLoading(true);
       try {
-        const roomsSnap = await getDocs(collection(db, "rooms"));
-        const checks = await Promise.all(
-          roomsSnap.docs.map(async (roomDoc) => {
-            try {
-              const membershipRef = doc(
-                db,
-                "rooms",
-                roomDoc.id,
-                "players",
-                user.uid,
-              );
-              const membershipSnap = await getDoc(membershipRef);
-              if (!membershipSnap.exists()) return null;
-              const role = String(membershipSnap.data()?.role || "member");
-              return {
-                roomCode: roomDoc.id,
-                role: role === "leader" ? "leader" : "member",
-              } satisfies MemberRoom;
-            } catch {
-              return null;
-            }
-          }),
-        );
-
-        const joinedRooms = checks
-          .filter((r): r is MemberRoom => r !== null)
-          .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
+        const joinedRooms = await fetchMemberRooms(userUid);
         if (cancelled) return;
         setMemberRooms(joinedRooms);
 
@@ -142,8 +134,9 @@ export default function RoomGatePage() {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
-  }, [loading, user, router, kicked]);
+  }, [loading, userUid, userEmail, router, kicked]);
 
   const openJoinedRoom = async (targetRoomCode: string) => {
     if (!user) return;
@@ -155,6 +148,7 @@ export default function RoomGatePage() {
         { displayName, currentRoomCode: targetRoomCode },
         { merge: true },
       );
+      rememberLastRoomCode(targetRoomCode);
       router.replace(`/room/${targetRoomCode}`);
     } catch (e) {
       const message =
@@ -199,6 +193,7 @@ export default function RoomGatePage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not join room.");
 
+      rememberLastRoomCode(code);
       router.replace(`/room/${code}`);
     } catch (e) {
       const message =
@@ -257,6 +252,7 @@ export default function RoomGatePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not create room.");
+      rememberLastRoomCode(code);
       router.replace(`/room/${code}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not create room.");

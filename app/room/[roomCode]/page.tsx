@@ -50,15 +50,13 @@ import YearTableSection from "../../../components/YearTableSection";
 import { APP_VERSION_LABEL } from "@/lib/appVersion";
 import { db } from "../../../firebase";
 import {
-  collection,
   deleteDoc,
   deleteField,
   doc,
-  getDoc,
-  getDocs,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import { fetchMemberRooms } from "@/lib/memberRoomsClient";
 
 type Player = {
   uid: string;
@@ -451,35 +449,7 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      const roomsSnap = await getDocs(collection(db, "rooms"));
-      const checks = await Promise.all(
-        roomsSnap.docs.map(async (roomDoc) => {
-          try {
-            const membershipRef = doc(
-              db,
-              "rooms",
-              roomDoc.id,
-              "players",
-              user.uid,
-            );
-            const membershipSnap = await getDoc(membershipRef);
-            if (!membershipSnap.exists()) return null;
-            const data = membershipSnap.data() as {
-              role?: "leader" | "member";
-            };
-            return {
-              roomCode: roomDoc.id,
-              role: data.role === "leader" ? "leader" : "member",
-            } satisfies MemberRoom;
-          } catch {
-            // Not a member or no read access to this room's players doc.
-            return null;
-          }
-        }),
-      );
-      const rooms: MemberRoom[] = checks
-        .filter((x): x is MemberRoom => x !== null)
-        .sort((a, b) => a.roomCode.localeCompare(b.roomCode));
+      const rooms = await fetchMemberRooms(user.uid);
       setMemberRooms(rooms);
     } catch (e) {
       setSwitcherError(

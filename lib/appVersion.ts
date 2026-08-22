@@ -10,8 +10,8 @@
  */
 export const APP_VERSION = {
   major: 3,
-  minor: 3,
-  patch: 10,
+  minor: 4,
+  patch: 1,
 } as const;
 
 export const APP_VERSION_NUMBER = `${APP_VERSION.major}.${APP_VERSION.minor}.${APP_VERSION.patch}`;

@@ -30,23 +30,7 @@ function sameClubSet(order: string[], teamKeys: string[] | undefined) {
   return order.length === 20 && order.every((key) => expected.has(key));
 }
 
-export async function listMemberRoomCodes(uid: string) {
-  const roomRefs = await adminDb.collection("rooms").listDocuments();
-  if (!roomRefs.length) return [] as string[];
-  const memberRooms: string[] = [];
-  for (let i = 0; i < roomRefs.length; i += 50) {
-    const slice = roomRefs.slice(i, i + 50);
-    const snaps = await adminDb.getAll(
-      ...slice.map((roomRef) =>
-        adminDb.doc(`${roomRef.path}/players/${uid}`),
-      ),
-    );
-    snaps.forEach((snap, index) => {
-      if (snap.exists) memberRooms.push(slice[index].id);
-    });
-  }
-  return memberRooms;
-}
+export { listMemberRoomCodes } from "./memberRoomsAdmin";
 
 export async function syncYearTableAcrossRooms(args: {
   uid: string;

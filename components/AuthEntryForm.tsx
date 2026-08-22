@@ -176,7 +176,7 @@ export default function AuthEntryForm() {
               {mode === "signup" ? (
                 <div className="space-y-2">
                   <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">
-                    Full Name
+                    Name
                   </label>
                   <input
                     className={inputClassName}

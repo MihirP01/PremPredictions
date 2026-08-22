@@ -87,11 +87,17 @@ function overlayStatus(
 ) {
   if (!fotmobStatus) return String(providerStatus || "TIMED");
   if (isFotmobFinished(fotmobStatus)) return "FINISHED";
+  const reasonShort = cleanStatusText(fotmobStatus?.reason?.short);
+  if (
+    /^FT$/i.test(reasonShort) ||
+    /full\s*time/i.test(reasonShort)
+  ) {
+    return "FINISHED";
+  }
   if (fotmobStatus.cancelled) return "CANCELLED";
   if (fotmobStatus.started) {
     const liveShort = cleanStatusText(fotmobStatus?.liveTime?.short);
     if (liveShort === "HT") return halftimeLabel(fotmobStatus);
-    const reasonShort = cleanStatusText(fotmobStatus?.reason?.short);
     return liveShort || reasonShort || "LIVE";
   }
   return String(providerStatus || "TIMED");

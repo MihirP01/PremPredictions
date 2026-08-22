@@ -317,17 +317,33 @@ function isFinalFixtureStatus(status?: string | null) {
   return (
     s === "FINISHED" ||
     s === "FT" ||
+    s.startsWith("FT ") ||
+    s === "FULLTIME" ||
+    s === "FULL_TIME" ||
+    s.includes("FULL TIME") ||
+    s === "AET" ||
+    s === "PEN" ||
+    s === "PENALTIES" ||
     s === "AWARDED" ||
     s === "POSTPONED" ||
     s === "CANCELLED"
   );
 }
 
+const MAX_LIVE_MS = (2 * 60 + 15) * 60 * 1000;
+
+function isPastExpectedFullTime(fixture: Fixture, nowMs: number) {
+  const kickoffMs = Date.parse(String(fixture.kickoff || ""));
+  if (!Number.isFinite(kickoffMs)) return false;
+  return nowMs - kickoffMs >= MAX_LIVE_MS;
+}
+
 function isFixtureLiveWindow(fixture: Fixture, nowMs: number) {
   const kickoffMs = Date.parse(String(fixture.kickoff || ""));
   if (!Number.isFinite(kickoffMs)) return false;
   if (kickoffMs > nowMs) return false;
-  return !isFinalFixtureStatus(fixture.status);
+  if (isFinalFixtureStatus(fixture.status)) return false;
+  return !isPastExpectedFullTime(fixture, nowMs);
 }
 
 function isExplicitLiveFixtureStatus(status?: string | null) {
@@ -336,8 +352,7 @@ function isExplicitLiveFixtureStatus(status?: string | null) {
   if (!raw) return false;
   if (s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD")
     return false;
-  if (s === "FINISHED" || s === "FT" || s === "AWARDED") return false;
-  if (s === "CANCELLED" || s === "POSTPONED") return false;
+  if (isFinalFixtureStatus(s)) return false;
   return true;
 }
 
@@ -1174,7 +1189,10 @@ export default function FixturesPage() {
 
     for (const fixture of displayFixtures) {
       if (isFixtureLiveWindow(fixture, nowMs)) buckets.live.push(fixture);
-      else if (isFinalFixtureStatus(fixture.status))
+      else if (
+        isFinalFixtureStatus(fixture.status) ||
+        isPastExpectedFullTime(fixture, nowMs)
+      )
         buckets.completed.push(fixture);
       else buckets.upcoming.push(fixture);
     }

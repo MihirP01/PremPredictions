@@ -13,6 +13,7 @@ const displayFont = Orbitron({
 export const metadata = {
   title: "PL Predictions",
   applicationName: "PL Predictions",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -22,12 +23,16 @@ export const metadata = {
     icon: "/icons/icon-192.png",
     apple: "/icons/apple-touch-icon.png",
   },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#0ea5a4",
 };
 
 export default function RootLayout({

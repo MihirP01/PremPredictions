@@ -470,7 +470,7 @@ export async function GET(req) {
 
   try {
     const season = fotmobSeasonFromStartYear(seasonStartYearFromKey(seasonKey));
-    const leagueMatches = await getFotmobLeagueMatches(season);
+    const leagueMatches = await getFotmobLeagueMatches(season).catch(() => []);
     const leagueIndex = buildLeagueIndex(leagueMatches);
     const leagueMatch = findLeagueMatch(leagueIndex, {
       kickoff,
@@ -480,7 +480,7 @@ export async function GET(req) {
 
     if (!leagueMatch?.pageUrl) {
       return NextResponse.json(
-        { error: "Match not found on FotMob." },
+        { error: "Match details unavailable." },
         { status: 404 },
       );
     }
@@ -580,12 +580,9 @@ export async function GET(req) {
         },
       },
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to load match info.",
-      },
+      { error: "Match details unavailable." },
       { status: 502 },
     );
   }

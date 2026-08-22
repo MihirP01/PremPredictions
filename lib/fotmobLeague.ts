@@ -63,21 +63,65 @@ function ttlForMatches(matches: FotmobLeagueMatch[]) {
   return upcoming ? UPCOMING_TTL_MS : IDLE_TTL_MS;
 }
 
-async function fetchLeagueMatches(season: string) {
+const FOTMOB_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  Accept: "text/html,application/json;q=0.9,*/*;q=0.8",
+};
+
+function matchesFromPayload(data: unknown): FotmobLeagueMatch[] | null {
+  const root = (data || {}) as {
+    props?: { pageProps?: { fixtures?: { allMatches?: FotmobLeagueMatch[] } } };
+    fixtures?: { allMatches?: FotmobLeagueMatch[] };
+  };
+  const fromPage = root.props?.pageProps?.fixtures?.allMatches;
+  const fromJson = root.fixtures?.allMatches;
+  const matches = Array.isArray(fromPage)
+    ? fromPage
+    : Array.isArray(fromJson)
+      ? fromJson
+      : null;
+  return matches;
+}
+
+function parseNextData(html: string) {
+  const match = String(html || "").match(
+    /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/,
+  );
+  if (!match) throw new Error("FotMob page payload not found.");
+  return JSON.parse(match[1]);
+}
+
+async function fetchLeagueMatchesJson(season: string) {
   const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`;
   const response = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
+    headers: FOTMOB_HEADERS,
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+  const data = await response.json().catch(() => null);
+  return matchesFromPayload(data);
+}
+
+async function fetchLeagueMatchesHtml(season: string) {
+  const url = `https://www.fotmob.com/leagues/${FOTMOB_LEAGUE_ID}/matches/premier-league?season=${encodeURIComponent(season)}`;
+  const response = await fetch(url, {
+    headers: FOTMOB_HEADERS,
     cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`FotMob league fetch failed (${response.status})`);
   }
-  const data = (await response.json().catch(() => null)) as {
-    fixtures?: { allMatches?: FotmobLeagueMatch[] };
-  } | null;
-  return Array.isArray(data?.fixtures?.allMatches)
-    ? data.fixtures.allMatches
-    : [];
+  const html = await response.text();
+  const matches = matchesFromPayload(parseNextData(html));
+  if (!matches) throw new Error("FotMob league fixtures not found.");
+  return matches;
+}
+
+async function fetchLeagueMatches(season: string) {
+  const fromJson = await fetchLeagueMatchesJson(season).catch(() => null);
+  if (fromJson?.length) return fromJson;
+  return fetchLeagueMatchesHtml(season);
 }
 
 export async function getFotmobLeagueMatches(

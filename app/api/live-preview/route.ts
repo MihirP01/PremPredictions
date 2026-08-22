@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
     : null;
 
   try {
-    const matches = await getFotmobLeagueMatches(season);
+    const matches = await getFotmobLeagueMatches(season).catch(() => []);
 
     const filtered =
       gameweek == null
@@ -171,15 +171,19 @@ export async function GET(req: NextRequest) {
         },
       },
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to load live preview",
+        seasonKey,
+        source: "fotmob",
+        generatedAt: new Date().toISOString(),
+        fixtures: [],
       },
-      { status: 502 },
+      {
+        headers: {
+          "Cache-Control": "s-maxage=10, stale-while-revalidate=5",
+        },
+      },
     );
   }
 }

@@ -2026,11 +2026,6 @@ export default function FixturesPage() {
                   const second = leagueWeekScores[1];
                   const third = leagueWeekScores[2];
                   const rest = leagueWeekScores.slice(3);
-                  const youIndex = leagueWeekScores.findIndex(
-                    (entry) => entry.uid === user?.uid,
-                  );
-                  const youInRest =
-                    youIndex >= 3 ? leagueWeekScores[youIndex] : null;
                   const placeCard = (
                     entry: (typeof leagueWeekScores)[number],
                     place: 1 | 2 | 3,
@@ -2117,25 +2112,6 @@ export default function FixturesPage() {
                           {third ? placeCard(third, 3) : null}
                         </div>
                       )}
-                      {youInRest ? (
-                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
-                          <div className="min-w-0">
-                            <div className="font-display text-sm font-semibold text-foreground">
-                              {youIndex + 1}. {youInRest.displayName}
-                              <span className="ml-2 text-[0.62rem] uppercase tracking-[0.14em] text-white/45">
-                                You
-                              </span>
-                            </div>
-                            <div className="mt-0.5 text-xs text-muted">
-                              {youInRest.exacts} exact · {youInRest.results}{" "}
-                              result
-                            </div>
-                          </div>
-                          <div className="shrink-0 font-display text-base font-semibold text-foreground">
-                            {youInRest.points}
-                          </div>
-                        </div>
-                      ) : null}
                       {rest.length ? (
                         <div>
                           <button

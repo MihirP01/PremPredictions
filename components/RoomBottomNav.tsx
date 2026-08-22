@@ -577,11 +577,11 @@ export default function RoomBottomNav() {
       }}
     >
       <div
-        className="overflow-hidden"
+        className="overflow-hidden rounded-[30px]"
         style={{
           clipPath:
             slotWidth > 0
-              ? `inset(0 0 0 ${collapsed ? (items.length - 1) * slotWidth : 0}px)`
+              ? `inset(0 0 0 ${collapsed ? (items.length - 1) * slotWidth : 0}px round 30px)`
               : undefined,
           transition: `clip-path ${NAV_MOTION_MS}ms ${NAV_EASE}`,
         }}

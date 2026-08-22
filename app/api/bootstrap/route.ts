@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "../../../firebase-admin";
+import { GET as getCurrentGameweek } from "../current-gameweek/route";
 
 type CurrentGwPayload = {
   currentGameweek?: number;
@@ -43,9 +44,9 @@ export async function GET(req: NextRequest) {
     if (gameModeStyle === "league")
       currentGwUrl.searchParams.set("mode", "league");
 
-    const currentGwRes = await fetch(currentGwUrl, {
-      cache: "no-store",
-    });
+    const currentGwRes = await getCurrentGameweek(
+      new NextRequest(currentGwUrl),
+    );
     if (!currentGwRes.ok) {
       return NextResponse.json(
         { error: "Failed to resolve current gameweek" },

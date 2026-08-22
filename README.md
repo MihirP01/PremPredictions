@@ -22,7 +22,7 @@ Multiplayer Premier League prediction app with:
 - **Live modes**: Captain, Round-Robin, and Sprint use the shared lobby flow.
 - **League mode**: room-wide asynchronous, one-shot gameweek submissions. Every
   eligible fixture is required and locks on submit; optional Fair Play awards a
-  completely missed week the submitted-player median as a labelled bye.
+  completely missed week half the submitted-player median as a labelled bye.
 - **Scoring**:
   - exact score = 2 points
   - correct result (W/D/L) = 1 point

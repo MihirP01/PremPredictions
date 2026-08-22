@@ -272,7 +272,9 @@ async function scoreSingleGw(
   for (const entry of calculated) {
     const missed = isLeague && !entry.hasPrediction;
     const fairPlayApplied = missed && fairPlayEnabled && fairPlayMedian != null;
-    const points = fairPlayApplied ? fairPlayMedian : entry.rawPoints;
+    const points = fairPlayApplied
+      ? Math.round((fairPlayMedian / 2) * 100) / 100
+      : entry.rawPoints;
     const scoreStatus = fairPlayApplied
       ? "fair_play_bye"
       : missed

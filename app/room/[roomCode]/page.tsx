@@ -5,7 +5,6 @@ import PageShell from "../../../components/PageShell";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  BarChart3,
   CalendarDays,
   Gamepad2,
   Loader2,
@@ -1052,7 +1051,7 @@ export default function RoomPage() {
                     Desktop rail
                   </div>
                 </div>
-                <SectionGrid gap="tight" className="xl:grid-cols-4">
+                <SectionGrid gap="tight" className="xl:grid-cols-3">
                   <HubNavTile
                     label="Fixtures"
                     hint="Games, scores, and room picks"
@@ -1077,12 +1076,6 @@ export default function RoomPage() {
                     hint="Room ranking and gameweek matrix"
                     icon={Trophy}
                     onClick={() => router.push(`/room/${roomCode}/leaderboard`)}
-                  />
-                  <HubNavTile
-                    label="Stats"
-                    hint="Player profile and scoring trends"
-                    icon={BarChart3}
-                    onClick={() => router.push(`/room/${roomCode}/stats`)}
                   />
                 </SectionGrid>
               </SectionStack>

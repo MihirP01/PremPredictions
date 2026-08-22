@@ -377,7 +377,6 @@ export default function RoomScopedLayout({
       `${base}/minigame/powerups`,
       `${base}/minigame/reveal`,
       `${base}/leaderboard`,
-      `${base}/stats`,
     ];
     routes.forEach((href) => {
       void router.prefetch(href);

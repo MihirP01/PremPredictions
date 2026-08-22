@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
         destination: "/room/KHUSHALSMELLS/:path*",
         permanent: true,
       },
+      {
+        source: "/room/:roomCode/stats",
+        destination: "/room/:roomCode/leaderboard",
+        permanent: false,
+      },
     ];
   },
 };

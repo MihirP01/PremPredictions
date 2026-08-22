@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
+import { CalendarDays, Gamepad2, House, Trophy } from "lucide-react";
 import {
   getRoomBootstrapCached,
   peekRoomBootstrapCached,
@@ -221,7 +221,7 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
 }
 
 type NavItem = {
-  key: "fixtures" | "predictions" | "home" | "leaderboard" | "stats";
+  key: "fixtures" | "predictions" | "home" | "leaderboard";
   label: string;
   href: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -384,13 +384,6 @@ export default function RoomBottomNav() {
         href: `/room/${roomCode}/leaderboard`,
         icon: Trophy,
         active: pathname === `/room/${roomCode}/leaderboard`,
-      },
-      {
-        key: "stats",
-        label: "Stats",
-        href: `/room/${roomCode}/stats`,
-        icon: BarChart3,
-        active: pathname === `/room/${roomCode}/stats`,
       },
     ],
     [

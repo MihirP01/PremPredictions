@@ -12,10 +12,9 @@ Before installing `compose.yaml` as a TrueNAS Custom App:
 4. Build the app image with the four documented `NEXT_PUBLIC_FIREBASE_*` build arguments.
 5. Add the public hostname to Firebase Authentication's authorized domains.
 
-Run `npm run db:backfill` and `npm run db:verify` before deploying this version.
-PostgreSQL is then the only application data store for rooms, players, game
-data, and leaderboards. Firebase remains enabled for Authentication only.
+PostgreSQL is the application data store for rooms, players, game data, and
+leaderboards. Firebase is used for Authentication only.
 
 PostgreSQL is only attached to the internal Compose network. Port 5432 is not
 published. Configure TrueNAS snapshots and an off-box backup for the PostgreSQL
-dataset before cutover.
+dataset.

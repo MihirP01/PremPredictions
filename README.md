@@ -107,7 +107,5 @@ If iOS Home Screen / browser spacing looks different, clear old installed PWA ca
 
 - Container image: `Dockerfile`
 - TrueNAS Compose template: `deploy/truenas/compose.yaml`
-- Firestore-to-PostgreSQL runbook: `docs/postgres-migration.md`
 
-After the one-time backfill and verifier pass, PostgreSQL is the only
-application data store. Firebase remains enabled for Authentication only.
+PostgreSQL is the application data store. Firebase is used for Authentication only.

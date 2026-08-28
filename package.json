@@ -8,9 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node scripts/migrate-postgres.mjs",
-    "db:backfill": "node scripts/firestore-to-postgres.mjs",
-    "db:verify": "node scripts/verify-postgres-migration.mjs"
+    "db:migrate": "node scripts/migrate-postgres.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

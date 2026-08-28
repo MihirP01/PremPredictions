@@ -45,8 +45,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/db/migrations ./db/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-postgres.mjs ./scripts/migrate-postgres.mjs
-COPY --from=builder --chown=nextjs:nodejs /app/scripts/firestore-to-postgres.mjs ./scripts/firestore-to-postgres.mjs
-COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-postgres-migration.mjs ./scripts/verify-postgres-migration.mjs
 
 USER nextjs
 EXPOSE 3000

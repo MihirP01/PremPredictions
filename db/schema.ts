@@ -9,7 +9,6 @@ import {
   primaryKey,
   text,
   timestamp,
-  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -348,25 +347,5 @@ export const seasonClubs = pgTable(
   (table) => [
     primaryKey({ columns: [table.seasonKey, table.teamId] }),
     index("season_clubs_season_key_idx").on(table.seasonKey),
-  ],
-);
-
-// Lossless staging/archive table. Every Firestore document is copied here
-// before individual features are switched to their normalized tables.
-export const firestoreDocuments = pgTable(
-  "firestore_documents",
-  {
-    path: text("path").primaryKey(),
-    collectionGroup: varchar("collection_group", { length: 128 }).notNull(),
-    documentId: text("document_id").notNull(),
-    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
-    sourceUpdateTime: timestamp("source_update_time", { withTimezone: true }),
-    migratedAt: timestamp("migrated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index("firestore_documents_collection_group_idx").on(table.collectionGroup),
-    uniqueIndex("firestore_documents_path_uidx").on(table.path),
   ],
 );

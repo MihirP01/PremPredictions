@@ -8,15 +8,6 @@ CREATE TABLE "app_users" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "firestore_documents" (
-	"path" text PRIMARY KEY NOT NULL,
-	"collection_group" varchar(128) NOT NULL,
-	"document_id" text NOT NULL,
-	"data" jsonb NOT NULL,
-	"source_update_time" timestamp with time zone,
-	"migrated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "game_lobby" (
 	"room_code" varchar(24) NOT NULL,
 	"season_key" varchar(16) NOT NULL,
@@ -151,8 +142,6 @@ ALTER TABLE "room_members" ADD CONSTRAINT "room_members_room_code_rooms_code_fk"
 ALTER TABLE "room_members" ADD CONSTRAINT "room_members_user_id_app_users_firebase_uid_fk" FOREIGN KEY ("user_id") REFERENCES "public"."app_users"("firebase_uid") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "room_security" ADD CONSTRAINT "room_security_room_code_rooms_code_fk" FOREIGN KEY ("room_code") REFERENCES "public"."rooms"("code") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "seasons" ADD CONSTRAINT "seasons_room_code_rooms_code_fk" FOREIGN KEY ("room_code") REFERENCES "public"."rooms"("code") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "firestore_documents_collection_group_idx" ON "firestore_documents" USING btree ("collection_group");--> statement-breakpoint
-CREATE UNIQUE INDEX "firestore_documents_path_uidx" ON "firestore_documents" USING btree ("path");--> statement-breakpoint
 CREATE INDEX "games_room_season_idx" ON "games" USING btree ("room_code","season_key");--> statement-breakpoint
 CREATE INDEX "predictions_game_idx" ON "predictions" USING btree ("room_code","season_key","gameweek");--> statement-breakpoint
 CREATE INDEX "room_members_user_id_idx" ON "room_members" USING btree ("user_id");--> statement-breakpoint

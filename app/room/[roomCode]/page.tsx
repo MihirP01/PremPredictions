@@ -43,6 +43,7 @@ import {
 } from "@/lib/useRoomCache";
 import {
   ROOM_CODE_ERROR,
+  canonicalRoomCode,
   isValidRoomCode,
   normalizeRoomCode,
 } from "@/lib/roomCode";
@@ -155,7 +156,7 @@ function HubNavTile({
 export default function RoomPage() {
   const params = useParams<{ roomCode: string }>();
   const roomCode = useMemo(
-    () => String(params.roomCode).toUpperCase(),
+    () => canonicalRoomCode(params.roomCode),
     [params.roomCode],
   );
 
@@ -483,7 +484,7 @@ export default function RoomPage() {
 
   async function joinNewRoom() {
     if (!user) return;
-    const code = normalizeRoomCode(joinCode);
+    const code = canonicalRoomCode(joinCode);
     if (!isValidRoomCode(code)) {
       setSwitcherError(ROOM_CODE_ERROR);
       return;
@@ -1285,11 +1286,14 @@ export default function RoomPage() {
             <div className="mt-4 flex flex-col gap-2">
               <input
                 value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
+                onChange={(e) => setJoinCode(normalizeRoomCode(e.target.value))}
                 placeholder="AB12"
                 maxLength={24}
                 className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
               <button
                 onClick={joinNewRoom}
@@ -1309,11 +1313,14 @@ export default function RoomPage() {
             <div className="mt-4 flex flex-col gap-2">
               <input
                 value={createCode}
-                onChange={(e) => setCreateCode(e.target.value)}
+                onChange={(e) => setCreateCode(normalizeRoomCode(e.target.value))}
                 placeholder="NEW25"
                 maxLength={24}
                 className={`${sharedInputClass} min-w-0 uppercase font-display tracking-[0.08em]`}
                 inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
               <button
                 onClick={createNewRoom}

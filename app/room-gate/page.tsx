@@ -163,7 +163,7 @@ export default function RoomGatePage() {
 
   const joinRoom = async () => {
     if (!user) return;
-    const code = normalizeRoomCode(roomCode);
+    const code = canonicalRoomCode(roomCode);
 
     if (!isValidRoomCode(code)) {
       setError(ROOM_CODE_ERROR);
@@ -385,11 +385,14 @@ export default function RoomGatePage() {
                   Room Code
                 </label>
                 <input
-                  className={`${fieldClassName} uppercase`}
+                  className={`${fieldClassName} uppercase tracking-[0.08em]`}
                   value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value)}
+                  onChange={(e) => setRoomCode(normalizeRoomCode(e.target.value))}
                   placeholder="AB12"
                   maxLength={24}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>

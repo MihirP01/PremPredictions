@@ -129,7 +129,7 @@ export default function YearTableSection({
   const [submitBusy, setSubmitBusy] = useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
   const [lockAtMs, setLockAtMs] = useState<number | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(0);
 
   const playerByUid = useMemo(() => {
     const map = new Map<string, Player>();
@@ -211,6 +211,7 @@ export default function YearTableSection({
   }, [seasonKey]);
 
   useEffect(() => {
+    setNowMs(Date.now());
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -225,6 +226,7 @@ export default function YearTableSection({
   const canEnter = open && !myPick && rankedClubs.length === 20;
 
   function openEnter() {
+    setError(null);
     setDraftOrder(emptyDraft());
     setFocusedRank(0);
     setEnterOpen(true);
@@ -386,7 +388,7 @@ export default function YearTableSection({
               <button
                 type="button"
                 onClick={openEnter}
-                disabled={!canEnter || loading}
+                disabled={!canEnter}
                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {myPick ? "Submitted" : "Enter year predictions"}
@@ -411,6 +413,7 @@ export default function YearTableSection({
         open={enterOpen}
         onClose={() => (submitBusy ? null : setEnterOpen(false))}
         maxWidthClassName="max-w-2xl"
+        initialSnap="expanded"
       >
         <ModalHeader
           title="Enter year predictions"
@@ -422,6 +425,11 @@ export default function YearTableSection({
           Swipe ranks, tap a club to fill the focused slot. Remove to put a
           club back.
         </div>
+        {error ? (
+          <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : null}
         <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto no-scrollbar">
           {draftOrder.map((key, index) => {
             const club = key ? clubFor(key) : undefined;

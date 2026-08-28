@@ -10,6 +10,7 @@ export const ROOM_CODE_ALIASES: Record<string, string> = {
 export function normalizeRoomCode(code: unknown) {
   return String(code || "")
     .trim()
+    .replace(/\s+/g, "")
     .toUpperCase();
 }
 
@@ -20,4 +21,10 @@ export function isValidRoomCode(code: unknown) {
 export function canonicalRoomCode(code: unknown) {
   const normalized = normalizeRoomCode(code);
   return ROOM_CODE_ALIASES[normalized] || normalized;
+}
+
+export function roomCodeLookupCandidates(code: unknown) {
+  const normalized = normalizeRoomCode(code);
+  const aliased = canonicalRoomCode(normalized);
+  return [...new Set([normalized, aliased].filter((value) => isValidRoomCode(value)))];
 }

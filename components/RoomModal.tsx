@@ -15,6 +15,7 @@ type ThemedModalProps = {
 type ThemedSheetModalProps = ThemedModalProps & {
   bodyClassName?: string;
   showHandle?: boolean;
+  initialSnap?: "collapsed" | "expanded";
 };
 
 const SHEET_COLLAPSED_RATIO = 2 / 5;
@@ -60,9 +61,10 @@ export function ThemedSheetModal({
   panelClassName = "",
   bodyClassName = "",
   showHandle = true,
+  initialSnap = "collapsed",
 }: ThemedSheetModalProps) {
   const [sheetSnap, setSheetSnap] = useState<"collapsed" | "expanded">(
-    "collapsed",
+    initialSnap,
   );
   const [isMobile, setIsMobile] = useState(false);
   const [sheetHeightPx, setSheetHeightPx] = useState<number | null>(null);
@@ -89,14 +91,19 @@ export function ThemedSheetModal({
       return () => window.clearTimeout(timer);
     }
     const timer = window.setTimeout(() => {
-      setSheetSnap("collapsed");
-      const nextHeight = Math.round(window.innerHeight * SHEET_COLLAPSED_RATIO);
+      setSheetSnap(initialSnap);
+      const nextHeight = Math.round(
+        window.innerHeight *
+          (initialSnap === "expanded"
+            ? SHEET_EXPANDED_RATIO
+            : SHEET_COLLAPSED_RATIO),
+      );
       setSheetHeightPx(nextHeight);
       liveHeightRef.current = nextHeight;
       setDragging(false);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [open]);
+  }, [open, initialSnap]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

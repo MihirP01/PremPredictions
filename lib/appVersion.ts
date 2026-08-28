@@ -11,7 +11,7 @@
 export const APP_VERSION = {
   major: 3,
   minor: 4,
-  patch: 1,
+  patch: 2,
 } as const;
 
 export const APP_VERSION_NUMBER = `${APP_VERSION.major}.${APP_VERSION.minor}.${APP_VERSION.patch}`;

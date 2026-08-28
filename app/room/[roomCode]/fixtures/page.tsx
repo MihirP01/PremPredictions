@@ -33,7 +33,6 @@ import SpecialBreak from "../../../../components/SpecialBreak";
 import TeamBadge from "../../../../components/TeamBadge";
 import TeamLabel from "../../../../components/TeamLabel";
 import TopActionRow from "../../../../components/TopActionRow";
-import { db } from "../../../../firebase";
 import { getCurrentGameweekCached, gameweekModeFromStyle } from "@/lib/currentGameweekClient";
 import {
   getRoomBootstrapCached,
@@ -41,6 +40,7 @@ import {
 } from "@/lib/roomBootstrapClient";
 import {
   getFixturesCached,
+  peekFixturesCached,
   refreshFixturesCached,
 } from "@/lib/fixturesClient";
 import { getTableCached, type TableRow } from "@/lib/tableClient";
@@ -55,7 +55,10 @@ import {
   type MatchInfoData,
   type MatchInfoPlayer,
 } from "@/lib/matchInfoClient";
-import { getGameDataCached } from "@/lib/gameDataClient";
+import {
+  peekGameDataCached,
+  refreshGameDataCached,
+} from "@/lib/gameDataClient";
 import ScoringKeyRow, {
   LEAGUE_SCORING_ITEMS,
   PREDICTION_TONE_ITEMS,
@@ -841,7 +844,7 @@ function PitchMarker({
           <span className="absolute -left-2 -top-2 inline-flex flex-col items-center gap-0.5">
             {subEvent.time != null ? (
               <span className="font-display text-[8px] text-foreground tabular-nums">
-                {subEvent.time}'
+                {subEvent.time}&prime;
               </span>
             ) : null}
             <span
@@ -1005,6 +1008,46 @@ export default function FixturesPage() {
   const initialFixturesLoadDoneRef = useRef(false);
   const fixturesLoadSeqRef = useRef(0);
   const fixturesLoadTimerRef = useRef<number | null>(null);
+  const activeCachedGame = useCachedGameData(roomCode, seasonKey, gw, {
+    includeChips: gameModeStyle !== "league",
+  });
+  const activeCachedMapped = useMemo(
+    () => (activeCachedGame ? mapGameData(activeCachedGame) : null),
+    [activeCachedGame],
+  );
+  const visiblePicksByFixture =
+    activeCachedMapped?.byFx ?? picksByFixture;
+  const visibleGoldenByUid = activeCachedMapped?.gByUid ?? goldenByUid;
+  const visiblePowerupByUid = activeCachedMapped?.pByUid ?? powerupByUid;
+  const gameDataReady = activeCachedGame !== null;
+
+  useEffect(() => {
+    if (!seededBoot || bootstrapped) return;
+    setGw(Number.isFinite(seededGw) ? seededGw : 1);
+    setSeasonCurrentGw(Number.isFinite(seededGw) ? seededGw : 1);
+    setSeasonKey(seededSeason);
+    setGameModeStyle(seededBoot.gameModeStyle);
+    setBootstrapped(true);
+  }, [bootstrapped, seededBoot, seededGw, seededSeason]);
+
+  useEffect(() => {
+    if (!seededFixtures || gw !== seededGw || seasonKey !== seededSeason) return;
+    setFixtures((previous) =>
+      mergeFixtureResults(
+        previous,
+        (seededFixtures.fixtures ?? []) as Fixture[],
+      ),
+    );
+    setFixturesGeneratedAt(asDate(seededFixtures.generatedAt));
+  }, [gw, seasonKey, seededFixtures, seededGw, seededSeason]);
+
+  useEffect(() => {
+    if (!seededGame || gw !== seededGw || seasonKey !== seededSeason) return;
+    const mapped = mapGameData(seededGame);
+    setPicksByFixture(mapped.byFx);
+    setGoldenByUid(mapped.gByUid);
+    setPowerupByUid(mapped.pByUid);
+  }, [gw, seasonKey, seededGame, seededGw, seededSeason]);
 
   const scheduleTableSwap = useCallback((apply: () => void) => {
     if (tableSwapTimerRef.current) {
@@ -1429,6 +1472,7 @@ export default function FixturesPage() {
   );
 
   useEffect(() => {
+    if (loading || !user) return;
     let cancelled = false;
 
     (async () => {
@@ -1455,9 +1499,10 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   useEffect(() => {
+    if (loading || !user) return;
     return subscribeRoomMeta(
       roomCode,
       (roomMeta) => {
@@ -1470,7 +1515,7 @@ export default function FixturesPage() {
       },
       () => {},
     );
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   // Auth guard
   useEffect(() => {
@@ -1509,9 +1554,10 @@ export default function FixturesPage() {
   }, [gameModeStyle, refreshLockedUntil, nowMs]);
 
   useEffect(() => {
+    if (loading || !user) return;
     void getRoomPlayersCached(roomCode).catch(() => {});
     return subscribeRoomPlayers(roomCode, () => {}, () => {});
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   const loadFixtures = useCallback(
     async (opts?: { force?: boolean; showSpinner?: boolean }) => {
@@ -1591,9 +1637,9 @@ export default function FixturesPage() {
     let cancelled = false;
 
     (async () => {
-      if (!gameDataEnabled || !seasonKey) return;
+      if (loading || !user || !gameDataEnabled || !seasonKey) return;
       setError(null);
-      const gameData = await getGameDataCached(roomCode, seasonKey, gw, {
+      const gameData = await refreshGameDataCached(roomCode, seasonKey, gw, {
         includeChips: gameModeStyle !== "league",
       });
       const mapped = mapGameData(gameData);
@@ -1612,7 +1658,7 @@ export default function FixturesPage() {
     return () => {
       cancelled = true;
     };
-  }, [gameDataEnabled, roomCode, gw, seasonKey, gameModeStyle]);
+  }, [gameDataEnabled, roomCode, gw, seasonKey, gameModeStyle, loading, user]);
 
   const isLoading = fixtures === null || fixturesLoading;
   const navLoading = !bootstrapped;
@@ -1623,7 +1669,7 @@ export default function FixturesPage() {
     return nowMs >= firstKickoffMs - LEAGUE_LOCK_WINDOW_MS;
   }, [fixtures, gameModeStyle, nowMs]);
   const leagueWeekScores = useMemo(() => {
-    if (gameModeStyle !== "league") return [];
+    if (gameModeStyle !== "league" || !gameDataReady) return [];
     return players
       .map((player) => {
         let points = 0;
@@ -1633,7 +1679,8 @@ export default function FixturesPage() {
         for (const fixture of fixtures ?? []) {
           const actual = String(fixture.result || "").trim();
           if (!actual) continue;
-          const pred = picksByFixture[fixture.fixtureId]?.[player.uid] ?? "";
+          const pred =
+            visiblePicksByFixture[fixture.fixtureId]?.[player.uid] ?? "";
           const pts = getBasePointsFromScores(pred, actual);
           const tier = classifyPredictionTier(pred, actual);
           graded += 1;
@@ -1656,7 +1703,13 @@ export default function FixturesPage() {
           sensitivity: "base",
         });
       });
-  }, [fixtures, gameModeStyle, picksByFixture, players]);
+  }, [
+    fixtures,
+    gameModeStyle,
+    gameDataReady,
+    visiblePicksByFixture,
+    players,
+  ]);
   const leagueHasGradedResults = leagueWeekScores.some(
     (entry) => entry.graded > 0,
   );
@@ -1675,10 +1728,26 @@ export default function FixturesPage() {
     setNowMs(Date.now());
     setRefreshingFixtures(true);
     try {
-      await loadFixtures({ force: true, showSpinner: false });
+      const [, refreshedGameData] = await Promise.all([
+        loadFixtures({ force: true, showSpinner: false }),
+        gameDataEnabled && seasonKey
+          ? refreshGameDataCached(roomCode, seasonKey, gw, {
+              includeChips: gameModeStyle !== "league",
+            })
+          : Promise.resolve(null),
+      ]);
+
+      if (refreshedGameData) {
+        const mapped = mapGameData(refreshedGameData);
+        setPicksByFixture(mapped.byFx);
+        setGoldenByUid(mapped.gByUid);
+        setPowerupByUid(mapped.pByUid);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "";
-      setError(`Failed to refresh fixtures for GW ${gw}. ${message}`.trim());
+      setError(
+        `Failed to refresh fixtures and predictions for GW ${gw}. ${message}`.trim(),
+      );
     } finally {
       setRefreshingFixtures(false);
     }
@@ -1704,6 +1773,33 @@ export default function FixturesPage() {
       [fixtureId]: nextExpanded,
     }));
   }
+
+  const selectGameweek = useCallback(
+    (nextGw: number) => {
+      const cachedFixtures = peekFixturesCached(nextGw, seasonKey);
+      const cachedGame = peekGameDataCached(roomCode, seasonKey, nextGw, {
+        includeChips: gameModeStyle !== "league",
+      });
+      setFixtures(
+        cachedFixtures
+          ? ((cachedFixtures.fixtures ?? []) as Fixture[])
+          : null,
+      );
+      setFixturesGeneratedAt(asDate(cachedFixtures?.generatedAt ?? null));
+      if (cachedGame) {
+        const mapped = mapGameData(cachedGame);
+        setPicksByFixture(mapped.byFx);
+        setGoldenByUid(mapped.gByUid);
+        setPowerupByUid(mapped.pByUid);
+      } else {
+        setPicksByFixture({});
+        setGoldenByUid({});
+        setPowerupByUid({});
+      }
+      setGw(nextGw);
+    },
+    [gameModeStyle, roomCode, seasonKey],
+  );
 
   useEffect(() => {
     if (!bootstrapped || !seasonKey) return;
@@ -1916,11 +2012,11 @@ export default function FixturesPage() {
                   onClick={refreshFixtures}
                   disabled={refreshingFixtures || refreshLockSeconds > 0}
                   className="page-action-btn inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.16)] transition hover:bg-white/[0.06] disabled:opacity-60"
-                  aria-label="Refresh fixtures"
+                  aria-label="Refresh fixtures and predictions"
                   title={
                     refreshLockSeconds > 0
                       ? `Refresh locked (${refreshLockSeconds}s)`
-                      : "Refresh fixtures"
+                      : "Refresh fixtures and predictions"
                   }
                 >
                   <RefreshCw
@@ -1955,7 +2051,9 @@ export default function FixturesPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/6 pt-3">
                 <span className="text-[0.72rem] font-medium uppercase tracking-[0.16em] text-white/42">
-                  {finishedFixtureCount}/{fixtureList.length || 0} done
+                  {fixtures
+                    ? `${finishedFixtureCount}/${fixtureList.length} done`
+                    : "Loading fixtures"}
                 </span>
                 <span className="font-display text-sm font-semibold text-foreground">
                   {gw === seasonCurrentGw
@@ -2059,7 +2157,7 @@ export default function FixturesPage() {
           </div>
         </SectionCard>
 
-        {gameModeStyle === "league" ? (
+        {gameModeStyle === "league" && !isLoading ? (
           <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -2084,7 +2182,12 @@ export default function FixturesPage() {
                 </div>
               </div>
             </div>
-            {!leaguePicksRevealed ? (
+            {!gameDataReady ? (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
+                <Loader2 size={14} className="animate-spin" />
+                Loading weekly scores…
+              </div>
+            ) : !leaguePicksRevealed ? (
               <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-muted">
                 Scores stay hidden until 30 minutes before the first kickoff.
               </div>
@@ -2265,7 +2368,7 @@ export default function FixturesPage() {
               min={MIN_GW}
               max={MAX_GW}
               disabled={navLoading}
-              onChange={setGw}
+              onChange={selectGameweek}
               buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
               selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
             />
@@ -2522,7 +2625,12 @@ export default function FixturesPage() {
                                       : "players"}
                                   </span>
                                 </div>
-                                {players.length === 0 ? (
+                                {!gameDataReady ? (
+                                  <div className="inline-flex items-center gap-2 text-sm text-muted">
+                                    <Loader2 size={14} className="animate-spin" />
+                                    Loading predictions…
+                                  </div>
+                                ) : players.length === 0 ? (
                                   <div className="text-sm text-muted">
                                     No players found.
                                   </div>
@@ -2530,7 +2638,7 @@ export default function FixturesPage() {
                                   <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(104px,1fr))]">
                                     {players.map((p) => {
                                       const pred =
-                                        picksByFixture?.[f.fixtureId]?.[
+                                        visiblePicksByFixture?.[f.fixtureId]?.[
                                           p.uid
                                         ] ?? "";
                                       const hideOtherPick =
@@ -2539,14 +2647,14 @@ export default function FixturesPage() {
                                         p.uid !== user?.uid;
                                       const golden = hideOtherPick
                                         ? undefined
-                                        : goldenByUid[p.uid];
+                                        : visibleGoldenByUid[p.uid];
                                       const isGolden =
                                         !!golden &&
                                         golden.fixtureId === f.fixtureId &&
                                         golden.score === pred;
                                       const powerup = hideOtherPick
                                         ? undefined
-                                        : powerupByUid[p.uid];
+                                        : visiblePowerupByUid[p.uid];
                                       const powerupType =
                                         powerup &&
                                         powerup.locked &&
@@ -2566,7 +2674,9 @@ export default function FixturesPage() {
                                         actual || "",
                                       ).trim();
                                       const hasScoredResult =
-                                        !hideOtherPick && actualNorm.length > 0;
+                                        gameDataReady &&
+                                        !hideOtherPick &&
+                                        actualNorm.length > 0;
                                       const fixturePoints =
                                         hideOtherPick || !hasScoredResult
                                           ? null

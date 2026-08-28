@@ -1,5 +1,4 @@
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { authenticatedFetch } from "./authenticatedFetch";
 import { notifyRoomCache } from "./cacheStore";
 import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
@@ -37,7 +36,10 @@ function peekCached(
 ): { expiresAt: number; data: CachedRoomGameState | null } | null {
   const mem = memCache.get(key);
   if (mem) return mem;
-  const stored = peekSessionRecord<CachedRoomGameState | null>(STORAGE_PREFIX, key);
+  const stored = peekSessionRecord<CachedRoomGameState | null>(
+    STORAGE_PREFIX,
+    key,
+  );
   if (!stored) return null;
   memCache.set(key, { expiresAt: stored.expiresAt, data: stored.data });
   return stored;
@@ -58,11 +60,22 @@ function fetchGameState(
   const existing = pending.get(key);
   if (existing) return existing;
   const req = (async () => {
-    const ref = doc(db, "rooms", room, "seasons", season, "games", `gw-${gw}`);
-    const snap = await getDoc(ref);
-    const data = snap.exists()
-      ? ((snap.data() as CachedRoomGameState) ?? null)
-      : null;
+    const params = new URLSearchParams({
+      roomCode: room,
+      seasonKey: season,
+      gameweek: String(gw),
+    });
+    const response = await authenticatedFetch(`/api/game/state?${params}`, {
+      cache: "no-store",
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      game?: CachedRoomGameState | null;
+      error?: string;
+    };
+    if (!response.ok) {
+      throw new Error(payload.error || `game state ${response.status}`);
+    }
+    const data = payload.game ?? null;
     setCached(key, data);
     return data;
   })().finally(() => pending.delete(key));
@@ -111,14 +124,21 @@ export async function getRoomGameStateCached(
   const key = keyFor(normalizedRoom, normalizedSeason, normalizedGw);
   const cached = peekCached(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
-  if (cached) {
-    void fetchGameState(
-      normalizedRoom,
-      normalizedSeason,
-      normalizedGw,
-      key,
-    ).catch(() => {});
-    return cached.data;
-  }
-  return fetchGameState(normalizedRoom, normalizedSeason, normalizedGw, key);
+  return fetchGameState(normalizedRoom, normalizedSeason, normalizedGw, key).catch(
+    (error) => {
+      if (cached) return cached.data;
+      throw error;
+    },
+  );
+}
+
+export function refreshRoomGameStateCached(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+) {
+  const room = String(roomCode || "").toUpperCase();
+  const season = String(seasonKey || "");
+  const gameweek = Number(gw);
+  return fetchGameState(room, season, gameweek, keyFor(room, season, gameweek));
 }

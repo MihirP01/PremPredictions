@@ -1,7 +1,8 @@
-const CACHE_VERSION = "pl-predictions-v3.4.2";
+const CACHE_VERSION = "pl-predictions-v3.4.3";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
+const BADGE_CACHE = `${CACHE_VERSION}-club-badges`;
 const APP_SHELL = [
   "/",
   "/offline",
@@ -16,6 +17,10 @@ const API_CACHEABLE_PATHS = [
   "/api/fixtures",
   "/api/table",
 ];
+const CLUB_BADGE_HOSTS = new Set([
+  "crests.football-data.org",
+  "images.fotmob.com",
+]);
 
 function isBypassRequest(request, url) {
   if (request.method !== "GET") return true;
@@ -89,8 +94,32 @@ async function networkFirst(request, cacheName) {
   }
 }
 
+async function cacheClubBadge(request) {
+  const cache = await caches.open(BADGE_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response && (response.ok || response.type === "opaque")) {
+      cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+  } catch {
+    return Response.error();
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  if (
+    event.request.method === "GET" &&
+    event.request.destination === "image" &&
+    CLUB_BADGE_HOSTS.has(url.hostname)
+  ) {
+    event.respondWith(cacheClubBadge(event.request));
+    return;
+  }
 
   // Live scores / table / current GW must not be served stale.
   if (

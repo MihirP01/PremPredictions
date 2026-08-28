@@ -96,9 +96,8 @@ export async function getTableCached(seasonKey: string): Promise<TableData> {
   const key = keyFor(seasonKey);
   const cached = peekCached(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
-  if (cached) {
-    void fetchTable(key).catch(() => {});
-    return cached.data;
-  }
-  return fetchTable(key);
+  return fetchTable(key).catch((error) => {
+    if (cached) return cached.data;
+    throw error;
+  });
 }

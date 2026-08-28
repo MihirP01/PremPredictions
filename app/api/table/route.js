@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSeasonClubCatalog } from "@/lib/server/season-clubs";
 
 const LEAGUE = "PL";
 const SEASON_START_MONTH_UTC = 7; // Aug
@@ -49,20 +50,16 @@ export async function GET(req) {
   const season = seasonStartYearFromKey(seasonKey);
 
   const url = `https://api.football-data.org/v4/competitions/${LEAGUE}/standings?season=${season}`;
-  const teamsUrl = `https://api.football-data.org/v4/competitions/${LEAGUE}/teams?season=${season}`;
 
   let response;
-  let teamsResponse;
+  let seasonClubs = [];
   try {
-    [response, teamsResponse] = await Promise.all([
+    [response, seasonClubs] = await Promise.all([
       fetch(url, {
         headers: { "X-Auth-Token": API_KEY },
         next: { revalidate: 45 },
       }),
-      fetch(teamsUrl, {
-        headers: { "X-Auth-Token": API_KEY },
-        next: { revalidate: 45 },
-      }),
+      getSeasonClubCatalog(seasonKey, API_KEY).catch(() => []),
     ]);
   } catch {
     return NextResponse.json(
@@ -71,39 +68,38 @@ export async function GET(req) {
     );
   }
 
-  const teamsData = teamsResponse?.ok
-    ? await teamsResponse.json().catch(() => ({}))
-    : {};
-  const teamsList = Array.isArray(teamsData?.teams) ? teamsData.teams : [];
-  const tlaByTeamId = new Map(
-    teamsList.map((t) => [
-      Number(t?.id),
-      String(t?.tla || "").toUpperCase(),
-    ]),
+  const clubByTeamId = new Map(
+    seasonClubs.map((club) => [Number(club.teamId), club]),
   );
 
   const mapRows = (rows = []) =>
-    rows.map((row) => ({
-      position: Number(row.position ?? 0),
-      team: {
-        id: Number.isFinite(Number(row?.team?.id))
-          ? Number(row?.team?.id)
-          : null,
-        name: row?.team?.name || "Club",
-        tla: row?.team?.tla || tlaByTeamId.get(Number(row?.team?.id)) || null,
-        shortName:
-          row?.team?.shortName || row?.team?.tla || row?.team?.name || "Club",
-        badge: row?.team?.crest || null,
-      },
-      playedGames: Number(row.playedGames ?? 0),
-      won: Number(row.won ?? 0),
-      draw: Number(row.draw ?? 0),
-      lost: Number(row.lost ?? 0),
-      goalsScored: Number(row.goalsFor ?? 0),
-      goalsAgainst: Number(row.goalsAgainst ?? 0),
-      goalDifference: Number(row.goalDifference ?? 0),
-      points: Number(row.points ?? 0),
-    }));
+    rows.map((row) => {
+      const teamId = Number(row?.team?.id);
+      const stored = clubByTeamId.get(teamId);
+      return {
+        position: Number(row.position ?? 0),
+        team: {
+          id: Number.isFinite(teamId) ? teamId : null,
+          name: stored?.name || row?.team?.name || "Club",
+          tla: stored?.tla || row?.team?.tla || null,
+          shortName:
+            stored?.shortName ||
+            row?.team?.shortName ||
+            row?.team?.tla ||
+            row?.team?.name ||
+            "Club",
+          badge: stored?.badgeUrl || row?.team?.crest || null,
+        },
+        playedGames: Number(row.playedGames ?? 0),
+        won: Number(row.won ?? 0),
+        draw: Number(row.draw ?? 0),
+        lost: Number(row.lost ?? 0),
+        goalsScored: Number(row.goalsFor ?? 0),
+        goalsAgainst: Number(row.goalsAgainst ?? 0),
+        goalDifference: Number(row.goalDifference ?? 0),
+        points: Number(row.points ?? 0),
+      };
+    });
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");

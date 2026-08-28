@@ -1,5 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import { authenticatedFetch } from "./authenticatedFetch";
 import { notifyRoomCache } from "./cacheStore";
 import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
@@ -55,21 +54,27 @@ function fetchPlayers(key: string): Promise<CachedRoomPlayer[]> {
   const existing = pending.get(key);
   if (existing) return existing;
   const req = (async () => {
-    const snap = await getDocs(collection(db, "rooms", key, "players"));
-    const list = snap.docs
-      .map((d) => {
-        const data = d.data() as {
-          displayName?: string;
-          nickName?: string;
-          role?: "leader" | "member";
-        };
+    const response = await authenticatedFetch(
+      `/api/room/players?roomCode=${encodeURIComponent(key)}`,
+      { cache: "no-store" },
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      players?: CachedRoomPlayer[];
+      error?: string;
+    };
+    if (!response.ok) {
+      throw new Error(payload.error || `players ${response.status}`);
+    }
+    const list = (Array.isArray(payload.players) ? payload.players : [])
+      .map((data) => {
         return {
-          uid: d.id,
+          uid: String(data.uid || ""),
           displayName: String(data.displayName || "Player"),
           nickName: typeof data.nickName === "string" ? data.nickName : "",
-          role: data.role,
+          role: data.role === "leader" ? "leader" : "member",
         } satisfies CachedRoomPlayer;
       })
+      .filter((player) => Boolean(player.uid))
       .sort((a, b) =>
         a.displayName.localeCompare(b.displayName, undefined, {
           sensitivity: "base",
@@ -97,9 +102,14 @@ export async function getRoomPlayersCached(
   if (!key) return [];
   const cached = peekCached(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
-  if (cached) {
-    void fetchPlayers(key).catch(() => {});
-    return cached.data;
-  }
+  return fetchPlayers(key).catch((error) => {
+    if (cached) return cached.data;
+    throw error;
+  });
+}
+
+export function refreshRoomPlayersCached(roomCode: string) {
+  const key = keyFor(roomCode);
+  if (!key) return Promise.resolve([]);
   return fetchPlayers(key);
 }

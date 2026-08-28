@@ -1,16 +1,14 @@
-import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import {
+  cert,
+  getApps,
+  initializeApp,
+  type AppOptions,
+} from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { createPrivateKey } from "crypto";
 
-function must(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
-
-function loadPrivateKey() {
-  let k = process.env.FIREBASE_PRIVATE_KEY;
-  if (!k) throw new Error("Missing env var: FIREBASE_PRIVATE_KEY");
+function loadPrivateKey(input: string) {
+  let k = input;
 
   // strip accidental wrapping quotes
   k = k.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
@@ -40,15 +38,39 @@ function loadPrivateKey() {
   return k;
 }
 
-const app =
-  getApps().length > 0
-    ? getApps()[0]
-    : initializeApp({
-        credential: cert({
-          projectId: must("FIREBASE_PROJECT_ID"),
-          clientEmail: must("FIREBASE_CLIENT_EMAIL"),
-          privateKey: loadPrivateKey(),
-        }),
-      });
+function adminOptions(): AppOptions {
+  const explicitProjectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId =
+    explicitProjectId || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const providedCredentials = [
+    explicitProjectId,
+    clientEmail,
+    privateKey,
+  ].filter(Boolean).length;
 
-export const adminDb = getFirestore(app);
+  if (providedCredentials > 0 && providedCredentials < 3) {
+    throw new Error(
+      "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY must be configured together.",
+    );
+  }
+  if (explicitProjectId && clientEmail && privateKey) {
+    return {
+      projectId: explicitProjectId,
+      credential: cert({
+        projectId: explicitProjectId,
+        clientEmail,
+        privateKey: loadPrivateKey(privateKey),
+      }),
+    };
+  }
+
+  // `next build` only needs to bundle server modules. Runtime containers still
+  // provide explicit credentials; this fallback avoids baking them into an image.
+  return projectId ? { projectId } : {};
+}
+
+const app = getApps().length > 0 ? getApps()[0] : initializeApp(adminOptions());
+
+export const adminAuth = getAuth(app);

@@ -2,19 +2,24 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "../../../firebase";
 import { useAuth } from "../../../components/AuthProvider";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import RoomBottomNav from "../../../components/RoomBottomNav";
-import { getRoomBootstrapCached, peekRoomBootstrapCached, refreshRoomBootstrapCached } from "@/lib/roomBootstrapClient";
+import {
+  getRoomBootstrapCached,
+  patchRoomBootstrapCached,
+  peekRoomBootstrapCached,
+  refreshRoomBootstrapCached,
+} from "@/lib/roomBootstrapClient";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import { getGameDataCached } from "@/lib/gameDataClient";
 import { getTableCached } from "@/lib/tableClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import { prewarmSeasonScoresSnapshot } from "@/lib/seasonScoresClient";
 import { canonicalRoomCode } from "@/lib/roomCode";
 import { clearLastRoomCode, rememberLastRoomCode } from "@/lib/lastRoom";
+import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 
 type AccentTheme = {
   hex: string;
@@ -84,12 +89,6 @@ const ACCENT_THEME: Record<string, AccentTheme> = {
   },
 };
 
-type RoomDoc = {
-  settings?: {
-    themeAccent?: string;
-  };
-};
-
 export default function RoomScopedLayout({
   children,
 }: {
@@ -105,10 +104,7 @@ export default function RoomScopedLayout({
     () => String(params.roomCode || "").toUpperCase(),
     [params.roomCode],
   );
-  const roomCode = useMemo(
-    () => canonicalRoomCode(rawRoomCode),
-    [rawRoomCode],
-  );
+  const roomCode = useMemo(() => canonicalRoomCode(rawRoomCode), [rawRoomCode]);
   const [accentKey, setAccentKey] = useState<string>("teal");
   const [showBootOverlay, setShowBootOverlay] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
@@ -137,21 +133,15 @@ export default function RoomScopedLayout({
   useEffect(() => {
     if (loading || !user || !roomCode) return;
     if (rawRoomCode !== roomCode) return;
-    const membershipRef = doc(db, "rooms", roomCode, "players", user.uid);
     const forceToRoomGate = () => {
       if (redirectedRef.current) return;
       redirectedRef.current = true;
-      setDoc(
-        doc(db, "users", user.uid),
-        { currentRoomCode: null },
-        { merge: true },
-      ).catch(() => {});
       router.replace("/room-gate?kicked=1");
     };
-    const unsub = onSnapshot(
-      membershipRef,
-      (snap) => {
-        if (snap.exists()) {
+    return subscribeRoomPlayers(
+      roomCode,
+      (players) => {
+        if (players.some((player) => player.uid === user.uid)) {
           redirectedRef.current = false;
           rememberLastRoomCode(roomCode);
           return;
@@ -159,29 +149,37 @@ export default function RoomScopedLayout({
         clearLastRoomCode();
         forceToRoomGate();
       },
-      () => {
-        // Transient Firestore errors after a long background must not kick.
-      },
+      // Network/auth failures must never be mistaken for removal from a room.
+      () => {},
     );
-    return () => unsub();
   }, [loading, user, roomCode, rawRoomCode, router]);
 
   useEffect(() => {
     if (!roomCode) return;
-    const ref = doc(db, "rooms", roomCode);
-    const unsub = onSnapshot(ref, (snap) => {
-      const room = snap.data() as RoomDoc | undefined;
-      const key = String(room?.settings?.themeAccent || "teal").toLowerCase();
+    return subscribeRoomMeta(roomCode, (room) => {
+      const key = String(room?.settings.themeAccent || "teal").toLowerCase();
       setAccentKey(ACCENT_THEME[key] ? key : "teal");
+      if (room) {
+        patchRoomBootstrapCached(roomCode, {
+          leaderUid: room.leaderUid,
+          gameModeStyle: room.settings.gameModeStyle,
+          allowIdenticalPicks:
+            room.settings.gameModeStyle === "sprint"
+              ? true
+              : !room.settings.sameResultLock,
+          powerupsEnabled: room.settings.powerupsEnabled,
+          leagueFairPlayEnabled: room.settings.leagueFairPlayEnabled,
+          themeAccent: room.settings.themeAccent,
+        });
+      }
     });
-    return () => unsub();
   }, [roomCode]);
 
   useEffect(() => {
-    if (!roomCode) return;
+    if (loading || !user || !roomCode) return;
     let cancelled = false;
     let overlayTimer: number | null = null;
-      const RESUME_WARM_COOLDOWN_MS = 15 * 1000;
+    const RESUME_WARM_COOLDOWN_MS = 15 * 1000;
 
     const WARM_TIMEOUT_MS = 4000;
     const withTimeout = async <T,>(promise: Promise<T>, ms: number) => {
@@ -238,33 +236,34 @@ export default function RoomScopedLayout({
               warmedDataKeyRef.current = warmKey;
               void getFixturesCached(gw, season).catch(() => {});
               void getRoomGameStateCached(roomCode, season, gw).catch(() => {});
+              prewarmSeasonScoresSnapshot(roomCode, season);
             } else if (bootedRef.current) {
               void refreshFixturesCached(gw, season).catch(() => {});
             }
 
-              const scheduleIdle = (fn: () => void) => {
-                const w = window as Window & {
-                  requestIdleCallback?: (
-                    cb: () => void,
-                    opts?: { timeout: number },
-                  ) => number;
-                };
-                if (w.requestIdleCallback) {
-                  const id = w.requestIdleCallback(fn, { timeout: 1200 });
-                  idleTasksRef.current.push(id);
-                  return;
-                }
-                const id = window.setTimeout(fn, 180);
-                idleTasksRef.current.push(id);
+            const scheduleIdle = (fn: () => void) => {
+              const w = window as Window & {
+                requestIdleCallback?: (
+                  cb: () => void,
+                  opts?: { timeout: number },
+                ) => number;
               };
+              if (w.requestIdleCallback) {
+                const id = w.requestIdleCallback(fn, { timeout: 1200 });
+                idleTasksRef.current.push(id);
+                return;
+              }
+              const id = window.setTimeout(fn, 180);
+              idleTasksRef.current.push(id);
+            };
 
-              scheduleIdle(() => {
-                void getGameDataCached(roomCode, season, gw, {
-                  includeChips: bootstrap.gameModeStyle !== "league",
-                }).catch(() => {});
-                void getTableCached(season).catch(() => {});
-                void getRoomPlayersCached(roomCode).catch(() => {});
-              });
+            scheduleIdle(() => {
+              void getGameDataCached(roomCode, season, gw, {
+                includeChips: bootstrap.gameModeStyle !== "league",
+              }).catch(() => {});
+              void getTableCached(season).catch(() => {});
+              void getRoomPlayersCached(roomCode).catch(() => {});
+            });
           }
           lastWarmAtRef.current = Date.now();
         } catch {
@@ -327,7 +326,7 @@ export default function RoomScopedLayout({
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, [roomCode]);
+  }, [loading, user, roomCode]);
 
   useEffect(() => {
     if (!showBootOverlay) {
@@ -474,7 +473,10 @@ export default function RoomScopedLayout({
           </div>
         </div>
       ) : null}
-      <div id="room-scroll-root" className="room-scroll-root min-h-0 flex-1 overflow-y-auto">
+      <div
+        id="room-scroll-root"
+        className="room-scroll-root min-h-0 flex-1 overflow-y-auto"
+      >
         {children}
       </div>
       <div

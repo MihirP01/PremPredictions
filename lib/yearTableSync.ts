@@ -1,133 +1,66 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "../firebase-admin";
-import { YEAR_TABLE_LOCK_AFTER_GW } from "./yearTableScoring";
+import "server-only";
 
-function yearTableMetaRef(roomCode: string, seasonKey: string) {
-  return adminDb.doc(`rooms/${roomCode}/seasons/${seasonKey}/yearTable/meta`);
-}
-
-function yearTablePickRef(roomCode: string, seasonKey: string, uid: string) {
-  return adminDb.doc(
-    `rooms/${roomCode}/seasons/${seasonKey}/yearTable/meta/picks/${uid}`,
-  );
-}
+import { getPostgresPool } from "./server/postgres";
 
 export function isCompleteYearOrder(order: unknown): order is string[] {
   if (!Array.isArray(order) || order.length !== 20) return false;
-  const seen = new Set<string>();
-  for (const value of order) {
-    const key = String(value || "").trim();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-  }
-  return true;
+  const normalized = order.map((value) => String(value || "").trim());
+  return normalized.every(Boolean) && new Set(normalized).size === 20;
 }
 
-function sameClubSet(order: string[], teamKeys: string[] | undefined) {
-  if (!Array.isArray(teamKeys) || teamKeys.length !== 20) return true;
-  const expected = new Set(teamKeys.map(String));
-  if (expected.size !== 20) return false;
-  return order.length === 20 && order.every((key) => expected.has(key));
-}
-
-export { listMemberRoomCodes } from "./memberRoomsAdmin";
-
-export async function syncYearTableAcrossRooms(args: {
+export async function syncUserYearTablePick(args: {
   uid: string;
   seasonKey: string;
   sourceRoomCode?: string;
   sourceOrder?: string[];
 }) {
-  const memberRooms = await listMemberRoomCodes(args.uid);
-  if (!memberRooms.length) return { copiedTo: [] as string[] };
-
-  let sourceOrder =
-    args.sourceOrder && isCompleteYearOrder(args.sourceOrder)
-      ? args.sourceOrder.map(String)
-      : null;
-  let sourceTeamKeys: string[] | undefined;
-  let sourceSubmittedAt: unknown;
-  let sourceRoom = args.sourceRoomCode || "";
-
-  async function loadRoomSource(roomCode: string) {
-    const [metaSnap, pickSnap] = await Promise.all([
-      yearTableMetaRef(roomCode, args.seasonKey).get(),
-      yearTablePickRef(roomCode, args.seasonKey, args.uid).get(),
-    ]);
-    const order = pickSnap.data()?.order;
-    if (!isCompleteYearOrder(order)) return false;
-    const meta = metaSnap.data() as { teamKeys?: string[] } | undefined;
-    if (!sourceOrder) sourceOrder = order.map(String);
-    sourceTeamKeys = Array.isArray(meta?.teamKeys)
-      ? meta.teamKeys.map(String)
-      : sourceTeamKeys;
-    sourceSubmittedAt = pickSnap.data()?.submittedAt ?? sourceSubmittedAt;
-    sourceRoom = roomCode;
-    return true;
+  let order = args.sourceOrder && isCompleteYearOrder(args.sourceOrder)
+    ? args.sourceOrder.map(String)
+    : null;
+  if (!order) {
+    const source = await getPostgresPool().query<{ club_order: string[] }>(
+      `SELECT club_order FROM user_year_table_picks
+        WHERE user_id = $1 AND season_key = $2
+        LIMIT 1`,
+      [args.uid, args.seasonKey],
+    );
+    if (isCompleteYearOrder(source.rows[0]?.club_order)) order = source.rows[0].club_order.map(String);
   }
-
-  if (sourceRoom) {
-    await loadRoomSource(sourceRoom);
-  }
-  if (!sourceOrder) {
-    for (const roomCode of memberRooms) {
-      if (roomCode === sourceRoom) continue;
-      if (await loadRoomSource(roomCode)) break;
+  if (!order) {
+    const legacy = await getPostgresPool().query<{ club_order: string[] }>(
+      `SELECT club_order FROM year_table_picks
+        WHERE user_id = $1 AND season_key = $2
+        ORDER BY (room_code = $3) DESC, submitted_at ASC NULLS LAST
+        LIMIT 1`,
+      [args.uid, args.seasonKey, args.sourceRoomCode || ""],
+    );
+    if (isCompleteYearOrder(legacy.rows[0]?.club_order)) {
+      order = legacy.rows[0].club_order.map(String);
     }
   }
+  if (!order) return { created: false };
 
-  if (!sourceOrder) return { copiedTo: [] as string[] };
+  const result = await insertUserYearTablePick(
+    args.uid,
+    args.seasonKey,
+    order,
+  );
+  return { created: Boolean(result.rowCount) };
+}
 
-  const copiedTo: string[] = [];
-  for (const roomCode of memberRooms) {
-    const metaRef = yearTableMetaRef(roomCode, args.seasonKey);
-    const pickRef = yearTablePickRef(roomCode, args.seasonKey, args.uid);
-    const [metaSnap, pickSnap] = await Promise.all([
-      metaRef.get(),
-      pickRef.get(),
-    ]);
-    if (pickSnap.exists && isCompleteYearOrder(pickSnap.data()?.order)) continue;
-
-    const meta = metaSnap.data() as { teamKeys?: string[] } | undefined;
-    const destKeys = Array.isArray(meta?.teamKeys) && meta.teamKeys.length === 20
-      ? meta.teamKeys.map(String)
-      : sourceTeamKeys;
-    if (!sameClubSet(sourceOrder, destKeys)) continue;
-
-    await adminDb.runTransaction(async (tx) => {
-      const [lockedMeta, lockedPick] = await Promise.all([
-        tx.get(metaRef),
-        tx.get(pickRef),
-      ]);
-      if (lockedPick.exists && isCompleteYearOrder(lockedPick.data()?.order)) {
-        return;
-      }
-      const lockedKeys = Array.isArray(lockedMeta.data()?.teamKeys)
-        ? lockedMeta.data()?.teamKeys.map(String)
-        : destKeys;
-      if (!lockedMeta.exists || !Array.isArray(lockedMeta.data()?.teamKeys)) {
-        const teamKeys = lockedKeys?.length === 20 ? lockedKeys : sourceTeamKeys;
-        if (teamKeys?.length === 20) {
-          tx.set(
-            metaRef,
-            {
-              teamKeys,
-              lockAfterGw: YEAR_TABLE_LOCK_AFTER_GW,
-              createdAt: FieldValue.serverTimestamp(),
-              createdBy: args.uid,
-            },
-            { merge: true },
-          );
-        }
-      }
-      tx.set(pickRef, {
-        uid: args.uid,
-        order: sourceOrder,
-        submittedAt: sourceSubmittedAt || FieldValue.serverTimestamp(),
-      });
-    });
-    copiedTo.push(roomCode);
-  }
-
-  return { copiedTo };
+export async function insertUserYearTablePick(
+  uid: string,
+  seasonKey: string,
+  order: string[],
+) {
+  // Use a separate $4 for the jsonb uid. Reusing $2 as varchar and $2::text
+  // makes Postgres fail with "inconsistent types deduced for parameter $2".
+  return getPostgresPool().query(
+    `INSERT INTO user_year_table_picks
+       (season_key, user_id, club_order, data, submitted_at, updated_at)
+     VALUES ($1, $2, $3::jsonb,
+       jsonb_build_object('uid', $4::text, 'order', $3::jsonb), now(), now())
+     ON CONFLICT (season_key, user_id) DO NOTHING`,
+    [seasonKey, uid, JSON.stringify(order), uid],
+  );
 }

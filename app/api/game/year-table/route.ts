@@ -2,8 +2,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "../../../../firebase-admin";
 import { resolveSeasonKey } from "../../season";
 import { getBaseUrl } from "../lock-window";
 import { canonicalRoomCode, isValidRoomCode } from "@/lib/roomCode";
@@ -16,361 +14,224 @@ import {
 } from "@/lib/yearTableScoring";
 import {
   isCompleteYearOrder,
-  syncYearTableAcrossRooms,
+  insertUserYearTablePick,
+  syncUserYearTablePick,
 } from "@/lib/yearTableSync";
+import { AuthenticationError, requireFirebaseUser } from "@/lib/server/firebase-auth";
+import { getPostgresPool } from "@/lib/server/postgres";
+import { getPostgresRoomSummary, requirePostgresRoomMember } from "@/lib/server/postgres-read-model";
+import { getSeasonClubCatalog } from "@/lib/server/season-clubs";
 
-type YearTableBody = {
-  roomCode?: string;
-  uid?: string;
-  seasonKey?: string;
-  order?: string[];
-};
+type TableRow = { position?: number; team?: { id?: number | null; name?: string; tla?: string | null; shortName?: string | null; badge?: string | null } };
+const FINISHED = new Set(["FINISHED", "FT", "AWARDED"]);
+const VOIDED = new Set(["POSTPONED", "SUSPENDED", "CANCELLED"]);
 
-type TableApiRow = {
-  position?: number;
-  team?: {
-    id?: number | null;
-    name?: string;
-    tla?: string | null;
-    shortName?: string | null;
-    badge?: string | null;
-  };
-};
-
-type FixtureApiItem = {
-  status?: string;
-};
-
-const FINISHED_STATUSES = new Set(["FINISHED", "FT", "AWARDED"]);
-const VOIDED_STATUSES = new Set(["POSTPONED", "SUSPENDED", "CANCELLED"]);
-
-function validRoomCode(code: string) {
-  return isValidRoomCode(code);
-}
-
-function asIso(value: unknown) {
-  if (!value) return null;
-  if (value instanceof Date) {
-    const ms = value.getTime();
-    return Number.isFinite(ms) ? value.toISOString() : null;
-  }
-  if (typeof value === "string" || typeof value === "number") {
-    const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-  }
-  if (value && typeof value === "object") {
-    const candidate = value as {
-      toDate?: () => Date;
-      toMillis?: () => number;
-    };
-    if (typeof candidate.toDate === "function") {
-      const date = candidate.toDate();
-      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-    }
-    if (typeof candidate.toMillis === "function") {
-      const date = new Date(candidate.toMillis());
-      return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-    }
-  }
-  return null;
-}
-
-async function assertMember(roomCode: string, uid: string) {
-  const playerSnap = await adminDb
-    .doc(`rooms/${roomCode}/players/${uid}`)
-    .get();
-  if (!playerSnap.exists) {
-    throw Object.assign(new Error("You are not in this room"), { status: 403 });
-  }
-}
-
-async function resolveCurrentGw(req: Request, roomCode: string, seasonKey: string) {
-  const roomSnap = await adminDb.doc(`rooms/${roomCode}`).get();
-  const style = String(
-    (roomSnap.data() as { settings?: { gameModeStyle?: string } } | undefined)
-      ?.settings?.gameModeStyle || "",
-  )
-    .trim()
-    .toLowerCase();
+async function currentGw(req: Request, roomCode: string, seasonKey: string) {
+  const room = await getPostgresRoomSummary(roomCode);
   const url = new URL("/api/current-gameweek", req.url);
   url.searchParams.set("seasonKey", seasonKey);
-  if (style === "league") url.searchParams.set("mode", "league");
-  const res = await getCurrentGameweek(new NextRequest(url));
-  if (!res.ok) throw new Error("Failed to resolve current gameweek");
-  const data = (await res.json()) as { currentGameweek?: number };
-  const gw = Number(data.currentGameweek ?? 1);
-  return Number.isFinite(gw) ? gw : 1;
+  if (room.gameModeStyle === "league") url.searchParams.set("mode", "league");
+  const response = await getCurrentGameweek(new NextRequest(url));
+  if (!response.ok) throw new Error("Failed to resolve current gameweek");
+  return Number(((await response.json()) as { currentGameweek?: number }).currentGameweek || 1);
 }
 
-async function loadTableClubs(req: Request, seasonKey: string) {
-  const res = await fetch(
-    `${getBaseUrl(req)}/api/table?seasonKey=${encodeURIComponent(seasonKey)}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) throw new Error("Failed to load Premier League table");
-  const data = (await res.json()) as { standingsTotal?: TableApiRow[] };
-  const clubs = clubsFromTableRows(
-    Array.isArray(data.standingsTotal) ? data.standingsTotal : [],
-  );
-  if (clubs.length !== 20) {
-    throw new Error("Need all 20 Premier League clubs before ranking");
+function clubsFromCatalog(
+  catalog: Array<{
+    teamId: number;
+    name: string;
+    tla: string | null;
+    shortName: string | null;
+    badgeUrl: string | null;
+  }>,
+): YearTableClub[] {
+  const clubs: YearTableClub[] = [];
+  const seen = new Set<string>();
+  for (const club of catalog) {
+    const key = String(club.teamId);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    clubs.push({
+      key,
+      id: club.teamId,
+      name: club.name,
+      tla: club.tla,
+      shortName: club.shortName,
+      badge: club.badgeUrl,
+      position: null,
+    });
   }
   return clubs;
 }
 
-async function isGw38Complete(req: Request, seasonKey: string) {
+function resolveSubmittedOrder(order: string[], clubs: YearTableClub[]) {
+  const byId = new Map(clubs.map((club) => [club.key, club.key]));
+  const byTla = new Map(
+    clubs
+      .filter((club) => club.tla)
+      .map((club) => [String(club.tla).trim().toUpperCase(), club.key]),
+  );
+  const byName = new Map(
+    clubs.map((club) => [String(club.name || "").trim().toUpperCase(), club.key]),
+  );
+  const resolved = order.map((value) => {
+    const key = String(value || "").trim();
+    if (!key) return "";
+    return (
+      byId.get(key) ||
+      byTla.get(key.toUpperCase()) ||
+      byName.get(key.toUpperCase()) ||
+      ""
+    );
+  });
+  if (
+    resolved.length !== 20 ||
+    resolved.some((key) => !key) ||
+    new Set(resolved).size !== 20
+  ) {
+    return null;
+  }
+  return resolved;
+}
+
+async function clubs(req: Request, seasonKey: string) {
+  const catalog = await getSeasonClubCatalog(
+    seasonKey,
+    process.env.FOOTBALLDATA_KEY || "",
+  ).catch(() => []);
+  const fromCatalog = clubsFromCatalog(catalog);
+  if (fromCatalog.length === 20) return fromCatalog;
+
+  const response = await fetch(
+    `${getBaseUrl(req)}/api/table?seasonKey=${encodeURIComponent(seasonKey)}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) throw new Error("Failed to load Premier League clubs");
+  const data = (await response.json()) as { standingsTotal?: TableRow[] };
+  const result = clubsFromTableRows(data.standingsTotal ?? []);
+  if (result.length !== 20) {
+    throw new Error("Need all 20 Premier League clubs before ranking");
+  }
+  return result;
+}
+
+async function gw38Complete(req: Request, seasonKey: string) {
   try {
-    const params = new URLSearchParams({
-      gameweek: String(YEAR_TABLE_SCORE_AFTER_GW),
-      seasonKey,
-    });
-    const res = await fetch(
-      `${getBaseUrl(req)}/api/fixtures?${params.toString()}`,
+    const response = await fetch(
+      `${getBaseUrl(req)}/api/fixtures?gameweek=${YEAR_TABLE_SCORE_AFTER_GW}&seasonKey=${encodeURIComponent(seasonKey)}`,
       { cache: "no-store" },
     );
-    if (!res.ok) return false;
-    const data = (await res.json()) as { fixtures?: FixtureApiItem[] };
-    const fixtures = Array.isArray(data.fixtures) ? data.fixtures : [];
-    if (!fixtures.length) return false;
-    const live = fixtures.filter((fixture) => {
-      const status = String(fixture.status || "")
-        .trim()
-        .toUpperCase();
-      return !VOIDED_STATUSES.has(status);
-    });
-    if (!live.length) return false;
-    return live.every((fixture) =>
-      FINISHED_STATUSES.has(
-        String(fixture.status || "")
-          .trim()
-          .toUpperCase(),
-      ),
-    );
+    if (!response.ok) return false;
+    const data = (await response.json()) as { fixtures?: Array<{ status?: string }> };
+    const live = (data.fixtures ?? []).filter((fixture) => !VOIDED.has(String(fixture.status || "").toUpperCase()));
+    return live.length > 0 && live.every((fixture) => FINISHED.has(String(fixture.status || "").toUpperCase()));
   } catch {
     return false;
   }
 }
 
-function yearTableRefs(roomCode: string, seasonKey: string) {
-  const metaRef = adminDb.doc(
-    `rooms/${roomCode}/seasons/${seasonKey}/yearTable/meta`,
-  );
-  const picksCol = adminDb.collection(
-    `rooms/${roomCode}/seasons/${seasonKey}/yearTable/meta/picks`,
-  );
-  return { metaRef, picksCol };
+function publicYearTableError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : "";
+  if (
+    !message ||
+    /inconsistent types|parameter \$|syntax error|relation |column /i.test(message)
+  ) {
+    return fallback;
+  }
+  return message;
 }
 
-function serializePick(
-  uid: string,
-  data: { order?: unknown; submittedAt?: unknown } | undefined,
-) {
-  const order = Array.isArray(data?.order)
-    ? data.order.map((value) => String(value))
-    : [];
-  return {
-    uid,
-    order,
-    submittedAt: asIso(data?.submittedAt),
-  };
+async function loadPicks(roomCode: string, seasonKey: string) {
+  const result = await getPostgresPool().query<{
+    user_id: string;
+    club_order: string[];
+    submitted_at: Date | null;
+  }>(
+    `SELECT pick.user_id, pick.club_order, pick.submitted_at
+       FROM user_year_table_picks pick
+       JOIN room_members member ON member.user_id = pick.user_id
+      WHERE upper(member.room_code) = $1 AND pick.season_key = $2
+      ORDER BY pick.submitted_at, pick.user_id`,
+    [canonicalRoomCode(roomCode), seasonKey],
+  );
+  return result.rows.map((row) => ({
+    uid: row.user_id,
+    order: Array.isArray(row.club_order) ? row.club_order.map(String) : [],
+    submittedAt: row.submitted_at?.toISOString() ?? null,
+  }));
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const roomCode = canonicalRoomCode(req.nextUrl.searchParams.get("roomCode"));
-    const uid = String(req.nextUrl.searchParams.get("uid") || "").trim();
+    const user = await requireFirebaseUser(req);
+    const requested = canonicalRoomCode(req.nextUrl.searchParams.get("roomCode"));
     const seasonKey = resolveSeasonKey(req.nextUrl.searchParams.get("seasonKey"));
-
-    if (!validRoomCode(roomCode) || !uid) {
-      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
-    }
-
-    await assertMember(roomCode, uid);
-    const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
-    const [currentGw, metaSnap, clubs, picksSnap] = await Promise.all([
-      resolveCurrentGw(req, roomCode, seasonKey),
-      metaRef.get(),
-      loadTableClubs(req, seasonKey).catch(() => [] as YearTableClub[]),
-      picksCol.get(),
+    if (!isValidRoomCode(requested)) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    const roomCode = await requirePostgresRoomMember(requested, user.uid);
+    const [gw, clubList] = await Promise.all([
+      currentGw(req, roomCode, seasonKey),
+      clubs(req, seasonKey).catch(() => [] as YearTableClub[]),
     ]);
-    const open = currentGw <= YEAR_TABLE_LOCK_AFTER_GW;
-    const scoringOpen =
-      currentGw >= YEAR_TABLE_SCORE_AFTER_GW &&
-      (await isGw38Complete(req, seasonKey));
-
-    const meta = metaSnap.data() as { teamKeys?: string[] } | undefined;
-    const frozenKeys = Array.isArray(meta?.teamKeys)
-      ? meta.teamKeys.map(String)
-      : [];
-    const clubByKey = new Map(clubs.map((club) => [club.key, club]));
-    const teamKeys = frozenKeys.length ? frozenKeys : clubs.map((club) => club.key);
-    const resolvedClubs = teamKeys.map(
-      (key) =>
-        clubByKey.get(key) || {
-          key,
-          name: key,
-          tla: null,
-          shortName: null,
-          badge: null,
-        },
-    );
-
-    let picks = picksSnap.docs.map((docSnap) =>
-      serializePick(
-        docSnap.id,
-        docSnap.data() as { order?: unknown; submittedAt?: unknown },
-      ),
-    );
-    let myPick = picks.find((pick) => pick.uid === uid) ?? null;
+    let picks = await loadPicks(roomCode, seasonKey);
+    let myPick = picks.find((pick) => pick.uid === user.uid) ?? null;
     if (!myPick || !isCompleteYearOrder(myPick.order)) {
-      await syncYearTableAcrossRooms({
-        uid,
-        seasonKey,
-        sourceRoomCode: roomCode,
-      });
-      const syncedPicks = await picksCol.get();
-      picks = syncedPicks.docs.map((docSnap) =>
-        serializePick(
-          docSnap.id,
-          docSnap.data() as { order?: unknown; submittedAt?: unknown },
-        ),
-      );
-      myPick = picks.find((pick) => pick.uid === uid) ?? null;
+      await syncUserYearTablePick({ uid: user.uid, seasonKey, sourceRoomCode: roomCode });
+      picks = await loadPicks(roomCode, seasonKey);
+      myPick = picks.find((pick) => pick.uid === user.uid) ?? null;
     }
-
+    const teamKeys = clubList.map((club) => club.key);
     return NextResponse.json({
       ok: true,
-      open,
-      scoringOpen,
-      currentGw,
+      open: gw <= YEAR_TABLE_LOCK_AFTER_GW,
+      scoringOpen: gw >= YEAR_TABLE_SCORE_AFTER_GW && (await gw38Complete(req, seasonKey)),
+      currentGw: gw,
       lockAfterGw: YEAR_TABLE_LOCK_AFTER_GW,
       teamKeys,
-      clubs: resolvedClubs,
+      clubs: clubList,
       myPick,
       picks,
-    });
-  } catch (error: unknown) {
-    const status =
-      error && typeof error === "object" && "status" in error
-        ? Number((error as { status?: number }).status) || 400
-        : 400;
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to load year table",
-      },
-      { status },
-    );
+    }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    if (error instanceof AuthenticationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json({ error: publicYearTableError(error, "Failed to load year predictions") }, { status: 400 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as YearTableBody;
-    const roomCode = canonicalRoomCode(body.roomCode);
-    const uid = String(body.uid || "").trim();
+    const user = await requireFirebaseUser(req);
+    const body = (await req.json()) as { roomCode?: string; uid?: string; seasonKey?: string; order?: string[] };
+    const requested = canonicalRoomCode(body.roomCode);
     const seasonKey = resolveSeasonKey(body.seasonKey);
-    const submittedOrder = Array.isArray(body.order)
-      ? body.order.map((value) => String(value).trim()).filter(Boolean)
-      : [];
-
-    if (!validRoomCode(roomCode) || !uid) {
+    const order = Array.isArray(body.order) ? body.order.map(String) : [];
+    if (!isValidRoomCode(requested) || (body.uid && body.uid !== user.uid)) {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
-
-    await assertMember(roomCode, uid);
-    const currentGw = await resolveCurrentGw(req, roomCode, seasonKey);
-    if (currentGw > YEAR_TABLE_LOCK_AFTER_GW) {
-      return NextResponse.json(
-        { error: "Year predictions close at the start of GW3." },
-        { status: 400 },
-      );
+    const roomCode = await requirePostgresRoomMember(requested, user.uid);
+    if ((await currentGw(req, roomCode, seasonKey)) > YEAR_TABLE_LOCK_AFTER_GW) {
+      return NextResponse.json({ error: "Year predictions close at the start of GW3." }, { status: 400 });
     }
-
-    const clubs = await loadTableClubs(req, seasonKey);
-    const liveKeys = clubs.map((club) => club.key);
-    const { metaRef, picksCol } = yearTableRefs(roomCode, seasonKey);
-    const pickRef = picksCol.doc(uid);
-
-    await syncYearTableAcrossRooms({ uid, seasonKey });
-    const alreadyLocked = await pickRef.get();
-    if (alreadyLocked.exists && isCompleteYearOrder(alreadyLocked.data()?.order)) {
-      return NextResponse.json(
-        { error: "Your year predictions are already locked" },
-        { status: 400 },
-      );
+    const clubList = await clubs(req, seasonKey);
+    const resolvedOrder = resolveSubmittedOrder(order, clubList);
+    if (!resolvedOrder) {
+      return NextResponse.json({ error: "Rank every club from 1 to 20, once each" }, { status: 400 });
     }
-
-    await adminDb.runTransaction(async (tx) => {
-      const [metaSnap, pickSnap] = await Promise.all([
-        tx.get(metaRef),
-        tx.get(pickRef),
-      ]);
-      if (pickSnap.exists) {
-        throw new Error("Your year predictions are already locked");
-      }
-
-      const meta = metaSnap.data() as { teamKeys?: string[] } | undefined;
-      const teamKeys = Array.isArray(meta?.teamKeys) && meta.teamKeys.length
-        ? meta.teamKeys.map(String)
-        : liveKeys;
-      if (teamKeys.length !== 20) {
-        throw new Error("Need all 20 Premier League clubs before ranking");
-      }
-
-      const expected = new Set(teamKeys);
-      const seen = new Set<string>();
-      if (submittedOrder.length !== teamKeys.length) {
-        throw new Error("Rank every club from 1 to 20");
-      }
-      for (const key of submittedOrder) {
-        if (!expected.has(key) || seen.has(key)) {
-          throw new Error("Each club can only appear once");
-        }
-        seen.add(key);
-      }
-
-      if (!metaSnap.exists || !Array.isArray(meta?.teamKeys)) {
-        tx.set(
-          metaRef,
-          {
-            teamKeys,
-            lockAfterGw: YEAR_TABLE_LOCK_AFTER_GW,
-            createdAt: FieldValue.serverTimestamp(),
-            createdBy: uid,
-          },
-          { merge: true },
-        );
-      }
-
-      tx.set(pickRef, {
-        uid,
-        order: submittedOrder,
-        submittedAt: FieldValue.serverTimestamp(),
-      });
-    });
-
-    await syncYearTableAcrossRooms({
-      uid,
+    await syncUserYearTablePick({ uid: user.uid, seasonKey });
+    const result = await insertUserYearTablePick(
+      user.uid,
+      seasonKey,
+      resolvedOrder,
+    );
+    if (!result.rowCount) return NextResponse.json({ error: "Your year predictions are already locked" }, { status: 400 });
+    await syncUserYearTablePick({
+      uid: user.uid,
       seasonKey,
       sourceRoomCode: roomCode,
-      sourceOrder: submittedOrder,
+      sourceOrder: resolvedOrder,
     });
-
     return NextResponse.json({ ok: true });
-  } catch (error: unknown) {
-    const status =
-      error && typeof error === "object" && "status" in error
-        ? Number((error as { status?: number }).status) || 400
-        : 400;
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to save year predictions",
-      },
-      { status },
-    );
+  } catch (error) {
+    if (error instanceof AuthenticationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json({ error: publicYearTableError(error, "Failed to save year predictions") }, { status: 400 });
   }
 }

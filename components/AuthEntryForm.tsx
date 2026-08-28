@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
+import { authErrorMessage, normalizeAuthEmail } from "@/lib/authErrors";
 import AnimatedModal from "./AnimatedModal";
 
 type InstallPlatform = "ios" | "android" | "other";
@@ -16,11 +19,13 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 export default function AuthEntryForm() {
+  const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isPhone, setIsPhone] = useState(false);
@@ -74,35 +79,63 @@ export default function AuthEntryForm() {
       );
   }, []);
 
-  const submit = async () => {
+  const finishSignIn = async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Sign in failed.");
+    await user.getIdToken();
+    await auth.authStateReady();
+    router.replace("/room-gate");
+  };
+
+  const submit = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    const nextEmail = normalizeAuthEmail(email);
+    setEmail(nextEmail);
     setBusy(true);
     setError(null);
+    setNotice(null);
 
     try {
+      if (!nextEmail || !password) {
+        throw new Error("Enter your email and password.");
+      }
       if (mode === "signup") {
-        const cred = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-        const uid = cred.user.uid;
-
-        await setDoc(
-          doc(db, "users", uid),
-          {
-            displayName: displayName || email.split("@")[0],
+        await createUserWithEmailAndPassword(auth, nextEmail, password);
+        await authenticatedFetch("/api/user/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: displayName.trim() || nextEmail.split("@")[0],
             currentRoomCode: null,
-            createdAt: new Date().toISOString(),
-          },
-          { merge: true },
-        );
+          }),
+        }).catch(() => undefined);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, nextEmail, password);
       }
 
-      window.location.replace("/room-gate");
+      await finishSignIn();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Login failed");
+      setError(authErrorMessage(e, e instanceof Error ? e.message : "Login failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    const nextEmail = normalizeAuthEmail(email);
+    setEmail(nextEmail);
+    setError(null);
+    setNotice(null);
+    if (!nextEmail) {
+      setError("Enter your email first, then tap Forgot password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendPasswordResetEmail(auth, nextEmail);
+      setNotice("Check that inbox for a reset link.");
+    } catch (e: unknown) {
+      setError(authErrorMessage(e, "Could not send a reset email."));
     } finally {
       setBusy(false);
     }
@@ -172,7 +205,7 @@ export default function AuthEntryForm() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={submit}>
               {mode === "signup" ? (
                 <div className="space-y-2">
                   <label className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-white/55">
@@ -202,6 +235,7 @@ export default function AuthEntryForm() {
                   placeholder="name@email.com"
                   autoComplete="email"
                   autoCapitalize="none"
+                  autoCorrect="off"
                   spellCheck={false}
                   inputMode="email"
                 />
@@ -221,39 +255,55 @@ export default function AuthEntryForm() {
                   autoComplete={
                     mode === "signin" ? "current-password" : "new-password"
                   }
-                  inputMode="text"
                 />
               </div>
-            </div>
+              {mode === "signin" ? (
+                <button
+                  type="button"
+                  onClick={() => void resetPassword()}
+                  disabled={busy}
+                  className="text-left text-sm font-semibold text-white/55 transition hover:text-foreground disabled:opacity-60"
+                >
+                  Forgot password?
+                </button>
+              ) : null}
 
-            {error ? (
-              <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                {error}
+              {notice ? (
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                  {notice}
+                </div>
+              ) : null}
+
+              {error ? (
+                <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="grid gap-3">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground shadow-[0_16px_28px_rgba(3,8,20,0.24)] transition disabled:opacity-60"
+                >
+                  {busy
+                    ? "Please wait..."
+                    : mode === "signin"
+                      ? "Sign in"
+                      : "Create account"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMode((m) => (m === "signin" ? "signup" : "signin"))
+                  }
+                  disabled={busy}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
+                >
+                  {mode === "signin" ? "Need an account?" : "Already registered?"}
+                </button>
               </div>
-            ) : null}
-
-            <div className="grid gap-3">
-              <button
-                onClick={submit}
-                disabled={busy}
-                className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground shadow-[0_16px_28px_rgba(3,8,20,0.24)] transition disabled:opacity-60"
-              >
-                {busy
-                  ? "Please wait..."
-                  : mode === "signin"
-                    ? "Sign in"
-                    : "Create account"}
-              </button>
-              <button
-                onClick={() =>
-                  setMode((m) => (m === "signin" ? "signup" : "signin"))
-                }
-                disabled={busy}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-foreground transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
-              >
-                {mode === "signin" ? "Need an account?" : "Already registered?"}
-              </button>
-            </div>
+            </form>
 
             {isPhone ? (
               <button

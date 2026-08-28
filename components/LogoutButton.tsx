@@ -1,7 +1,6 @@
 "use client";
 
 import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { auth } from "../firebase";
 import AnimatedModal from "./AnimatedModal";
@@ -9,14 +8,15 @@ import AnimatedModal from "./AnimatedModal";
 export default function LogoutButton() {
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const router = useRouter();
 
   const doLogout = async () => {
     setConfirmOpen(false);
     setBusy(true);
     try {
       await signOut(auth);
-      router.replace("/");
+      // A full reload clears private in-memory room caches between users.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/");
     } finally {
       setBusy(false);
     }

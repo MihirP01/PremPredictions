@@ -3,11 +3,15 @@ import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 type CurrentGameweekResponse = {
   currentGameweek?: number;
   seasonKey?: string;
+  predictionLockAt?: string | null;
+  nextGameweekAt?: string | null;
 };
 
 type CurrentGameweekData = {
   currentGameweek: number;
   seasonKey: string;
+  predictionLockAt: string | null;
+  nextGameweekAt: string | null;
 };
 
 export type CurrentGameweekMode = "live" | "league";
@@ -43,6 +47,8 @@ function normalize(data: CurrentGameweekResponse): CurrentGameweekData {
   return {
     currentGameweek: Number.isFinite(gw) ? gw : 1,
     seasonKey: String(data.seasonKey || ""),
+    predictionLockAt: data.predictionLockAt ?? null,
+    nextGameweekAt: data.nextGameweekAt ?? null,
   };
 }
 
@@ -70,6 +76,8 @@ export function primeCurrentGameweekCache(
   const normalized: CurrentGameweekData = {
     currentGameweek: Number(data.currentGameweek),
     seasonKey: String(data.seasonKey || ""),
+    predictionLockAt: data.predictionLockAt ?? null,
+    nextGameweekAt: data.nextGameweekAt ?? null,
   };
   setCached(keyFor(undefined, mode), normalized);
   if (normalized.seasonKey) setCached(keyFor(normalized.seasonKey, mode), normalized);
@@ -95,13 +103,9 @@ export async function getCurrentGameweekCached(
   const fresh = readCached(cacheKey, now);
   if (fresh) return fresh;
   const stale = readCached(cacheKey, now, true);
-  if (stale) {
-    void refreshCurrentGameweekCached(seasonKey, mode).catch(() => {});
-    return stale;
-  }
 
   if (seasonKey) {
-    const defaultCached = readCached(keyFor(undefined, mode), now, true);
+    const defaultCached = readCached(keyFor(undefined, mode), now);
     if (defaultCached && defaultCached.seasonKey === seasonKey) {
       setCached(cacheKey, defaultCached);
       return defaultCached;
@@ -113,6 +117,7 @@ export async function getCurrentGameweekCached(
 
   const req = (async () => {
     const res = await fetch(buildUrl(seasonKey, mode), { cache: "no-store" });
+    if (!res.ok) throw new Error(`current gameweek ${res.status}`);
     const data = normalize((await res.json()) as CurrentGameweekResponse);
     setCached(cacheKey, data);
     if (data.seasonKey) setCached(keyFor(data.seasonKey, mode), data);
@@ -120,9 +125,14 @@ export async function getCurrentGameweekCached(
       setCached(keyFor(undefined, mode), data);
     }
     return data;
-  })().finally(() => {
-    pending.delete(cacheKey);
-  });
+  })()
+    .catch((error) => {
+      if (stale) return stale;
+      throw error;
+    })
+    .finally(() => {
+      pending.delete(cacheKey);
+    });
 
   pending.set(cacheKey, req);
   return req;
@@ -134,6 +144,7 @@ export async function refreshCurrentGameweekCached(
 ): Promise<CurrentGameweekData> {
   const cacheKey = keyFor(seasonKey, mode);
   const res = await fetch(buildUrl(seasonKey, mode), { cache: "no-store" });
+  if (!res.ok) throw new Error(`current gameweek ${res.status}`);
   const data = normalize((await res.json()) as CurrentGameweekResponse);
   setCached(cacheKey, data);
   if (data.seasonKey) setCached(keyFor(data.seasonKey, mode), data);

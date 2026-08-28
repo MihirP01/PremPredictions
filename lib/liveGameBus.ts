@@ -1,13 +1,9 @@
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  type Unsubscribe,
-} from "firebase/firestore";
-import { db } from "../firebase";
-import { writeRoomGameStateCached } from "./gameStateClient";
-import { writeRoomPlayersCached } from "./roomPlayersClient";
+"use client";
+
+import { refreshGameDataCached } from "./gameDataClient";
+import { refreshRoomGameStateCached } from "./gameStateClient";
+import { refreshRoomBootstrapCached } from "./roomBootstrapClient";
+import { refreshRoomPlayersCached } from "./roomPlayersClient";
 
 type GameDocLike = Record<string, unknown> | null;
 type PickLike = { uid: string; fixtureId: number; score: string };
@@ -23,6 +19,12 @@ type PowerupLike = {
   powerupType: "ALL_IN" | "SAFETY_NET";
   locked: boolean;
 };
+type RoomPlayerLike = {
+  uid: string;
+  displayName: string;
+  nickName?: string;
+  role?: "leader" | "member";
+};
 type RoomMetaLike = {
   leaderUid: string | null;
   settings: {
@@ -37,234 +39,76 @@ type RoomMetaLike = {
 
 type DataListener<T> = (data: T) => void;
 type ErrorListener = (error: Error) => void;
-
-type Channel<T> = {
-  dataListeners: Set<DataListener<T>>;
+type PollChannel<T> = {
+  listeners: Set<DataListener<T>>;
   errorListeners: Set<ErrorListener>;
-  firestoreUnsub: Unsubscribe | null;
+  stop: (() => void) | null;
 };
 
-const gameChannels = new Map<string, Channel<GameDocLike>>();
-const picksChannels = new Map<string, Channel<PickLike[]>>();
-const goldenChannels = new Map<string, Channel<GoldenLike[]>>();
-const powerupsChannels = new Map<string, Channel<PowerupLike[]>>();
-const roomPlayersChannels = new Map<string, Channel<RoomPlayerLike[]>>();
-const roomMetaChannels = new Map<string, Channel<RoomMetaLike | null>>();
-
-type RoomPlayerLike = {
-  uid: string;
-  displayName: string;
-  nickName?: string;
-  role?: "leader" | "member";
-};
+const gameChannels = new Map<string, PollChannel<GameDocLike>>();
+const picksChannels = new Map<string, PollChannel<PickLike[]>>();
+const goldenChannels = new Map<string, PollChannel<GoldenLike[]>>();
+const powerupsChannels = new Map<string, PollChannel<PowerupLike[]>>();
+const roomPlayersChannels = new Map<string, PollChannel<RoomPlayerLike[]>>();
+const roomMetaChannels = new Map<string, PollChannel<RoomMetaLike | null>>();
 
 function keyFor(roomCode: string, seasonKey: string, gw: number) {
-  return `${String(roomCode || "").toUpperCase()}:${String(seasonKey || "")}:gw-${Number(gw)}`;
+  return `${String(roomCode || "").toUpperCase()}:${seasonKey}:gw-${Number(gw)}`;
 }
 
-function createChannel<T>() {
-  return {
-    dataListeners: new Set<DataListener<T>>(),
-    errorListeners: new Set<ErrorListener>(),
-    firestoreUnsub: null,
-  } satisfies Channel<T>;
+function createChannel<T>(): PollChannel<T> {
+  return { listeners: new Set(), errorListeners: new Set(), stop: null };
 }
 
-function emitData<T>(ch: Channel<T>, data: T) {
-  ch.dataListeners.forEach((cb) => cb(data));
-}
-
-function emitErr<T>(ch: Channel<T>, error: unknown) {
-  const err =
-    error instanceof Error ? error : new Error("Firestore listener failed");
-  ch.errorListeners.forEach((cb) => cb(err));
-}
-
-function attachGameListener(
-  roomCode: string,
-  seasonKey: string,
-  gw: number,
-  ch: Channel<GameDocLike>,
-) {
-  const ref = doc(
-    db,
-    "rooms",
-    roomCode.toUpperCase(),
-    "seasons",
-    seasonKey,
-    "games",
-    `gw-${gw}`,
-  );
-  ch.firestoreUnsub = onSnapshot(
-    ref,
-    (snap) => {
-      const data = snap.exists()
-        ? ((snap.data() as Record<string, unknown>) ?? null)
-        : null;
-      writeRoomGameStateCached(roomCode, seasonKey, gw, data);
-      emitData(ch, data);
-    },
-    (e) => emitErr(ch, e),
-  );
-}
-
-function attachPicksListener(
-  roomCode: string,
-  seasonKey: string,
-  gw: number,
-  ch: Channel<PickLike[]>,
-) {
-  const q = query(
-    collection(
-      db,
-      "rooms",
-      roomCode.toUpperCase(),
-      "seasons",
-      seasonKey,
-      "games",
-      `gw-${gw}`,
-      "picks",
-    ),
-  );
-  ch.firestoreUnsub = onSnapshot(
-    q,
-    (snap) => {
-      const picks = snap.docs
-        .map((d) => {
-          const data = d.data() as {
-            uid?: string;
-            fixtureId?: number;
-            score?: string;
-          };
-          return {
-            uid: String(data.uid || d.id),
-            fixtureId: Number(data.fixtureId),
-            score: String(data.score || ""),
-          } satisfies PickLike;
-        })
-        .filter((p) => !!p.uid && Number.isFinite(p.fixtureId));
-      emitData(ch, picks);
-    },
-    (e) => emitErr(ch, e),
-  );
-}
-
-function attachGoldenListener(
-  roomCode: string,
-  seasonKey: string,
-  gw: number,
-  ch: Channel<GoldenLike[]>,
-) {
-  const q = query(
-    collection(
-      db,
-      "rooms",
-      roomCode.toUpperCase(),
-      "seasons",
-      seasonKey,
-      "games",
-      `gw-${gw}`,
-      "golden",
-    ),
-  );
-  ch.firestoreUnsub = onSnapshot(
-    q,
-    (snap) => {
-      const goldens = snap.docs
-        .map((d) => {
-          const data = d.data() as {
-            fixtureId?: number;
-            score?: string;
-            locked?: boolean;
-          };
-          return {
-            uid: d.id,
-            fixtureId: Number(data.fixtureId),
-            score: String(data.score || ""),
-            locked: Boolean(data.locked),
-          } satisfies GoldenLike;
-        })
-        .filter((g) => !!g.uid && Number.isFinite(g.fixtureId));
-      emitData(ch, goldens);
-    },
-    (e) => emitErr(ch, e),
-  );
-}
-
-function attachPowerupsListener(
-  roomCode: string,
-  seasonKey: string,
-  gw: number,
-  ch: Channel<PowerupLike[]>,
-) {
-  const q = query(
-    collection(
-      db,
-      "rooms",
-      roomCode.toUpperCase(),
-      "seasons",
-      seasonKey,
-      "games",
-      `gw-${gw}`,
-      "powerups",
-    ),
-  );
-  ch.firestoreUnsub = onSnapshot(
-    q,
-    (snap) => {
-      const powerups = snap.docs
-        .map((d) => {
-          const data = d.data() as {
-            fixtureId?: number;
-            powerupType?: string;
-            locked?: boolean;
-          };
-          const powerupType = String(data.powerupType || "").toUpperCase();
-          const normalizedType =
-            powerupType === "ALL_IN" || powerupType === "SAFETY_NET"
-              ? powerupType
-              : null;
-          return {
-            uid: d.id,
-            fixtureId: Number(data.fixtureId),
-            powerupType: normalizedType,
-            locked: Boolean(data.locked),
-          };
-        })
-        .filter(
-          (
-            p,
-          ): p is {
-            uid: string;
-            fixtureId: number;
-            powerupType: "ALL_IN" | "SAFETY_NET";
-            locked: boolean;
-          } => !!p.uid && Number.isFinite(p.fixtureId) && !!p.powerupType,
-        );
-      emitData(ch, powerups);
-    },
-    (e) => emitErr(ch, e),
-  );
-}
-
-function subscribeChannel<T>(
-  bucket: Map<string, Channel<T>>,
+function pollingChannel<T>(
+  bucket: Map<string, PollChannel<T>>,
   key: string,
   onData: DataListener<T>,
   onError: ErrorListener | undefined,
-  attach: (ch: Channel<T>) => void,
+  load: () => Promise<T>,
+  intervalMs: number,
 ) {
   const channel = bucket.get(key) ?? createChannel<T>();
   bucket.set(key, channel);
-  channel.dataListeners.add(onData);
+  channel.listeners.add(onData);
   if (onError) channel.errorListeners.add(onError);
-  if (!channel.firestoreUnsub) attach(channel);
+
+  if (!channel.stop) {
+    let stopped = false;
+    let inFlight = false;
+    const run = async () => {
+      if (stopped || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const data = await load();
+        if (!stopped) channel.listeners.forEach((listener) => listener(data));
+      } catch (error) {
+        const normalized = error instanceof Error ? error : new Error("Refresh failed");
+        if (!stopped) channel.errorListeners.forEach((listener) => listener(normalized));
+      } finally {
+        inFlight = false;
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void run();
+    };
+    const timer = window.setInterval(run, intervalMs);
+    window.addEventListener("focus", run);
+    document.addEventListener("visibilitychange", onVisible);
+    void run();
+    channel.stop = () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", run);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }
 
   return () => {
-    channel.dataListeners.delete(onData);
+    channel.listeners.delete(onData);
     if (onError) channel.errorListeners.delete(onError);
-    if (channel.dataListeners.size === 0 && channel.errorListeners.size === 0) {
-      if (channel.firestoreUnsub) channel.firestoreUnsub();
+    if (channel.listeners.size === 0 && channel.errorListeners.size === 0) {
+      channel.stop?.();
       bucket.delete(key);
     }
   };
@@ -277,9 +121,32 @@ export function subscribeRoomGameDoc(
   onData: DataListener<GameDocLike>,
   onError?: ErrorListener,
 ) {
-  const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(gameChannels, key, onData, onError, (ch) =>
-    attachGameListener(roomCode, seasonKey, gw, ch),
+  return pollingChannel(
+    gameChannels,
+    keyFor(roomCode, seasonKey, gw),
+    onData,
+    onError,
+    () => refreshRoomGameStateCached(roomCode, seasonKey, gw),
+    2500,
+  );
+}
+
+function subscribeGameData<T>(
+  bucket: Map<string, PollChannel<T>>,
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  onData: DataListener<T>,
+  onError: ErrorListener | undefined,
+  select: (data: Awaited<ReturnType<typeof refreshGameDataCached>>) => T,
+) {
+  return pollingChannel(
+    bucket,
+    keyFor(roomCode, seasonKey, gw),
+    onData,
+    onError,
+    async () => select(await refreshGameDataCached(roomCode, seasonKey, gw)),
+    2500,
   );
 }
 
@@ -290,10 +157,7 @@ export function subscribeRoomPicks(
   onData: DataListener<PickLike[]>,
   onError?: ErrorListener,
 ) {
-  const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(picksChannels, key, onData, onError, (ch) =>
-    attachPicksListener(roomCode, seasonKey, gw, ch),
-  );
+  return subscribeGameData(picksChannels, roomCode, seasonKey, gw, onData, onError, (d) => d.picks);
 }
 
 export function subscribeRoomGoldens(
@@ -303,10 +167,7 @@ export function subscribeRoomGoldens(
   onData: DataListener<GoldenLike[]>,
   onError?: ErrorListener,
 ) {
-  const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(goldenChannels, key, onData, onError, (ch) =>
-    attachGoldenListener(roomCode, seasonKey, gw, ch),
-  );
+  return subscribeGameData(goldenChannels, roomCode, seasonKey, gw, onData, onError, (d) => d.goldens);
 }
 
 export function subscribeRoomPowerups(
@@ -316,44 +177,7 @@ export function subscribeRoomPowerups(
   onData: DataListener<PowerupLike[]>,
   onError?: ErrorListener,
 ) {
-  const key = keyFor(roomCode, seasonKey, gw);
-  return subscribeChannel(powerupsChannels, key, onData, onError, (ch) =>
-    attachPowerupsListener(roomCode, seasonKey, gw, ch),
-  );
-}
-
-function attachRoomPlayersListener(
-  roomCode: string,
-  ch: Channel<RoomPlayerLike[]>,
-) {
-  const q = query(collection(db, "rooms", roomCode.toUpperCase(), "players"));
-  ch.firestoreUnsub = onSnapshot(
-    q,
-    (snap) => {
-      const players = snap.docs
-        .map((d) => {
-          const data = d.data() as {
-            displayName?: string;
-            nickName?: string;
-            role?: "leader" | "member";
-          };
-          return {
-            uid: d.id,
-            displayName: String(data.displayName || "Player"),
-            nickName: typeof data.nickName === "string" ? data.nickName : "",
-            role: data.role,
-          } satisfies RoomPlayerLike;
-        })
-        .sort((a, b) =>
-          a.displayName.localeCompare(b.displayName, undefined, {
-            sensitivity: "base",
-          }),
-        );
-      writeRoomPlayersCached(roomCode, players);
-      emitData(ch, players);
-    },
-    (e) => emitErr(ch, e),
-  );
+  return subscribeGameData(powerupsChannels, roomCode, seasonKey, gw, onData, onError, (d) => d.powerups);
 }
 
 export function subscribeRoomPlayers(
@@ -362,50 +186,13 @@ export function subscribeRoomPlayers(
   onError?: ErrorListener,
 ) {
   const key = String(roomCode || "").toUpperCase();
-  return subscribeChannel(roomPlayersChannels, key, onData, onError, (ch) =>
-    attachRoomPlayersListener(roomCode, ch),
-  );
-}
-
-function attachRoomMetaListener(
-  roomCode: string,
-  ch: Channel<RoomMetaLike | null>,
-) {
-  const ref = doc(db, "rooms", roomCode.toUpperCase());
-  ch.firestoreUnsub = onSnapshot(
-    ref,
-    (snap) => {
-      if (!snap.exists()) {
-        emitData(ch, null);
-        return;
-      }
-      const data = snap.data() as {
-        leaderUid?: string;
-        settings?: {
-          sameResultLock?: boolean;
-          powerupsEnabled?: boolean;
-          gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
-          leagueFairPlayEnabled?: boolean;
-          themeAccent?: string;
-          hasPassword?: boolean;
-        };
-      };
-      const sameResultLock = data?.settings?.sameResultLock !== false;
-      emitData(ch, {
-        leaderUid: data?.leaderUid ?? null,
-        settings: {
-          sameResultLock,
-          powerupsEnabled: data?.settings?.powerupsEnabled === true,
-          gameModeStyle:
-            data?.settings?.gameModeStyle ??
-            (sameResultLock ? "round_robin" : "sprint"),
-          leagueFairPlayEnabled: data?.settings?.leagueFairPlayEnabled === true,
-          themeAccent: String(data?.settings?.themeAccent || "teal"),
-          hasPassword: Boolean(data?.settings?.hasPassword),
-        },
-      });
-    },
-    (e) => emitErr(ch, e),
+  return pollingChannel(
+    roomPlayersChannels,
+    key,
+    onData,
+    onError,
+    () => refreshRoomPlayersCached(key),
+    15_000,
   );
 }
 
@@ -415,7 +202,25 @@ export function subscribeRoomMeta(
   onError?: ErrorListener,
 ) {
   const key = String(roomCode || "").toUpperCase();
-  return subscribeChannel(roomMetaChannels, key, onData, onError, (ch) =>
-    attachRoomMetaListener(roomCode, ch),
+  return pollingChannel(
+    roomMetaChannels,
+    key,
+    onData,
+    onError,
+    async () => {
+      const room = await refreshRoomBootstrapCached(key);
+      return {
+        leaderUid: room.leaderUid,
+        settings: {
+          sameResultLock: !room.allowIdenticalPicks,
+          powerupsEnabled: room.powerupsEnabled === true,
+          gameModeStyle: room.gameModeStyle,
+          leagueFairPlayEnabled: room.leagueFairPlayEnabled === true,
+          themeAccent: room.themeAccent || "teal",
+          hasPassword: room.hasPassword === true,
+        },
+      };
+    },
+    15_000,
   );
 }

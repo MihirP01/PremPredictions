@@ -10,6 +10,10 @@ import {
   type SeasonScoresSnapshot,
 } from "./seasonScoresClient";
 import { peekTableCached, type TableData } from "./tableClient";
+import {
+  peekYearTableCached,
+  type YearTableSnapshot,
+} from "./yearTableClient";
 import { readCachedSnapshot, subscribeRoomCache } from "./cacheStore";
 
 const EMPTY_PLAYERS: CachedRoomPlayer[] = [];
@@ -115,6 +119,23 @@ export function useCachedSeasonScores(
           : null,
       ),
     [roomCode, seasonKey],
+  );
+  return useClientCache(getClientSnapshot, getServerNull);
+}
+
+export function useCachedYearTable(
+  roomCode: string,
+  seasonKey: string,
+  uid: string,
+): YearTableSnapshot | null {
+  const getClientSnapshot = useCallback(
+    () =>
+      readCachedSnapshot(`year:${roomCode}:${seasonKey}:${uid}`, () =>
+        seasonKey && uid
+          ? peekYearTableCached(roomCode, seasonKey, uid)
+          : null,
+      ),
+    [roomCode, seasonKey, uid],
   );
   return useClientCache(getClientSnapshot, getServerNull);
 }

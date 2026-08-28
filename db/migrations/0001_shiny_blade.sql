@@ -1,0 +1,1 @@
+ALTER TABLE "weekly_scores" ALTER COLUMN "points" SET DATA TYPE double precision;

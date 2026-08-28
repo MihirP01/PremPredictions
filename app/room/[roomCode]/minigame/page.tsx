@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Loader2, Lock } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useAuth } from "../../../../components/AuthProvider";
 import PageBackButton from "../../../../components/PageBackButton";
 import PageShell from "../../../../components/PageShell";
@@ -14,7 +14,6 @@ import SectionStack from "../../../../components/SectionStack";
 import SpecialBreak from "../../../../components/SpecialBreak";
 import StatusPill from "../../../../components/StatusPill";
 import TopActionRow from "../../../../components/TopActionRow";
-import { db } from "../../../../firebase";
 import {
   getRoomBootstrapCached,
   refreshRoomBootstrapCached,
@@ -22,24 +21,18 @@ import {
 import { resolveDisplayName } from "@/lib/displayNameResolver";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { subscribeRoomMeta, subscribeRoomPlayers } from "@/lib/liveGameBus";
 import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+  subscribeRoomGameDoc,
+  subscribeRoomMeta,
+  subscribeRoomPlayers,
+} from "@/lib/liveGameBus";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
+import { nextLondonNoonMs } from "@/lib/gameweekRollover";
 import { getCountdownParts, LOCK_WINDOW_MS } from "./lock-utils";
 
 type LobbyPlayer = { uid: string; displayName: string };
-type LobbyDoc = { displayName?: string };
-type GameStateDoc = { state?: string };
 type Fixture = { kickoff?: string; status?: string };
 
-const ESTIMATED_FULL_TIME_MS = 150 * 60 * 1000;
 const INELIGIBLE_DRAFT_STATUSES = new Set([
   "FINISHED",
   "FT",
@@ -271,7 +264,7 @@ export default function MiniGameLobbyPage() {
           : "Sprint";
   const currentModeSummary =
     gameModeStyle === "league"
-      ? "Everyone submits the full gameweek independently until 30 minutes before the first kickoff. The next gameweek unlocks once that first match starts."
+      ? "Everyone submits independently until 30 minutes before kickoff. The next gameweek opens at 12pm the day after the final scheduled fixture."
       : gameModeStyle === "sprint"
         ? "Everyone submits at once each fixture. Fastest flow for larger rooms."
         : gameModeStyle === "captain"
@@ -283,7 +276,7 @@ export default function MiniGameLobbyPage() {
             : "Classic turn flow with unique score picks per fixture.";
 
   // Track current lobby doc ref so we can reliably remove it on back/logout/unmount
-  const lobbyRefRef = useRef<ReturnType<typeof doc> | null>(null);
+  const lobbyActiveRef = useRef(false);
 
   // 1) Auth guard
   useEffect(() => {
@@ -295,6 +288,7 @@ export default function MiniGameLobbyPage() {
 
   // 2) Load current gameweek + initial room mode from bootstrap (lobby is tied to GW)
   useEffect(() => {
+    if (loading || !user) return;
     let cancelled = false;
     const loadBootstrap = async () => {
       try {
@@ -303,6 +297,16 @@ export default function MiniGameLobbyPage() {
         const gw = Number(data.currentGameweek ?? 1);
         setGameweek(Number.isFinite(gw) ? gw : 1);
         setSeasonKey(String(data.seasonKey || ""));
+        const predictionLockAt = Date.parse(
+          String(data.predictionLockAt || ""),
+        );
+        const nextGameweekAt = Date.parse(String(data.nextGameweekAt || ""));
+        setLockAtMs(
+          Number.isFinite(predictionLockAt) ? predictionLockAt : null,
+        );
+        setUnlockAtMs(
+          Number.isFinite(nextGameweekAt) ? nextGameweekAt : null,
+        );
         setLeaderUid(data.leaderUid ?? null);
         const style = data.gameModeStyle ?? "sprint";
         setGameModeStyle(style);
@@ -350,10 +354,11 @@ export default function MiniGameLobbyPage() {
         bootstrapRetryRef.current = null;
       }
     };
-  }, [roomCode, router, withDevPreview]);
+  }, [loading, roomCode, router, user, withDevPreview]);
 
   // 2b) Live room meta updates (leader + mode + lock setting)
   useEffect(() => {
+    if (loading || !user) return;
     return subscribeRoomMeta(
       roomCode,
       (roomMeta) => {
@@ -371,7 +376,7 @@ export default function MiniGameLobbyPage() {
       },
       () => {},
     );
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   // 3) Resolve best display name for lobby presence writes.
   useEffect(() => {
@@ -429,48 +434,15 @@ export default function MiniGameLobbyPage() {
         gameModeStyle === "league" && Number.isFinite(firstScheduledKickoff)
           ? firstScheduledKickoff
           : firstKickoff;
-      const pendingKickoffs = eligibleFixtures
-        .map((f) => Date.parse(String(f.kickoff || "")))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b);
-      const lastPendingKickoff = pendingKickoffs.length
-        ? pendingKickoffs[pendingKickoffs.length - 1]
-        : null;
-      const allFinished = fixtures.length > 0 && eligibleFixtures.length === 0;
-
       if (cancelled) return;
 
-      setLockAtMs(
-        Number.isFinite(lockKickoff) ? lockKickoff - LOCK_WINDOW_MS : null,
-      );
-
-      if (gameModeStyle === "league") {
-        if (
-          Number.isFinite(firstScheduledKickoff) &&
-          currentNowMs >= firstScheduledKickoff
-        ) {
-          const next = await refreshRoomBootstrapCached(roomCode);
-          if (cancelled) return;
-          const nextGw = Number(next.currentGameweek);
-          if (Number.isFinite(nextGw) && nextGw !== gameweek) {
-            setGameweek(nextGw);
-            setSeasonKey(String(next.seasonKey || seasonKey));
-            return;
-          }
-        }
+      if (Number.isFinite(lockKickoff)) {
+        setLockAtMs(lockKickoff - LOCK_WINDOW_MS);
+      }
+      if (!unlockAtMs && scheduledKickoffs.length) {
         setUnlockAtMs(
-          Number.isFinite(firstScheduledKickoff)
-            ? firstScheduledKickoff
-            : null,
+          nextLondonNoonMs(scheduledKickoffs[scheduledKickoffs.length - 1]),
         );
-      } else if (allFinished) {
-        setUnlockAtMs(Date.now());
-        setGameweek((prev) => (prev == null ? prev : Math.min(prev + 1, 38)));
-        return;
-      } else if (Number.isFinite(lastPendingKickoff ?? NaN)) {
-        setUnlockAtMs((lastPendingKickoff as number) + ESTIMATED_FULL_TIME_MS);
-      } else {
-        setUnlockAtMs(null);
       }
 
       const shouldPoll =
@@ -494,45 +466,70 @@ export default function MiniGameLobbyPage() {
       cancelled = true;
       if (refreshTimer) clearTimeout(refreshTimer);
     };
-  }, [gameModeStyle, gameweek, roomCode, seasonKey]);
+  }, [gameModeStyle, gameweek, roomCode, seasonKey, unlockAtMs]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (unlockAtMs == null || gameweek == null || !seasonKey) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const refreshRollover = async (attempt = 0) => {
+      try {
+        const next = await refreshRoomBootstrapCached(roomCode);
+        if (cancelled) return;
+        const nextGw = Number(next.currentGameweek);
+        if (Number.isFinite(nextGw) && nextGw !== gameweek) {
+          setGameweek(nextGw);
+          setSeasonKey(String(next.seasonKey || seasonKey));
+          const nextLock = Date.parse(String(next.predictionLockAt || ""));
+          const nextUnlock = Date.parse(String(next.nextGameweekAt || ""));
+          setLockAtMs(Number.isFinite(nextLock) ? nextLock : null);
+          setUnlockAtMs(Number.isFinite(nextUnlock) ? nextUnlock : null);
+          return;
+        }
+      } catch {
+        // Retry briefly below; upstream fixture data may still be refreshing.
+      }
+      if (!cancelled && attempt < 8) {
+        timer = setTimeout(() => void refreshRollover(attempt + 1), 15_000);
+      }
+    };
+
+    const delay = unlockAtMs - Date.now();
+    if (delay <= 0) void refreshRollover();
+    else timer = setTimeout(() => void refreshRollover(), delay + 750);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [gameweek, roomCode, seasonKey, unlockAtMs]);
+
   // 4) Presence: join lobby on enter, heartbeat, leave on exit
   useEffect(() => {
     if (!user || gameweek == null || !seasonKey) return;
-
-    const gwId = `gw-${gameweek}`;
-    const lobbyRef = doc(
-      db,
-      "rooms",
-      roomCode,
-      "seasons",
-      seasonKey,
-      "games",
-      gwId,
-      "lobby",
-      user.uid,
-    );
-    lobbyRefRef.current = lobbyRef;
 
     let stopped = false;
 
     const upsertPresence = async () => {
       if (stopped) return;
-      await setDoc(
-        lobbyRef,
-        {
-          uid: user.uid,
+      await authenticatedFetch("/api/game/lobby", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "join",
+          roomCode,
+          seasonKey,
+          gameweek,
           displayName: myDisplayName,
-          joinedAt: serverTimestamp(), // merge keeps existing if set earlier
-          lastSeenAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+        }),
+      });
+      lobbyActiveRef.current = true;
     };
 
     // initial join
@@ -546,7 +543,12 @@ export default function MiniGameLobbyPage() {
     return () => {
       stopped = true;
       clearInterval(t);
-      deleteDoc(lobbyRef).catch(() => {});
+      void authenticatedFetch("/api/game/lobby", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leave", roomCode, seasonKey, gameweek }),
+      }).catch(() => {});
+      lobbyActiveRef.current = false;
     };
   }, [user, roomCode, gameweek, myDisplayName, seasonKey]);
 
@@ -554,43 +556,24 @@ export default function MiniGameLobbyPage() {
   useEffect(() => {
     if (!user || gameweek == null || !seasonKey) return;
 
-    const gwId = `gw-${gameweek}`;
-    const q = query(
-      collection(
-        db,
-        "rooms",
-        roomCode,
-        "seasons",
-        seasonKey,
-        "games",
-        gwId,
-        "lobby",
-      ),
-    );
-
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list: LobbyPlayer[] = snap.docs.map((d) => {
-          const data = d.data() as LobbyDoc;
-          return {
-            uid: d.id,
-            displayName: data?.displayName || "Player",
-          };
-        });
-
-        // Sort stable so UI doesn’t jump
-        list.sort((a, b) =>
-          a.displayName.localeCompare(b.displayName, undefined, {
-            sensitivity: "base",
-          }),
-        );
-        setPlayers(list);
-      },
-      () => setError("Failed to listen for lobby players."),
-    );
-
-    return () => unsub();
+    let stopped = false;
+    const load = async () => {
+      try {
+        const params = new URLSearchParams({ roomCode, seasonKey, gameweek: String(gameweek) });
+        const response = await authenticatedFetch(`/api/game/lobby?${params}`, { cache: "no-store" });
+        const data = (await response.json()) as { players?: LobbyPlayer[]; error?: string };
+        if (!response.ok) throw new Error(data.error || "Lobby refresh failed");
+        if (!stopped) setPlayers(Array.isArray(data.players) ? data.players : []);
+      } catch {
+        if (!stopped) setError("Failed to refresh lobby players.");
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 5000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
   }, [user, roomCode, gameweek, seasonKey]);
 
   // 5b) Listen to total room players so start is allowed only when all are in lobby
@@ -654,20 +637,12 @@ export default function MiniGameLobbyPage() {
     if (!roomCode) return;
     if (gameweek == null || !seasonKey) return;
 
-    const gameRef = doc(
-      db,
-      "rooms",
-      roomCode.toUpperCase(),
-      "seasons",
+    return subscribeRoomGameDoc(
+      roomCode,
       seasonKey,
-      "games",
-      `gw-${gameweek}`,
-    );
-
-    const unsub = onSnapshot(
-      gameRef,
-      (snap) => {
-        const raw = (snap.data() as GameStateDoc | undefined)?.state;
+      gameweek,
+      (game) => {
+        const raw = game?.state;
         const st = String(raw ?? "")
           .trim()
           .toUpperCase();
@@ -706,12 +681,8 @@ export default function MiniGameLobbyPage() {
           router.replace(`/room/${roomCode}`);
         }
       },
-      (err) => {
-        console.log("[minigame lobby] snapshot error:", err?.message || err);
-      },
+      () => {},
     );
-
-    return () => unsub();
   }, [user, roomCode, gameweek, router, seasonKey, withDevPreview]);
 
   useEffect(() => {
@@ -723,7 +694,7 @@ export default function MiniGameLobbyPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/game/league-open", {
+        const res = await authenticatedFetch("/api/game/league-open", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -756,10 +727,13 @@ export default function MiniGameLobbyPage() {
   ]);
 
   async function safeLeaveLobby() {
-    const ref = lobbyRefRef.current;
-    if (ref) {
-      await deleteDoc(ref).catch(() => {});
-      lobbyRefRef.current = null;
+    if (lobbyActiveRef.current && user && gameweek != null && seasonKey) {
+      await authenticatedFetch("/api/game/lobby", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "leave", roomCode, seasonKey, gameweek }),
+      }).catch(() => {});
+      lobbyActiveRef.current = false;
     }
   }
 
@@ -794,7 +768,7 @@ export default function MiniGameLobbyPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/game/start", {
+      const res = await authenticatedFetch("/api/game/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -974,8 +948,6 @@ export default function MiniGameLobbyPage() {
       progress: (secondValue / 60) * 100,
     },
   ];
-  const readyCount = players.length;
-  const missingCount = Math.max(roomPlayersCount - readyCount, 0);
   const standardSectionCardClass =
     "rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 sm:p-5";
 
@@ -1174,7 +1146,7 @@ export default function MiniGameLobbyPage() {
                   <div>
                     Lock closes automatically 30 minutes before the first kickoff.
                     {gameModeStyle === "league"
-                      ? " Anyone in the room can submit until then; the next gameweek opens once that first match starts."
+                      ? " Anyone in the room can submit until then; the next gameweek opens at 12pm the day after the final scheduled fixture."
                       : " Everyone must be ready before the leader can launch the round."}
                   </div>
                 )}
@@ -1275,8 +1247,8 @@ export default function MiniGameLobbyPage() {
                 {gameModeStyle === "league" ? (
                   isLocked ? (
                     <div className="rounded-[22px] border border-amber-300/20 bg-amber-400/5 px-4 py-4 text-sm text-amber-100/85">
-                      This gameweek is locked. The next one opens at first
-                      kickoff.
+                      This gameweek is locked. The next one opens at 12pm the
+                      day after the final scheduled fixture.
                     </div>
                   ) : (
                     <div className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted inline-flex w-full items-center justify-center gap-2">
@@ -1371,7 +1343,7 @@ export default function MiniGameLobbyPage() {
               {
                 key: "league" as const,
                 title: "League",
-                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff, then the next gameweek unlocks once that match starts. Exact score is 2 points, correct result is 1 point. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek half the room median as a labelled bye.",
+                body: "Large-room asynchronous mode. Anyone in the room can predict every eligible gameweek fixture until 30 minutes before the first kickoff. The next gameweek unlocks at 12pm the day after the final scheduled fixture. Exact score is 2 points, correct result is 1 point. Completed, postponed, suspended and cancelled fixtures are excluded. Optional Fair Play awards a completely missed gameweek half the room median as a labelled bye.",
               },
             ].map((item) => (
               <GuideDisclosure

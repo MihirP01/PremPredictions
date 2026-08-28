@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
+import { getPostgresPool } from "@/lib/server/postgres";
 
 const LEAGUE = "PL";
 const SEASON_START_MONTH_UTC = 7; // Aug
@@ -304,15 +305,48 @@ function fallbackFixtureFromFotmob(match, forceGameweek) {
   };
 }
 
-export async function GET(req) {
-  const API_KEY = process.env.FOOTBALLDATA_KEY;
-  if (!API_KEY) {
-    return NextResponse.json(
-      { error: "API key not configured" },
-      { status: 500 },
-    );
-  }
+async function persistFixtures(seasonKey, gameweek, payload) {
+  const gw = Number(gameweek);
+  if (!Number.isInteger(gw) || !Array.isArray(payload?.fixtures) || !payload.fixtures.length) return;
+  await getPostgresPool().query(
+    `INSERT INTO fixture_snapshots
+       (season_key, gameweek, fixtures, source, generated_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, now())
+     ON CONFLICT (season_key, gameweek) DO UPDATE SET
+       fixtures = EXCLUDED.fixtures,
+       source = EXCLUDED.source,
+       generated_at = EXCLUDED.generated_at,
+       updated_at = now()`,
+    [seasonKey, gw, JSON.stringify(payload.fixtures), payload.source || "football-data", payload.generatedAt || new Date().toISOString()],
+  );
+}
 
+async function storedFixtures(seasonKey, gameweek) {
+  const gw = Number(gameweek);
+  if (!Number.isInteger(gw)) return null;
+  const result = await getPostgresPool().query(
+    `SELECT fixtures, source, generated_at FROM fixture_snapshots
+      WHERE season_key = $1 AND gameweek = $2 LIMIT 1`,
+    [seasonKey, gw],
+  );
+  const row = result.rows[0];
+  if (!row || !Array.isArray(row.fixtures) || !row.fixtures.length) return null;
+  return {
+    fixtures: row.fixtures,
+    source: `${row.source || "provider"}-postgres-fallback`,
+    generatedAt: row.generated_at ? new Date(row.generated_at).toISOString() : null,
+    stale: true,
+  };
+}
+
+async function fixtureResponse(seasonKey, gameweek, payload, init) {
+  await persistFixtures(seasonKey, gameweek, payload).catch((error) => {
+    console.error("Fixture snapshot write failed", error);
+  });
+  return NextResponse.json(payload, init);
+}
+
+export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const gameweek = searchParams.get("gameweek");
   const forceRefresh =
@@ -321,6 +355,13 @@ export async function GET(req) {
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
   const season = seasonStartYearFromKey(seasonKey);
   const fotmobSeason = fotmobSeasonFromStartYear(season);
+  const API_KEY = process.env.FOOTBALLDATA_KEY;
+  if (!API_KEY) {
+    const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
+    return stored
+      ? NextResponse.json(stored, { headers: { "Cache-Control": "no-store" } })
+      : NextResponse.json({ error: "API key not configured" }, { status: 500 });
+  }
 
   const url = gameweek
     ? `https://api.football-data.org/v4/competitions/${LEAGUE}/matches?season=${season}&matchday=${gameweek}`
@@ -340,11 +381,10 @@ export async function GET(req) {
       ),
     ]);
   } catch {
-    // Network/DNS/etc
-    return NextResponse.json(
-      { error: "Upstream fetch failed" },
-      { status: 502 },
-    );
+    const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
+    return stored
+      ? NextResponse.json(stored, { headers: { "Cache-Control": "no-store" } })
+      : NextResponse.json({ error: "Upstream fetch failed" }, { status: 502 });
   }
 
   const fotmobIndex = buildFotmobIndex(fotmobMatches);
@@ -373,7 +413,9 @@ export async function GET(req) {
   if (response.status === 400 || response.status === 404) {
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
-      return NextResponse.json(
+      return fixtureResponse(
+        seasonKey,
+        gameweek,
         {
           generatedAt: new Date().toISOString(),
           seasonKey,
@@ -414,7 +456,9 @@ export async function GET(req) {
     console.error("Football-Data rate limit:", body);
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
-      return NextResponse.json(
+      return fixtureResponse(
+        seasonKey,
+        gameweek,
         {
           generatedAt: new Date().toISOString(),
           seasonKey,
@@ -432,6 +476,8 @@ export async function GET(req) {
         },
       );
     }
+    const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
+    if (stored) return NextResponse.json(stored, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json(
       { error: "Football API rate limit", status: 429, retryAfterSec: 10 },
       {
@@ -450,7 +496,9 @@ export async function GET(req) {
     console.error("Football-Data error:", response.status, body);
     if (selectedFotmobMatches.length > 0) {
       const fixtures = await buildFotmobFallbackFixtures();
-      return NextResponse.json(
+      return fixtureResponse(
+        seasonKey,
+        gameweek,
         {
           generatedAt: new Date().toISOString(),
           seasonKey,
@@ -468,6 +516,8 @@ export async function GET(req) {
         },
       );
     }
+    const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
+    if (stored) return NextResponse.json(stored, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json(
       { error: "Football API error", status: response.status },
       { status: 502 },
@@ -547,7 +597,9 @@ export async function GET(req) {
     }),
   );
 
-  return NextResponse.json(
+  return fixtureResponse(
+    seasonKey,
+    gameweek,
     { generatedAt: new Date().toISOString(), seasonKey, fixtures },
     {
       headers: forceRefresh

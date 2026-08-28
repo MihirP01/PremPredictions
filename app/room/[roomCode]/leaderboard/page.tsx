@@ -17,16 +17,96 @@ import SectionGrid from "../../../../components/SectionGrid";
 import SectionStack from "../../../../components/SectionStack";
 import SliderSwitch from "../../../../components/SliderSwitch";
 import TopActionRow from "../../../../components/TopActionRow";
-import { db } from "../../../../firebase";
 import { getCurrentGameweekCached, gameweekModeFromStyle } from "@/lib/currentGameweekClient";
 import { subscribeRoomPlayers } from "@/lib/liveGameBus";
 import { getRoomBootstrapCached } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
-import { getSeasonScoresSnapshotCached } from "@/lib/seasonScoresClient";
-import { useCachedBootstrap, useCachedPlayers } from "@/lib/useRoomCache";
-import { collection, onSnapshot } from "firebase/firestore";
+import {
+  getSeasonScoresSnapshotCached,
+  type SeasonScoresSnapshot,
+} from "@/lib/seasonScoresClient";
+import {
+  useCachedBootstrap,
+  useCachedPlayers,
+  useCachedSeasonScores,
+} from "@/lib/useRoomCache";
 
 type Player = { uid: string; displayName: string };
+
+function buildScoreView(
+  snapshot: SeasonScoresSnapshot | null,
+  players: Player[],
+  currentGw: number,
+) {
+  const pointsByUserByGw: Record<string, Record<number, number>> = {};
+  const hasPredByUserByGw: Record<string, Record<number, boolean>> = {};
+  const fairPlayByUserByGw: Record<string, Record<number, boolean>> = {};
+  for (const player of players) {
+    pointsByUserByGw[player.uid] = {};
+    hasPredByUserByGw[player.uid] = {};
+    fairPlayByUserByGw[player.uid] = {};
+    for (let gw = 1; gw <= currentGw; gw += 1) {
+      pointsByUserByGw[player.uid][gw] = 0;
+      hasPredByUserByGw[player.uid][gw] = false;
+      fairPlayByUserByGw[player.uid][gw] = false;
+    }
+  }
+
+  if (!snapshot) {
+    return {
+      pointsByUserByGw,
+      hasPredByUserByGw,
+      fairPlayByUserByGw,
+      scoredGameweeks: [] as number[],
+      gwScoreComputedAt: null as Date | null,
+    };
+  }
+
+  const weekByGw = new Map(snapshot.weeks.map((week) => [week.gw, week]));
+  const currentWeek = weekByGw.get(currentGw);
+  const gwScoreComputedAt =
+    currentWeek?.computedAtMs != null
+      ? new Date(currentWeek.computedAtMs)
+      : null;
+  const scoredWeeks = new Set<number>();
+  let computedGws = snapshot.weeks
+    .map((week) => week.gw)
+    .filter((gw) => gw >= 1 && gw <= currentGw);
+  if (computedGws.length === 0) {
+    computedGws = snapshot.gameWeeks.filter(
+      (gw) => gw >= 1 && gw <= currentGw,
+    );
+  }
+
+  for (const gw of Array.from(new Set(computedGws)).sort((a, b) => a - b)) {
+    const users = weekByGw.get(gw)?.users ?? [];
+    let hasMeaningfulScore = false;
+    for (const data of users) {
+      const uid = String(data.uid);
+      const points = Number(data.points ?? 0);
+      if (!Number.isFinite(points) || !pointsByUserByGw[uid]) continue;
+      const hasPrediction = Object.values(data.breakdown ?? {}).some((item) =>
+        Boolean(String(item?.pred ?? "").trim()),
+      );
+      pointsByUserByGw[uid][gw] = points;
+      hasPredByUserByGw[uid][gw] = hasPrediction;
+      fairPlayByUserByGw[uid][gw] = data.fairPlayApplied === true;
+      if (hasPrediction || points > 0 || data.fairPlayApplied) {
+        hasMeaningfulScore = true;
+      }
+    }
+    if (hasMeaningfulScore) scoredWeeks.add(gw);
+  }
+
+  return {
+    pointsByUserByGw,
+    hasPredByUserByGw,
+    fairPlayByUserByGw,
+    scoredGameweeks: Array.from(scoredWeeks).sort((a, b) => a - b),
+    gwScoreComputedAt,
+  };
+}
+
 function seasonLabel(seasonKey: string) {
   if (!/^\d{4}$/.test(seasonKey)) return seasonKey;
   return `${seasonKey.slice(0, 2)}/${seasonKey.slice(2)}`;
@@ -208,12 +288,8 @@ export default function LeaderboardMatrixPage() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [gwScoreComputedAt, setGwScoreComputedAt] = useState<Date | null>(null);
-  const [leaderboardRefreshedAt, setLeaderboardRefreshedAt] =
-    useState<Date | null>(null);
   const [refreshLockedUntil, setRefreshLockedUntil] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [scoredGameweeks, setScoredGameweeks] = useState<number[]>([]);
   const [selectedTableGw, setSelectedTableGw] = useState<number>(
     () => Number(bootstrap?.currentGameweek) || 1,
   );
@@ -222,19 +298,22 @@ export default function LeaderboardMatrixPage() {
   );
   const [fullPositionsExpanded, setFullPositionsExpanded] = useState(false);
   const seasonGwSyncPrimedRef = useRef(false);
-  const hasScoreRowsRef = useRef(false);
   const bootstrapRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // matrix: userUid -> gw -> points (read only from score docs)
-  const [pointsByUserByGw, setPointsByUserByGw] = useState<
-    Record<string, Record<number, number>>
-  >({});
-  const [hasPredByUserByGw, setHasPredByUserByGw] = useState<
-    Record<string, Record<number, boolean>>
-  >({});
-  const [fairPlayByUserByGw, setFairPlayByUserByGw] = useState<
-    Record<string, Record<number, boolean>>
-  >({});
+  const cachedScores = useCachedSeasonScores(roomCode, seasonKey);
+  const scoreView = useMemo(
+    () => buildScoreView(cachedScores, players, currentGw),
+    [cachedScores, players, currentGw],
+  );
+  const {
+    pointsByUserByGw,
+    hasPredByUserByGw,
+    fairPlayByUserByGw,
+    scoredGameweeks,
+    gwScoreComputedAt,
+  } = scoreView;
+  const leaderboardRefreshedAt = cachedScores?.fetchedAtMs
+    ? new Date(cachedScores.fetchedAtMs)
+    : null;
 
   // auth guard
   useEffect(() => {
@@ -317,116 +396,46 @@ export default function LeaderboardMatrixPage() {
     async (opts?: { force?: boolean }) => {
       if (players.length === 0 || !seasonKey) return;
 
-      if (!hasScoreRowsRef.current) setBusy(true);
+      if (!cachedScores) setBusy(true);
       setError(null);
 
-      const matrix: Record<string, Record<number, number>> = {};
-      const predMatrix: Record<string, Record<number, boolean>> = {};
-      const fairPlayMatrix: Record<string, Record<number, boolean>> = {};
-      for (const p of players) {
-        matrix[p.uid] = {};
-        predMatrix[p.uid] = {};
-        fairPlayMatrix[p.uid] = {};
-        for (let gw = 1; gw <= currentGw; gw++) matrix[p.uid][gw] = 0;
-        for (let gw = 1; gw <= currentGw; gw++) predMatrix[p.uid][gw] = false;
-        for (let gw = 1; gw <= currentGw; gw++)
-          fairPlayMatrix[p.uid][gw] = false;
-      }
-
       try {
-        const snapshot = await getSeasonScoresSnapshotCached(
+        await getSeasonScoresSnapshotCached(
           roomCode,
           seasonKey,
           {
             force: opts?.force === true,
           },
         );
-        const weekByGw = new Map(snapshot.weeks.map((w) => [w.gw, w]));
-        let currentGwComputedAt: Date | null = null;
-        const currentWeek = weekByGw.get(currentGw);
-        if (currentWeek?.computedAtMs != null) {
-          currentGwComputedAt = new Date(currentWeek.computedAtMs);
-        }
-
-        // "Scored" means we actually have per-user score docs for that GW.
-        // Do not infer scored weeks from summary doc ids alone.
-        const scoredWeeks = new Set<number>();
-
-        let computedGws = snapshot.weeks
-          .map((w) => w.gw)
-          .filter((n) => n >= 1 && n <= currentGw);
-
-        // If no score summaries, derive candidate weeks from seasonal games.
-        if (computedGws.length === 0) {
-          computedGws = snapshot.gameWeeks.filter(
-            (n) => n >= 1 && n <= currentGw,
-          );
-        }
-
-        computedGws = Array.from(new Set(computedGws)).sort((a, b) => a - b);
-
-        for (const gw of computedGws) {
-          const users = weekByGw.get(gw)?.users ?? [];
-          let gwHasMeaningfulScore = false;
-          for (const data of users) {
-            const uid = String(data.uid);
-            const points = Number(data.points ?? 0);
-            const hasPred = Object.values(data.breakdown ?? {}).some((b) =>
-              Boolean(String(b?.pred ?? "").trim()),
-            );
-
-            if (!Number.isFinite(points)) continue;
-            if (!matrix[uid]) continue; // only show current room players
-
-            matrix[uid][gw] = points;
-            predMatrix[uid][gw] = hasPred;
-            fairPlayMatrix[uid][gw] = data.fairPlayApplied === true;
-            if (hasPred || points > 0 || data.fairPlayApplied)
-              gwHasMeaningfulScore = true;
-          }
-          if (gwHasMeaningfulScore) scoredWeeks.add(gw);
-        }
-
-        const scoredList = Array.from(scoredWeeks).sort((a, b) => a - b);
-        hasScoreRowsRef.current = true;
-        setPointsByUserByGw(matrix);
-        setHasPredByUserByGw(predMatrix);
-        setFairPlayByUserByGw(fairPlayMatrix);
-        setGwScoreComputedAt(currentGwComputedAt);
-        setLeaderboardRefreshedAt(new Date());
-        setScoredGameweeks(scoredList);
       } catch (e) {
         setError(toErrorMessage(e, "Failed to load saved scores."));
       } finally {
         setBusy(false);
       }
     },
-    [players, currentGw, roomCode, seasonKey],
+    [players.length, roomCode, seasonKey, cachedScores],
   );
 
   useEffect(() => {
     loadSavedScores().catch(() => {});
   }, [loadSavedScores]);
 
-  // Live refresh when score docs change (e.g. recalc/cron writes).
+  // PostgreSQL is authoritative; refresh while open and immediately on resume.
   useEffect(() => {
     if (!seasonKey || players.length === 0) return;
-    const scoresRef = collection(
-      db,
-      "rooms",
-      roomCode,
-      "seasons",
-      seasonKey,
-      "scores",
-    );
-    const unsub = onSnapshot(
-      scoresRef,
-      () => {
-        loadSavedScores().catch(() => {});
-      },
-      () => {},
-    );
-    return () => unsub();
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        loadSavedScores({ force: true }).catch(() => {});
+      }
+    };
+    const timer = window.setInterval(refresh, 15_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [roomCode, seasonKey, players.length, loadSavedScores]);
 
   const weeks = useMemo(
@@ -549,9 +558,11 @@ export default function LeaderboardMatrixPage() {
     [topView, fairPlayByUserByGw, currentGw, lastScoredGw, weeks],
   );
   const scoreLabel = useCallback(
-    (score: number, hasPred: boolean) =>
-      score === 0 && hasPred ? "🦆" : String(score),
-    [],
+    (score: number, hasPred: boolean) => {
+      if (!cachedScores) return "—";
+      return score === 0 && hasPred ? "🦆" : String(score);
+    },
+    [cachedScores],
   );
   const mobileGwSortedPlayers = useMemo(() => {
     const list = [...players];

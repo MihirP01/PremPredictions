@@ -60,70 +60,70 @@ function isLeaguePredictionsBlocked(
   return lockAt != null && Date.now() >= lockAt;
 }
 
-function readLeagueBlocked(
+type PredictionGameSnapshot = {
+  state?: string;
+  leagueSubmittedByUid?: Record<string, boolean>;
+  lockAt?: unknown;
+} | null;
+
+function predictionsBlockedFor(
+  boot: ReturnType<typeof peekRoomBootstrapCached>,
+  game: PredictionGameSnapshot,
+  uid: string | undefined,
+) {
+  if (!boot) return true;
+  const state = String(game?.state || boot.gameState || "")
+    .trim()
+    .toUpperCase();
+  const lockAt =
+    timestampMs(game?.lockAt) ?? timestampMs(boot.predictionLockAt);
+
+  if (boot.gameModeStyle === "league") {
+    if (isLeaguePredictionsBlocked(game, uid)) return true;
+    return lockAt != null && Date.now() >= lockAt;
+  }
+
+  if (state === "REVEAL" || state === "CLOSED") return true;
+  return lockAt != null && Date.now() >= lockAt;
+}
+
+function readPredictionsBlocked(
   roomCode: string,
   uid: string | undefined,
 ): boolean | null {
   const boot = peekRoomBootstrapCached(roomCode);
   if (!boot) return null;
-  if (boot.gameModeStyle !== "league") return false;
   const game = peekRoomGameStateCached(
     roomCode,
     boot.seasonKey,
     boot.currentGameweek,
   );
-  if (!game) return null;
-  return isLeaguePredictionsBlocked(game, uid);
+  return predictionsBlockedFor(boot, game, uid);
 }
 
-export function useLeaguePredictionsBlocked(roomCode: string) {
-  const { user } = useAuth();
+export function usePredictionsBlocked(roomCode: string) {
+  const { user, loading } = useAuth();
   const bootstrap = useCachedBootstrap(roomCode);
-  const [isLeague, setIsLeague] = useState<boolean | null>(() =>
-    bootstrap ? bootstrap.gameModeStyle === "league" : null,
-  );
   const [blocked, setBlocked] = useState<boolean | null>(() =>
-    bootstrap ? readLeagueBlocked(roomCode, user?.uid) : null,
+    bootstrap ? readPredictionsBlocked(roomCode, user?.uid) : null,
   );
   const [watch, setWatch] = useState<{
     seasonKey: string;
     gw: number;
   } | null>(null);
 
-  const gameModeStyle = bootstrap?.gameModeStyle ?? null;
-
   useEffect(() => {
-    if (!gameModeStyle) return;
-    const league = gameModeStyle === "league";
-    setIsLeague(league);
-    if (!league) setBlocked(false);
-  }, [gameModeStyle]);
-
-  useEffect(() => {
-    if (watch) return;
-    setBlocked(readLeagueBlocked(roomCode, user?.uid));
-  }, [roomCode, user?.uid, watch]);
-
-  useEffect(() => {
-    if (!roomCode) return;
+    if (!roomCode || loading || !user) return;
     let cancelled = false;
 
     (async () => {
       try {
-        let current = await getRoomBootstrapCached(roomCode);
-        if (cancelled) return;
-        if (current.gameModeStyle !== "league") {
-          setIsLeague(false);
-          setWatch(null);
-          setBlocked(false);
-          return;
-        }
-        setIsLeague(true);
-        current = await refreshRoomBootstrapCached(roomCode);
+        const current = await getRoomBootstrapCached(roomCode);
         if (cancelled) return;
         const seasonKey = String(current.seasonKey || "");
         const gw = Number(current.currentGameweek || 1);
         if (!seasonKey || !Number.isFinite(gw)) return;
+        setBlocked(readPredictionsBlocked(roomCode, user.uid));
         setWatch({ seasonKey, gw });
       } catch {
         if (!cancelled) {
@@ -135,10 +135,10 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
     return () => {
       cancelled = true;
     };
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   useEffect(() => {
-    if (!roomCode || !watch) return;
+    if (!roomCode || !watch || loading || !user || !bootstrap) return;
     let cancelled = false;
     let lockTimer: number | null = null;
     let nextWeekTimer: number | null = null;
@@ -150,27 +150,50 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
       nextWeekTimer = null;
     };
 
-    let rolloverStarted = false;
-    const tryRollover = (attempt: number) => {
-      void refreshRoomBootstrapCached(roomCode).then((next) => {
-        if (cancelled) return;
-        const nextGw = Number(next.currentGameweek || 1);
-        if (Number.isFinite(nextGw) && nextGw !== watch.gw) {
-          setWatch({
-            seasonKey: String(next.seasonKey || watch.seasonKey),
-            gw: nextGw,
-          });
-          setBlocked(readLeagueBlocked(roomCode, user?.uid));
-          return;
-        }
-        if (attempt < 8) {
-          nextWeekTimer = window.setTimeout(
-            () => tryRollover(attempt + 1),
-            15000,
-          );
-        }
-      });
+    const tryRollover = (attempt = 0) => {
+      void refreshRoomBootstrapCached(roomCode)
+        .then((next) => {
+          if (cancelled) return;
+          const nextGw = Number(next.currentGameweek || 1);
+          if (Number.isFinite(nextGw) && nextGw !== watch.gw) {
+            setWatch({
+              seasonKey: String(next.seasonKey || watch.seasonKey),
+              gw: nextGw,
+            });
+            setBlocked(readPredictionsBlocked(roomCode, user.uid));
+            return;
+          }
+          setBlocked(readPredictionsBlocked(roomCode, user.uid));
+          if (attempt < 8) {
+            nextWeekTimer = window.setTimeout(
+              () => tryRollover(attempt + 1),
+              15000,
+            );
+          }
+        })
+        .catch(() => {
+          if (!cancelled && attempt < 8) {
+            nextWeekTimer = window.setTimeout(
+              () => tryRollover(attempt + 1),
+              15000,
+            );
+          }
+        });
     };
+
+    const predictionLockAt = timestampMs(bootstrap.predictionLockAt);
+    const nextGameweekAt = timestampMs(bootstrap.nextGameweekAt);
+    if (predictionLockAt != null && Date.now() < predictionLockAt) {
+      lockTimer = scheduleAt(predictionLockAt, () => setBlocked(true));
+    }
+    if (nextGameweekAt != null) {
+      if (Date.now() >= nextGameweekAt) tryRollover();
+      else {
+        nextWeekTimer = scheduleAt(nextGameweekAt + 750, () =>
+          tryRollover(),
+        );
+      }
+    }
 
     const unsub = subscribeRoomGameDoc(
       roomCode,
@@ -178,31 +201,12 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
       watch.gw,
       (snap) => {
         if (cancelled) return;
-        const game = snap as {
-          leagueSubmittedByUid?: Record<string, boolean>;
-          lockAt?: unknown;
-          firstKickoffAt?: unknown;
-        } | null;
-        setBlocked(isLeaguePredictionsBlocked(game, user?.uid));
+        const game = snap as PredictionGameSnapshot;
+        setBlocked(predictionsBlockedFor(bootstrap, game, user.uid));
         const lockAt = timestampMs(game?.lockAt);
-        const firstKickoff = timestampMs(game?.firstKickoffAt);
         const now = Date.now();
         if (lockTimer == null && lockAt != null && now < lockAt) {
           lockTimer = scheduleAt(lockAt, () => setBlocked(true));
-        }
-        if (rolloverStarted) return;
-        if (firstKickoff != null && now >= firstKickoff) {
-          rolloverStarted = true;
-          tryRollover(0);
-        } else if (
-          nextWeekTimer == null &&
-          firstKickoff != null &&
-          now < firstKickoff
-        ) {
-          nextWeekTimer = scheduleAt(firstKickoff + 750, () => {
-            rolloverStarted = true;
-            tryRollover(0);
-          });
         }
       },
       () => {
@@ -215,9 +219,9 @@ export function useLeaguePredictionsBlocked(roomCode: string) {
       unsub();
       clearTimers();
     };
-  }, [roomCode, watch, user?.uid]);
+  }, [bootstrap, loading, roomCode, user, watch]);
 
-  return isLeague === false ? false : blocked !== false;
+  return blocked !== false;
 }
 
 type NavItem = {
@@ -238,20 +242,16 @@ export default function RoomBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const roomCode = String(params?.roomCode || "").toUpperCase();
-  const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
+  const { user, loading } = useAuth();
+  const predictionsBlocked = usePredictionsBlocked(roomCode);
   const bootstrap = useCachedBootstrap(roomCode);
   const [predictionsHref, setPredictionsHref] = useState<string>("");
   const [predictionsDisabled, setPredictionsDisabled] = useState(false);
-  const [isLeagueMode, setIsLeagueMode] = useState<boolean | null>(() =>
-    bootstrap ? bootstrap.gameModeStyle === "league" : null,
-  );
 
   const gameModeStyle = bootstrap?.gameModeStyle ?? null;
-
-  useEffect(() => {
-    if (!gameModeStyle) return;
-    setIsLeagueMode(gameModeStyle === "league");
-  }, [gameModeStyle]);
+  const isLeagueMode = gameModeStyle
+    ? gameModeStyle === "league"
+    : null;
 
   const lastTouchHandledAtRef = useRef(0);
   const navRef = useRef<HTMLDivElement | null>(null);
@@ -260,7 +260,7 @@ export default function RoomBottomNav() {
   const [slotWidth, setSlotWidth] = useState(0);
 
   useEffect(() => {
-    if (!roomCode) return;
+    if (!roomCode || loading || !user) return;
     let cancelled = false;
     let unsub: (() => void) | null = null;
 
@@ -274,8 +274,6 @@ export default function RoomBottomNav() {
           .trim()
           .toUpperCase();
         const leagueMode = current?.gameModeStyle === "league";
-        if (!cancelled) setIsLeagueMode(leagueMode);
-
         if (leagueMode) {
           setPredictionsHref(`/room/${roomCode}/minigame/play`);
         } else if (bootstrapState === "REVEAL") {
@@ -347,7 +345,15 @@ export default function RoomBottomNav() {
       cancelled = true;
       if (unsub) unsub();
     };
-  }, [roomCode]);
+  }, [
+    bootstrap?.currentGameweek,
+    bootstrap?.gameModeStyle,
+    bootstrap?.gameState,
+    bootstrap?.seasonKey,
+    loading,
+    roomCode,
+    user,
+  ]);
 
   const items: NavItem[] = useMemo(
     () => [
@@ -367,9 +373,7 @@ export default function RoomBottomNav() {
           pathname === `/room/${roomCode}/minigame` ||
           pathname.startsWith(`/room/${roomCode}/minigame/`),
         disabled:
-          isLeagueMode === false
-            ? predictionsDisabled
-            : leaguePredictionsBlocked,
+          predictionsDisabled || predictionsBlocked,
       },
       {
         key: "home",
@@ -391,8 +395,7 @@ export default function RoomBottomNav() {
       roomCode,
       predictionsDisabled,
       predictionsHref,
-      isLeagueMode,
-      leaguePredictionsBlocked,
+      predictionsBlocked,
     ],
   );
   const activeItem = items.find((item) => item.active) || items[2];
@@ -522,8 +525,7 @@ export default function RoomBottomNav() {
       return;
     }
     if (active || disabled) return;
-    if (_key === "predictions" && isLeagueMode && leaguePredictionsBlocked)
-      return;
+    if (_key === "predictions" && predictionsBlocked) return;
     if (_key === "predictions") {
       const cachedBootstrap = peekRoomBootstrapCached(roomCode);
       const immediateHref =

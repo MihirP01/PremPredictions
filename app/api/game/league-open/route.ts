@@ -3,8 +3,9 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { resolveSeasonKey } from "../../season";
-import { isValidRoomCode } from "@/lib/roomCode";
+import { canonicalRoomCode, isValidRoomCode } from "@/lib/roomCode";
 import { ensureLeagueDraftGame } from "../league-game";
+import { AuthenticationError, requireFirebaseUser } from "@/lib/server/firebase-auth";
 
 type LeagueOpenBody = {
   roomCode?: string;
@@ -15,27 +16,26 @@ type LeagueOpenBody = {
 
 export async function POST(req: Request) {
   try {
+    const user = await requireFirebaseUser(req);
     const body = (await req.json()) as LeagueOpenBody;
-    const roomCode = String(body.roomCode || "")
-      .trim()
-      .toUpperCase();
+    const requested = canonicalRoomCode(body.roomCode);
     const gw = Number(body.gw);
-    const uid = String(body.uid || "").trim();
+    const uid = user.uid;
     const seasonKey = resolveSeasonKey(body.seasonKey);
 
-    if (!isValidRoomCode(roomCode)) {
+    if (!isValidRoomCode(requested)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
     if (!Number.isFinite(gw) || gw < 1 || gw > 38) {
       return NextResponse.json({ error: "Bad gw" }, { status: 400 });
     }
-    if (!uid) {
-      return NextResponse.json({ error: "Missing uid" }, { status: 400 });
+    if (body.uid && body.uid !== uid) {
+      return NextResponse.json({ error: "User identity does not match session" }, { status: 401 });
     }
 
     const opened = await ensureLeagueDraftGame({
       req,
-      roomCode,
+      roomCode: requested,
       gw,
       seasonKey,
       uid,
@@ -47,6 +47,9 @@ export async function POST(req: Request) {
       firstKickoffAt: opened.firstKickoffAt.toISOString(),
     });
   } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to open League predictions";
     const status =

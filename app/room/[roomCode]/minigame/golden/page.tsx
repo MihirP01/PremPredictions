@@ -23,6 +23,7 @@ import {
   subscribeRoomMeta,
   subscribeRoomPicks,
 } from "@/lib/liveGameBus";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
@@ -487,7 +488,7 @@ export default function GoldenPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/game/golden", {
+      const res = await authenticatedFetch("/api/game/golden", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

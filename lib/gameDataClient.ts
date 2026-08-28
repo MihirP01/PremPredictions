@@ -1,5 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import { authenticatedFetch } from "./authenticatedFetch";
 import { notifyRoomCache } from "./cacheStore";
 import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
@@ -79,17 +78,23 @@ export function peekGameDataCached(
   if (!normalizedRoom || !normalizedSeason || !Number.isFinite(normalizedGw)) {
     return null;
   }
+
+  // Prefer the exact representation requested by the caller. A picks-only
+  // refresh must not be hidden by an older full (picks + chips) snapshot.
+  const exact = peekCached(
+    keyFor(normalizedRoom, normalizedSeason, normalizedGw, includeChips),
+  );
+  if (exact) return exact.data;
+
+  // A full snapshot is still a valid fallback for a picks-only reader when
+  // no dedicated picks snapshot has been loaded yet.
   if (!includeChips) {
     const full = peekCached(
       keyFor(normalizedRoom, normalizedSeason, normalizedGw, true),
     );
     if (full) return full.data;
   }
-  return (
-    peekCached(
-      keyFor(normalizedRoom, normalizedSeason, normalizedGw, includeChips),
-    )?.data ?? null
-  );
+  return null;
 }
 
 export async function getGameDataCached(
@@ -112,7 +117,10 @@ export async function getGameDataCached(
     includeChips,
   );
   const now = Date.now();
-  if (!includeChips) {
+  const cached = peekCached(key);
+  if (cached && cached.expiresAt > now) return cached.data;
+
+  if (!includeChips && !cached) {
     const fullKey = keyFor(
       normalizedRoom,
       normalizedSeason,
@@ -120,29 +128,77 @@ export async function getGameDataCached(
       true,
     );
     const fullCached = peekCached(fullKey);
-    if (fullCached) return fullCached.data;
+    if (fullCached && fullCached.expiresAt > now) return fullCached.data;
   }
-  const cached = peekCached(key);
-  if (cached && cached.expiresAt > now) return cached.data;
-  if (cached) {
-    if (!pending.get(key)) {
-      void fetchGameData(
-        normalizedRoom,
-        normalizedSeason,
-        normalizedGw,
-        includeChips,
-        key,
-      ).catch(() => {});
-    }
-    return cached.data;
-  }
+
   return fetchGameData(
     normalizedRoom,
     normalizedSeason,
     normalizedGw,
     includeChips,
     key,
+  ).catch((error) => {
+    if (cached) return cached.data;
+    throw error;
+  });
+}
+
+export function refreshGameDataCached(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  opts?: { includeChips?: boolean },
+) {
+  const includeChips = opts?.includeChips !== false;
+  const room = String(roomCode || "").toUpperCase();
+  const season = String(seasonKey || "");
+  const gameweek = Number(gw);
+  return fetchGameData(
+    room,
+    season,
+    gameweek,
+    includeChips,
+    keyFor(room, season, gameweek, includeChips),
   );
+}
+
+export function patchGameDataPicksCached(
+  roomCode: string,
+  seasonKey: string,
+  gw: number,
+  uid: string,
+  picks: Array<{ fixtureId: number; score: string }>,
+) {
+  const room = String(roomCode || "").toUpperCase();
+  const season = String(seasonKey || "");
+  const gameweek = Number(gw);
+  if (!room || !season || !uid || !Number.isFinite(gameweek)) return;
+
+  for (const includeChips of [false, true]) {
+    const key = keyFor(room, season, gameweek, includeChips);
+    const existing = peekCached(key);
+    if (includeChips && !existing) continue;
+    const byFixture = new Map(
+      (existing?.data.picks ?? []).map((pick) => [
+        `${pick.uid}|${pick.fixtureId}`,
+        pick,
+      ]),
+    );
+    for (const pick of picks) {
+      if (!Number.isFinite(Number(pick.fixtureId))) continue;
+      const next: CachedPick = {
+        uid,
+        fixtureId: Number(pick.fixtureId),
+        score: String(pick.score || ""),
+      };
+      byFixture.set(`${uid}|${next.fixtureId}`, next);
+    }
+    setCached(key, {
+      picks: [...byFixture.values()],
+      goldens: existing?.data.goldens ?? [],
+      powerups: existing?.data.powerups ?? [],
+    });
+  }
 }
 
 function fetchGameData(
@@ -155,28 +211,25 @@ function fetchGameData(
   const existing = pending.get(key);
   if (existing) return existing;
   const req = (async () => {
-    const base = [
-      "rooms",
-      room,
-      "seasons",
-      season,
-      "games",
-      `gw-${gw}`,
-    ] as const;
-    const picksSnap = await getDocs(collection(db, ...base, "picks"));
-    const [goldenSnap, powerupsSnap] = includeChips
-      ? await Promise.all([
-          getDocs(collection(db, ...base, "golden")),
-          getDocs(collection(db, ...base, "powerups")),
-        ])
-      : [null, null];
-    const picks: CachedPick[] = picksSnap.docs
-      .map((d) => {
-        const data = d.data() as {
-          uid?: string;
-          fixtureId?: number;
-          score?: string;
-        };
+    const params = new URLSearchParams({
+      roomCode: room,
+      seasonKey: season,
+      gameweek: String(gw),
+      includeChips: includeChips ? "1" : "0",
+    });
+    const response = await authenticatedFetch(`/api/game/data?${params}`, {
+      cache: "no-store",
+    });
+    const payload = (await response
+      .json()
+      .catch(() => ({}))) as Partial<CachedGameData> & { error?: string };
+    if (!response.ok) {
+      throw new Error(payload.error || `game data ${response.status}`);
+    }
+    const picks: CachedPick[] = (
+      Array.isArray(payload.picks) ? payload.picks : []
+    )
+      .map((data) => {
         return {
           uid: String(data.uid || ""),
           fixtureId: Number(data.fixtureId),
@@ -184,16 +237,11 @@ function fetchGameData(
         } satisfies CachedPick;
       })
       .filter((p) => !!p.uid && Number.isFinite(p.fixtureId));
-    const goldens: CachedGolden[] = goldenSnap
-      ? goldenSnap.docs
-          .map((d) => {
-            const data = d.data() as {
-              fixtureId?: number;
-              score?: string;
-              locked?: boolean;
-            };
+    const goldens: CachedGolden[] = Array.isArray(payload.goldens)
+      ? payload.goldens
+          .map((data) => {
             return {
-              uid: d.id,
+              uid: String(data.uid || ""),
               fixtureId: Number(data.fixtureId),
               score: String(data.score || ""),
               locked: Boolean(data.locked),
@@ -201,19 +249,14 @@ function fetchGameData(
           })
           .filter((g) => !!g.uid && Number.isFinite(g.fixtureId))
       : [];
-    const powerups: CachedPowerup[] = powerupsSnap
-      ? powerupsSnap.docs
-          .map((d) => {
-            const data = d.data() as {
-              fixtureId?: number;
-              powerupType?: string;
-              locked?: boolean;
-            };
+    const powerups: CachedPowerup[] = Array.isArray(payload.powerups)
+      ? payload.powerups
+          .map((data) => {
             const rawType = String(data.powerupType || "").toUpperCase();
             const normalizedType =
               rawType === "ALL_IN" || rawType === "SAFETY_NET" ? rawType : null;
             return {
-              uid: d.id,
+              uid: String(data.uid || ""),
               fixtureId: Number(data.fixtureId),
               powerupType: normalizedType,
               locked: Boolean(data.locked),
@@ -231,9 +274,9 @@ function fetchGameData(
           )
       : [];
 
-    const payload = { picks, goldens, powerups } satisfies CachedGameData;
-    setCached(key, payload);
-    return payload;
+    const data = { picks, goldens, powerups } satisfies CachedGameData;
+    setCached(key, data);
+    return data;
   })().finally(() => pending.delete(key));
   pending.set(key, req);
   return req;

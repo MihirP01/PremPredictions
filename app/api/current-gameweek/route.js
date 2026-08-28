@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "../../../firebase-admin";
 import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
+import {
+  nextLondonNoonMs,
+  PREDICTION_LOCK_WINDOW_MS,
+} from "@/lib/gameweekRollover";
 
 const LEAGUE = "PL";
 const SEASON_START_MONTH_UTC = 7; // Aug
-const LEAGUE_TIME_ZONE = "Europe/London";
 
 function inferSeasonKey(now = new Date()) {
   const year = now.getUTCFullYear();
@@ -55,97 +57,6 @@ function clampGW(gw) {
 
 const MATCHDAY_CLUSTER_BREAK_MS = 5 * 24 * 60 * 60 * 1000;
 
-function zonedParts(ms, timeZone) {
-  const date = typeof ms === "number" ? new Date(ms) : ms;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-
-  const out = {
-    year: 1970,
-    month: 1,
-    day: 1,
-    hour: 0,
-    minute: 0,
-    second: 0,
-  };
-
-  for (const part of parts) {
-    if (part.type === "year") out.year = Number(part.value);
-    else if (part.type === "month") out.month = Number(part.value);
-    else if (part.type === "day") out.day = Number(part.value);
-    else if (part.type === "hour") out.hour = Number(part.value);
-    else if (part.type === "minute") out.minute = Number(part.value);
-    else if (part.type === "second") out.second = Number(part.value);
-  }
-
-  return out;
-}
-
-function zonedDateTimeToUtc(parts, timeZone) {
-  const guess = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour || 0,
-    parts.minute || 0,
-    parts.second || 0,
-    0,
-  );
-  const actual = zonedParts(guess, timeZone);
-  const actualAsUtc = Date.UTC(
-    actual.year,
-    actual.month - 1,
-    actual.day,
-    actual.hour,
-    actual.minute,
-    actual.second,
-    0,
-  );
-  const desiredAsUtc = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour || 0,
-    parts.minute || 0,
-    parts.second || 0,
-    0,
-  );
-  return guess + (desiredAsUtc - actualAsUtc);
-}
-
-function nextLocalNoonMs(baseMs, timeZone) {
-  const local = zonedParts(baseMs, timeZone);
-  const nextDayProbe = Date.UTC(
-    local.year,
-    local.month - 1,
-    local.day + 1,
-    12,
-    0,
-    0,
-    0,
-  );
-  const nextLocal = zonedParts(nextDayProbe, timeZone);
-  return zonedDateTimeToUtc(
-    {
-      year: nextLocal.year,
-      month: nextLocal.month,
-      day: nextLocal.day,
-      hour: 12,
-      minute: 0,
-      second: 0,
-    },
-    timeZone,
-  );
-}
-
 function selectGameweek(byMd, nowMs) {
   return selectCurrentGameweek(byMd, nowMs);
 }
@@ -172,10 +83,7 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!prev) {
       nextOpen = nextUpcomingMd;
     } else {
-      const rolloverAtMs = nextLocalNoonMs(
-        prev.latestKickoffMs,
-        LEAGUE_TIME_ZONE,
-      );
+      const rolloverAtMs = nextLondonNoonMs(prev.latestKickoffMs);
       nextOpen = nowMs >= rolloverAtMs ? nextUpcomingMd : prevMd;
     }
   } else if (matchdays.length > 0) {
@@ -184,19 +92,35 @@ function selectCurrentGameweek(byMd, nowMs) {
     if (!latest) {
       nextOpen = latestMd;
     } else {
-      const rolloverAtMs = nextLocalNoonMs(
-        latest.latestKickoffMs,
-        LEAGUE_TIME_ZONE,
-      );
+      const rolloverAtMs = nextLondonNoonMs(latest.latestKickoffMs);
       nextOpen = nowMs >= rolloverAtMs ? latestMd + 1 : latestMd;
     }
   } else {
     nextOpen = 1;
   }
 
+  const currentGameweek = clampGW(
+    Number.isFinite(nextOpen) ? Number(nextOpen) : 1,
+  );
+  const current = byMd.get(currentGameweek);
+  const nextGameweekAtMs = current
+    ? nextLondonNoonMs(current.latestKickoffMs)
+    : null;
+
   return {
-    currentGameweek: clampGW(Number.isFinite(nextOpen) ? Number(nextOpen) : 1),
+    currentGameweek,
     matchdaysSeen: matchdays.length,
+    predictionLockAt:
+      current && Number.isFinite(current.earliestKickoffMs)
+        ? new Date(
+            current.earliestKickoffMs - PREDICTION_LOCK_WINDOW_MS,
+          ).toISOString()
+        : null,
+    nextGameweekAt:
+      nextGameweekAtMs != null &&
+      !(currentGameweek === 38 && nowMs >= nextGameweekAtMs)
+        ? new Date(nextGameweekAtMs).toISOString()
+        : null,
   };
 }
 
@@ -245,7 +169,9 @@ function buildByMatchday(matches, nowMs) {
 
     const earliestKickoffMs = primaryCluster[0];
     const latestKickoffMs = primaryCluster[primaryCluster.length - 1];
-    const startedKickoffs = primaryCluster.filter((kickoffMs) => kickoffMs <= nowMs);
+    const startedKickoffs = primaryCluster.filter(
+      (kickoffMs) => kickoffMs <= nowMs,
+    );
 
     byMd.set(md, {
       total: kickoffList.length,
@@ -258,49 +184,6 @@ function buildByMatchday(matches, nowMs) {
   }
 
   return byMd;
-}
-
-async function buildSnapshotCurrentGameweek(seasonKey, now, mode) {
-  try {
-    const snap = await adminDb.doc(`_fixtureSnapshots/PL_${seasonKey}`).get();
-    if (!snap.exists) return null;
-
-    const raw = snap.data() || {};
-    const snapshotMatches = Array.isArray(raw.matches)
-      ? raw.matches
-      : Object.values(raw);
-    const matches = snapshotMatches.filter(
-      (value) =>
-        value &&
-        typeof value === "object" &&
-        Number.isFinite(Number(value.matchday)) &&
-        value.utcDate,
-    );
-
-    if (!matches.length) return null;
-
-    const byMd = buildByMatchday(matches, now.getTime());
-    const selected = selectGameweek(byMd, now.getTime(), mode);
-
-    return NextResponse.json(
-      {
-        currentGameweek: selected.currentGameweek,
-        seasonKey,
-        debug: {
-          source: "fixture-snapshot",
-          snapshotDoc: `PL_${seasonKey}`,
-          matchdaysSeen: selected.matchdaysSeen,
-          selectedBy:
-            mode === "league"
-              ? leagueSelectedBy("snapshot")
-              : "next-upcoming-then-rollover-midnight-europe-london-snapshot",
-        },
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  } catch {
-    return null;
-  }
 }
 
 async function buildFotmobFallback(seasonKey, now, mode) {
@@ -345,13 +228,15 @@ async function buildFotmobFallback(seasonKey, now, mode) {
     {
       currentGameweek: selected.currentGameweek,
       seasonKey,
+      predictionLockAt: selected.predictionLockAt,
+      nextGameweekAt: selected.nextGameweekAt,
       debug: {
         window: { source: "fotmob-fallback" },
         matchdaysSeen: selected.matchdaysSeen,
         selectedBy:
           mode === "league"
             ? leagueSelectedBy("fotmob")
-            : "next-upcoming-then-rollover-midnight-europe-london-fotmob",
+            : "next-gw-at-next-day-noon-fotmob",
       },
     },
     { headers: { "Cache-Control": "no-store" } },
@@ -371,13 +256,6 @@ export async function GET(req) {
       : "live";
 
   const now = new Date();
-  const snapshotCurrent = await buildSnapshotCurrentGameweek(
-    seasonKey,
-    now,
-    mode,
-  );
-  if (snapshotCurrent) return snapshotCurrent;
-
   const API_KEY = process.env.FOOTBALLDATA_KEY;
   if (!API_KEY) {
     const fallback = await buildFotmobFallback(seasonKey, now, mode);
@@ -436,13 +314,15 @@ export async function GET(req) {
     {
       currentGameweek: selected.currentGameweek,
       seasonKey,
+      predictionLockAt: selected.predictionLockAt,
+      nextGameweekAt: selected.nextGameweekAt,
       debug: {
         window: { dateFrom: fmt(from), dateTo: fmt(to) },
         matchdaysSeen: selected.matchdaysSeen,
         selectedBy:
           mode === "league"
             ? leagueSelectedBy("football-data")
-            : "next-upcoming-then-rollover-midnight-europe-london",
+            : "next-gw-at-next-day-noon-football-data",
       },
     },
     { headers: { "Cache-Control": "no-store" } },

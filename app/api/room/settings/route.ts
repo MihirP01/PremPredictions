@@ -2,159 +2,91 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { adminDb } from "../../../../firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { isValidRoomCode } from "@/lib/roomCode";
+import { canonicalRoomCode, isValidRoomCode } from "@/lib/roomCode";
+import {
+  assertClaimedUid,
+  AuthenticationError,
+  requireFirebaseUser,
+} from "@/lib/server/firebase-auth";
+import { mirrorRoomSettingsToPostgres } from "@/lib/server/postgres-room-repository";
+import { getPostgresRoomSummary, PostgresRoomNotFoundError } from "@/lib/server/postgres-read-model";
 
-type RoomSettingsBody = {
-  roomCode?: string;
-  leaderUid?: string;
-  sameResultLock?: boolean;
-  powerupsEnabled?: boolean;
-  leagueFairPlayEnabled?: boolean;
-  themeAccent?: string;
-  gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
-};
-
-type RoomDoc = {
-  leaderUid?: string;
-  settings?: {
-    sameResultLock?: boolean;
-    powerupsEnabled?: boolean;
-    leagueFairPlayEnabled?: boolean;
-    themeAccent?: string;
-    gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
-  };
-};
-
-const ALLOWED_THEME_ACCENTS = new Set([
-  "teal",
-  "blue",
-  "emerald",
-  "orange",
-  "rose",
-  "red",
-  "slate",
-]);
+const ACCENTS = new Set(["teal", "blue", "emerald", "orange", "rose", "red", "slate"]);
+const MODES = new Set(["round_robin", "sprint", "captain", "league"]);
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as RoomSettingsBody;
-    const roomCode = String(body.roomCode || "").toUpperCase();
-    const leaderUid = String(body.leaderUid || "");
-    const sameResultLock = body.sameResultLock;
-    const powerupsEnabled = body.powerupsEnabled;
-    const leagueFairPlayEnabled = body.leagueFairPlayEnabled;
-    const themeAccent =
-      typeof body.themeAccent === "string"
-        ? body.themeAccent.trim().toLowerCase()
-        : undefined;
-    const gameModeStyle =
-      typeof body.gameModeStyle === "string"
-        ? body.gameModeStyle.trim().toLowerCase()
-        : undefined;
-
-    if (!isValidRoomCode(roomCode)) {
+    const body = (await req.json()) as {
+      roomCode?: string;
+      leaderUid?: string;
+      sameResultLock?: boolean;
+      powerupsEnabled?: boolean;
+      leagueFairPlayEnabled?: boolean;
+      themeAccent?: string;
+      gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
+    };
+    const user = await requireFirebaseUser(req);
+    const requested = canonicalRoomCode(body.roomCode);
+    const leaderUid = assertClaimedUid(user, body.leaderUid);
+    if (!isValidRoomCode(requested)) {
       return NextResponse.json({ error: "Bad roomCode" }, { status: 400 });
     }
-    if (!leaderUid) {
-      return NextResponse.json({ error: "Missing leaderUid" }, { status: 400 });
-    }
-    if (
-      typeof sameResultLock !== "boolean" &&
-      typeof powerupsEnabled !== "boolean" &&
-      typeof leagueFairPlayEnabled !== "boolean" &&
-      typeof themeAccent !== "string" &&
-      typeof gameModeStyle !== "string"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Provide sameResultLock, powerupsEnabled, leagueFairPlayEnabled, themeAccent and/or gameModeStyle",
-        },
-        { status: 400 },
-      );
-    }
-    if (themeAccent && !ALLOWED_THEME_ACCENTS.has(themeAccent)) {
-      return NextResponse.json(
-        { error: "Invalid themeAccent" },
-        { status: 400 },
-      );
-    }
-    if (
-      gameModeStyle &&
-      gameModeStyle !== "round_robin" &&
-      gameModeStyle !== "sprint" &&
-      gameModeStyle !== "captain" &&
-      gameModeStyle !== "league"
-    ) {
-      return NextResponse.json(
-        { error: "Invalid gameModeStyle" },
-        { status: 400 },
-      );
-    }
-
-    const roomRef = adminDb.doc(`rooms/${roomCode}`);
-    const roomSnap = await roomRef.get();
-    if (!roomSnap.exists) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-
-    const room = roomSnap.data() as RoomDoc;
+    const room = await getPostgresRoomSummary(requested);
+    const roomCode = room.code;
     if (room.leaderUid !== leaderUid) {
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
     }
-
-    const currentSettings = room.settings ?? {};
-    let nextGameModeStyle: "round_robin" | "sprint" | "captain" | "league" =
-      currentSettings.gameModeStyle || "round_robin";
-    if (
-      gameModeStyle === "round_robin" ||
-      gameModeStyle === "sprint" ||
-      gameModeStyle === "captain" ||
-      gameModeStyle === "league"
-    ) {
-      nextGameModeStyle = gameModeStyle;
+    const themeAccent = body.themeAccent?.trim().toLowerCase();
+    const requestedMode = body.gameModeStyle?.trim().toLowerCase();
+    if (themeAccent && !ACCENTS.has(themeAccent)) {
+      return NextResponse.json({ error: "Invalid themeAccent" }, { status: 400 });
     }
-    let nextSameResultLock =
-      typeof sameResultLock === "boolean"
-        ? sameResultLock
-        : currentSettings.sameResultLock !== false;
-    if (nextGameModeStyle === "sprint" || nextGameModeStyle === "league") {
-      nextSameResultLock = false;
+    if (requestedMode && !MODES.has(requestedMode)) {
+      return NextResponse.json({ error: "Invalid gameModeStyle" }, { status: 400 });
     }
-    const nextPowerupsEnabled =
-      nextGameModeStyle === "league"
+    const gameModeStyle = (requestedMode || room.gameModeStyle) as
+      | "round_robin"
+      | "sprint"
+      | "captain"
+      | "league";
+    const sameResultLock =
+      gameModeStyle === "sprint" || gameModeStyle === "league"
         ? false
-        : typeof powerupsEnabled === "boolean"
-          ? powerupsEnabled
-          : currentSettings.powerupsEnabled === true;
-    const nextLeagueFairPlayEnabled =
-      typeof leagueFairPlayEnabled === "boolean"
-        ? leagueFairPlayEnabled
-        : currentSettings.leagueFairPlayEnabled === true;
-
-    const nextSettings: Record<string, unknown> = {
-      updatedAt: FieldValue.serverTimestamp(),
+        : typeof body.sameResultLock === "boolean"
+          ? body.sameResultLock
+          : !room.allowIdenticalPicks;
+    const powerupsEnabled =
+      gameModeStyle === "league"
+        ? false
+        : typeof body.powerupsEnabled === "boolean"
+          ? body.powerupsEnabled
+          : room.powerupsEnabled;
+    const leagueFairPlayEnabled =
+      typeof body.leagueFairPlayEnabled === "boolean"
+        ? body.leagueFairPlayEnabled
+        : room.leagueFairPlayEnabled;
+    const nextSettings = {
+      ...room.settings,
+      gameModeStyle,
+      sameResultLock,
+      powerupsEnabled,
+      leagueFairPlayEnabled,
+      themeAccent: themeAccent || room.themeAccent,
+      hasPassword: room.hasPassword,
+      updatedAt: new Date().toISOString(),
     };
-    nextSettings.gameModeStyle = nextGameModeStyle;
-    nextSettings.sameResultLock = nextSameResultLock;
-    nextSettings.powerupsEnabled = nextPowerupsEnabled;
-    nextSettings.leagueFairPlayEnabled = nextLeagueFairPlayEnabled;
-    if (themeAccent) nextSettings.themeAccent = themeAccent;
-
-    await roomRef.set({ settings: nextSettings }, { merge: true });
-
-    return NextResponse.json({
-      ok: true,
-      sameResultLock: nextSameResultLock,
-      powerupsEnabled: nextPowerupsEnabled,
-      leagueFairPlayEnabled: nextLeagueFairPlayEnabled,
-      gameModeStyle: nextGameModeStyle,
-      themeAccent: themeAccent ?? undefined,
-    });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "settings update failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    await mirrorRoomSettingsToPostgres(roomCode, nextSettings);
+    return NextResponse.json({ ok: true, ...nextSettings });
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof PostgresRoomNotFoundError) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "settings update failed" },
+      { status: 500 },
+    );
   }
 }

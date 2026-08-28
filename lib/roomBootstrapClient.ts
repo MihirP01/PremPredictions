@@ -1,15 +1,15 @@
 import { notifyRoomCache } from "./cacheStore";
+import { authenticatedFetch } from "./authenticatedFetch";
 import { primeCurrentGameweekCache } from "./currentGameweekClient";
-import {
-  peekSessionRecord,
-  writeSessionRecord,
-} from "./sessionCache";
+import { peekSessionRecord, writeSessionRecord } from "./sessionCache";
 
 export type RoomBootstrapData = {
   ok: boolean;
   roomCode: string;
   seasonKey: string;
   currentGameweek: number;
+  predictionLockAt?: string | null;
+  nextGameweekAt?: string | null;
   gameState: string;
   leaderUid: string | null;
   themeAccent: string;
@@ -17,6 +17,7 @@ export type RoomBootstrapData = {
   allowIdenticalPicks: boolean;
   powerupsEnabled?: boolean;
   leagueFairPlayEnabled?: boolean;
+  hasPassword?: boolean;
   seasonOptions?: string[];
 };
 
@@ -54,6 +55,8 @@ function setCached(key: string, data: RoomBootstrapData) {
     {
       currentGameweek: data.currentGameweek,
       seasonKey: data.seasonKey,
+      predictionLockAt: data.predictionLockAt ?? null,
+      nextGameweekAt: data.nextGameweekAt ?? null,
     },
     data.gameModeStyle === "league" ? "league" : "live",
   );
@@ -87,15 +90,11 @@ export async function getRoomBootstrapCached(
   const key = keyFor(roomCode);
   const cached = peekCached(key);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
-  if (cached) {
-    void refreshRoomBootstrapCached(roomCode).catch(() => {});
-    return cached.data;
-  }
   const existing = pending.get(key);
   if (existing) return existing;
 
   const req = (async () => {
-    const res = await fetch(
+    const res = await authenticatedFetch(
       `/api/bootstrap?roomCode=${encodeURIComponent(key)}`,
       {
         cache: "no-store",
@@ -105,7 +104,12 @@ export async function getRoomBootstrapCached(
     const data = (await res.json()) as RoomBootstrapData;
     setCached(key, data);
     return data;
-  })().finally(() => pending.delete(key));
+  })()
+    .catch((error) => {
+      if (cached) return cached.data;
+      throw error;
+    })
+    .finally(() => pending.delete(key));
   pending.set(key, req);
   return req;
 }
@@ -114,7 +118,7 @@ export async function refreshRoomBootstrapCached(
   roomCode: string,
 ): Promise<RoomBootstrapData> {
   const key = keyFor(roomCode);
-  const res = await fetch(
+  const res = await authenticatedFetch(
     `/api/bootstrap?roomCode=${encodeURIComponent(key)}`,
     {
       cache: "no-store",

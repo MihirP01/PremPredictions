@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: prem_predictions
+      POSTGRES_USER: prem_predictions
+      POSTGRES_PASSWORD: CHANGE_TO_A_LONG_URL_SAFE_PASSWORD
+    volumes:
+      - /mnt/tank/apps/prem-predictions/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prem_predictions -d prem_predictions"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - prem-predictions-internal
+
+  app:
+    image: ghcr.io/mihirp01/prempredictions:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: postgresql://prem_predictions:CHANGE_TO_A_LONG_URL_SAFE_PASSWORD@postgres:5432/prem_predictions
+      POSTGRES_POOL_MAX: "10"
+      FIREBASE_PROJECT_ID: REPLACE_ME
+      FIREBASE_CLIENT_EMAIL: REPLACE_ME
+      FIREBASE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nREPLACE_ME\n-----END PRIVATE KEY-----"
+      FOOTBALLDATA_KEY: REPLACE_ME
+      CRON_SECRET: REPLACE_ME
+    ports:
+      - "3010:3000"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - prem-predictions-internal
+
+networks:
+  prem-predictions-internal:
+    driver: bridge

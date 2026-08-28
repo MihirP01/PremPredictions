@@ -4,12 +4,16 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import LogoutButton from "../../components/LogoutButton";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useAuth } from "../../components/AuthProvider";
-import { db } from "../../firebase";
 import { peekLastRoomCode, rememberLastRoomCode } from "@/lib/lastRoom";
-import { fetchMemberRooms } from "@/lib/memberRoomsClient";
-import { ROOM_CODE_ERROR, canonicalRoomCode, isValidRoomCode, normalizeRoomCode } from "@/lib/roomCode";
+import { fetchMemberRooms, resolveRoomAccess } from "@/lib/memberRoomsClient";
+import {
+  ROOM_CODE_ERROR,
+  canonicalRoomCode,
+  isValidRoomCode,
+  normalizeRoomCode,
+} from "@/lib/roomCode";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 type MemberRoom = { roomCode: string; role: "leader" | "member" };
 
@@ -40,101 +44,81 @@ export default function RoomGatePage() {
       return;
     }
 
-    if (!kicked) {
-      const last = peekLastRoomCode();
-      if (last) {
-        router.replace(`/room/${last}`);
-        return;
-      }
-    }
-
     let cancelled = false;
-    const timeoutId = window.setTimeout(() => {
-      if (!cancelled) setResolving(false);
-    }, 8000);
+    const fallbackDisplayName =
+      String(userEmail || "").split("@")[0] || "Player";
+
+    const enterRoom = (code: string, existing: string, profileName: string) => {
+      if (cancelled) return;
+      rememberLastRoomCode(code);
+      router.replace(`/room/${code}`);
+
+      if (code !== existing) {
+        void authenticatedFetch("/api/user/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: profileName, currentRoomCode: code }),
+        }).catch(() => undefined);
+      }
+    };
+
+    const loadAllRoomsInBackground = (existing: string, profileName: string) => {
+      setRoomsLoading(true);
+      void fetchMemberRooms(userUid)
+        .then((joinedRooms) => {
+          if (cancelled) return;
+          setMemberRooms(joinedRooms);
+          if (!kicked && joinedRooms.length === 1) {
+            enterRoom(joinedRooms[0].roomCode, existing, profileName);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setError(
+              "Could not refresh joined rooms. You can still join or create a room.",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setRoomsLoading(false);
+        });
+    };
 
     (async () => {
       setResolving(true);
-      const snap = await getDoc(doc(db, "users", userUid));
-      const data = snap.data();
-      if (cancelled) return;
-      const resolvedDisplayName =
-        String(data?.displayName || "").trim() ||
-        String(userEmail || "").split("@")[0] ||
-        "Player";
-      setDisplayName(resolvedDisplayName);
-
-      const existing = canonicalRoomCode(String(data?.currentRoomCode || ""));
-      setCurrentRoomCode(existing);
-      if (existing) setRoomCode(existing);
-
-      const enterRoom = async (code: string) => {
-        if (cancelled) return;
-        rememberLastRoomCode(code);
-        if (code !== existing) {
-          await setDoc(
-            doc(db, "users", userUid),
-            { currentRoomCode: code },
-            { merge: true },
-          );
-        }
-        router.replace(`/room/${code}`);
-      };
-
-      if (existing && !kicked) {
-        try {
-          const existingMembership = await getDoc(
-            doc(db, "rooms", existing, "players", userUid),
-          );
-          if (existingMembership.exists()) {
-            const role = String(existingMembership.data()?.role || "member");
-            setMemberRooms([
-              {
-                roomCode: existing,
-                role: role === "leader" ? "leader" : "member",
-              },
-            ]);
-            await enterRoom(existing);
-            return;
-          }
-        } catch {
-          // Continue to fallback lookup.
-        }
-      }
-
-      setRoomsLoading(true);
       try {
-        const joinedRooms = await fetchMemberRooms(userUid);
+        const last = !kicked ? peekLastRoomCode() : "";
+        const resolution = await resolveRoomAccess(userUid, last);
         if (cancelled) return;
-        setMemberRooms(joinedRooms);
+        const existing = canonicalRoomCode(resolution.currentRoomCode);
+        const memberCodes = new Set(resolution.rooms.map((room) => room.roomCode));
+        setDisplayName(resolution.displayName || fallbackDisplayName);
+        setCurrentRoomCode(existing);
+        setMemberRooms(resolution.rooms);
+        if (existing) setRoomCode(existing);
 
-        if (!kicked && existing && joinedRooms.some((r) => r.roomCode === existing)) {
-          await enterRoom(existing);
+        const target = !kicked
+          ? (last && memberCodes.has(last) ? last : "") ||
+            (existing && memberCodes.has(existing) ? existing : "") ||
+            (resolution.rooms.length === 1 ? resolution.rooms[0].roomCode : "")
+          : "";
+        if (target) {
+          enterRoom(target, existing, resolution.displayName || fallbackDisplayName);
           return;
         }
-        if (!kicked && joinedRooms.length === 1) {
-          await enterRoom(joinedRooms[0].roomCode);
-          return;
-        }
-        if (!cancelled) setResolving(false);
+
+        setResolving(false);
+        if (!resolution.indexReady) loadAllRoomsInBackground(existing, resolution.displayName || fallbackDisplayName);
       } catch {
-        if (!cancelled) {
-          setMemberRooms([]);
-          setResolving(false);
-        }
-      } finally {
-        if (!cancelled) setRoomsLoading(false);
+        if (cancelled) return;
+        setDisplayName(fallbackDisplayName);
+        setResolving(false);
+        loadAllRoomsInBackground("", fallbackDisplayName);
       }
-    })().catch(() => {
-      if (cancelled) return;
-      setRoomsLoading(false);
-      setResolving(false);
-      setError("Failed to load profile.");
-    });
+    })();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timeoutId);
     };
   }, [loading, userUid, userEmail, router, kicked]);
 
@@ -142,23 +126,13 @@ export default function RoomGatePage() {
     if (!user) return;
     setBusy(true);
     setError(null);
-    try {
-      await setDoc(
-        doc(db, "users", user.uid),
-        { displayName, currentRoomCode: targetRoomCode },
-        { merge: true },
-      );
-      rememberLastRoomCode(targetRoomCode);
-      router.replace(`/room/${targetRoomCode}`);
-    } catch (e) {
-      const message =
-        e instanceof Error
-          ? e.message
-          : "Could not open room. Please try again.";
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
+    rememberLastRoomCode(targetRoomCode);
+    router.replace(`/room/${targetRoomCode}`);
+    void authenticatedFetch("/api/user/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName, currentRoomCode: targetRoomCode }),
+    }).catch(() => undefined);
   };
 
   const joinRoom = async () => {
@@ -179,7 +153,7 @@ export default function RoomGatePage() {
         setBusy(false);
         return;
       }
-      const res = await fetch("/api/room/access", {
+      const res = await authenticatedFetch("/api/room/access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -239,7 +213,7 @@ export default function RoomGatePage() {
           return;
         }
       }
-      const res = await fetch("/api/room/access", {
+      const res = await authenticatedFetch("/api/room/access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -267,7 +241,7 @@ export default function RoomGatePage() {
         <div className="mx-auto flex min-h-[40vh] max-w-xl items-center justify-center rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,18,34,0.98),rgba(11,24,41,0.96))] text-sm text-white/65 shadow-[0_24px_56px_rgba(3,8,20,0.4)]">
           <span className="inline-flex items-center gap-2">
             <Loader2 size={16} className="animate-spin" />
-            Loading room access...
+            {loading ? "Restoring your session..." : "Checking your rooms..."}
           </span>
         </div>
       </div>

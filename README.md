@@ -4,7 +4,7 @@ Multiplayer Premier League prediction app with:
 
 - room-based play,
 - minigame draft + golden pick flow,
-- saved score docs for leaderboard,
+- persisted PostgreSQL scores for leaderboard,
 - mobile-first UI + PWA support.
 
 ## Tech Stack
@@ -12,9 +12,9 @@ Multiplayer Premier League prediction app with:
 - Next.js 16 (App Router)
 - React 19 + TypeScript
 - Tailwind CSS v4
-- Firebase Auth + Firestore
-- Firebase Admin SDK (server API routes)
-- Vercel-ready deployment
+- Firebase Authentication
+- PostgreSQL (Drizzle + `pg`) for all application data
+- TrueNAS container deployment
 
 ## Core Features
 
@@ -29,7 +29,7 @@ Multiplayer Premier League prediction app with:
   - wrong result = 0 points
   - golden pick doubles points
 - **Leaderboard**:
-  - reads only saved `scores` docs
+  - reads only saved PostgreSQL weekly scores
   - leader tool recalculates latest 3 GWs
   - mobile-friendly GW view + desktop matrix
 - **PWA**: installable app with generated icons and iOS-safe layout handling.
@@ -42,9 +42,8 @@ Multiplayer Premier League prediction app with:
 - `app/room/[roomCode]/leaderboard/page.tsx` - leaderboard + leader tools
 - `app/room/[roomCode]/minigame/*` - lobby, draft play, golden, reveal
 - `app/api/*` - server routes for fixtures/game actions/score calc/room delete
-- `firebase.ts` - client Firebase init
-- `firebase-admin.ts` - admin Firebase init for secure server writes
-- `firestore.rules` - Firestore security rules
+- `firebase.ts` - client Firebase Authentication init
+- `firebase-admin.ts` - server Firebase token verification
 
 ## Scripts
 
@@ -64,8 +63,6 @@ Create `.env.local`:
 NEXT_PUBLIC_FIREBASE_API_KEY=
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 
 # Server Firebase Admin
@@ -75,22 +72,16 @@ FIREBASE_PRIVATE_KEY=
 
 # Football data provider
 FOOTBALLDATA_KEY=
+
+# PostgreSQL application database
+DATABASE_URL=
+POSTGRES_POOL_MAX=10
 ```
 
 Notes:
 
 - `FIREBASE_PRIVATE_KEY` supports multiline PEM and `\n` format.
-- Server routes use Admin SDK, so Firestore write rules can stay locked down for client writes.
-
-## Firestore Rules
-
-Rules are in `firestore.rules`.
-
-If using Firebase CLI, deploy with:
-
-```bash
-firebase deploy --only firestore:rules
-```
+- Firebase Admin is used only to verify Authentication tokens.
 
 ## API Endpoints
 
@@ -111,3 +102,12 @@ firebase deploy --only firestore:rules
 4. Deploy.
 
 If iOS Home Screen / browser spacing looks different, clear old installed PWA cache after major UI changes and reinstall.
+
+## Deployment (TrueNAS + PostgreSQL)
+
+- Container image: `Dockerfile`
+- TrueNAS Compose template: `deploy/truenas/compose.yaml`
+- Firestore-to-PostgreSQL runbook: `docs/postgres-migration.md`
+
+After the one-time backfill and verifier pass, PostgreSQL is the only
+application data store. Firebase remains enabled for Authentication only.

@@ -19,7 +19,11 @@ import {
 } from "@/lib/roomBootstrapClient";
 import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
 import { getFixturesCached, refreshFixturesCached } from "@/lib/fixturesClient";
-import { getGameDataCached } from "@/lib/gameDataClient";
+import {
+  getGameDataCached,
+  patchGameDataPicksCached,
+  refreshGameDataCached,
+} from "@/lib/gameDataClient";
 import { getRoomGameStateCached } from "@/lib/gameStateClient";
 import {
   subscribeRoomGameDoc,
@@ -39,6 +43,7 @@ import {
 import { TakenScoresStrip } from "./modes/ScoreDesk";
 import { SprintActionPanel, SprintTurnIndicator } from "./modes/SprintMode";
 import LeagueMode from "./modes/LeagueMode";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL" | "CLOSED";
@@ -337,7 +342,7 @@ export default function MiniGamePlayPage() {
   useEffect(() => {
     if (!user || !isLeagueMode || gw == null || !seasonKey) return;
     if (game?.state === "DRAFT" || game?.state === "CLOSED") return;
-    void fetch("/api/game/league-open", {
+    void authenticatedFetch("/api/game/league-open", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -735,7 +740,7 @@ export default function MiniGamePlayPage() {
   const isLocked = false;
 
   const submitPick = async () => {
-    if (!user) return;
+    if (!user || gw == null || !seasonKey) return;
     if (!isParallelDraft && !current) return;
     if (effectiveFixtureId == null) {
       setErr("Select a fixture first.");
@@ -757,7 +762,7 @@ export default function MiniGamePlayPage() {
     setSubmitting(true);
     setErr(null);
     try {
-      const res = await fetch("/api/game/pick", {
+      const res = await authenticatedFetch("/api/game/pick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -771,6 +776,11 @@ export default function MiniGamePlayPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Pick failed");
+      if (score) {
+        patchGameDataPicksCached(roomCode, seasonKey, gw, user.uid, [
+          { fixtureId: effectiveFixtureId, score },
+        ]);
+      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Pick failed");
     } finally {
@@ -846,7 +856,7 @@ export default function MiniGamePlayPage() {
     setStoppingPredictions(true);
     setErr(null);
     try {
-      const res = await fetch("/api/game/stop", {
+      const res = await authenticatedFetch("/api/game/stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -881,7 +891,7 @@ export default function MiniGamePlayPage() {
     if (!user || gw == null || !seasonKey) {
       throw new Error("Gameweek is still loading.");
     }
-    const res = await fetch("/api/game/league-picks", {
+    const res = await authenticatedFetch("/api/game/league-picks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -897,6 +907,10 @@ export default function MiniGamePlayPage() {
       savedCount?: number;
     };
     if (!res.ok) throw new Error(data.error || "Failed to save predictions.");
+    patchGameDataPicksCached(roomCode, seasonKey, gw, user.uid, picks);
+    await refreshGameDataCached(roomCode, seasonKey, gw, {
+      includeChips: false,
+    }).catch(() => null);
     router.replace(`/room/${roomCode}`);
     return Number(data.savedCount ?? 0);
   };

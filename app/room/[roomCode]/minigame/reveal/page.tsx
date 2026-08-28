@@ -29,6 +29,7 @@ import {
 } from "@/lib/liveGameBus";
 import { formatKickoffParts, formatUnlockDateParts } from "@/lib/dateDisplay";
 import { getCountdownParts } from "../lock-utils";
+import { nextLondonNoonMs } from "@/lib/gameweekRollover";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
@@ -212,10 +213,13 @@ export default function RevealPage() {
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState<number>(0);
   const [clockReady, setClockReady] = useState(false);
+  const [serverUnlockAtMs, setServerUnlockAtMs] = useState<number | null>(
+    null,
+  );
   const previewPlayerIds = useMemo(() => {
     const base = user?.uid ? [user.uid] : ["preview-self"];
     return [...base, "preview-rival-a", "preview-rival-b"];
-  }, [user?.uid]);
+  }, [user]);
 
   // auth guard
   useEffect(() => {
@@ -225,6 +229,7 @@ export default function RevealPage() {
 
   // current GW
   useEffect(() => {
+    if (loading || !user) return;
     let cancelled = false;
     (async () => {
       try {
@@ -236,6 +241,12 @@ export default function RevealPage() {
         if (!cancelled) {
           setGw(resolvedGw);
           setSeasonKey(sk);
+          const nextGameweekAt = Date.parse(
+            String(data.nextGameweekAt || ""),
+          );
+          setServerUnlockAtMs(
+            Number.isFinite(nextGameweekAt) ? nextGameweekAt : null,
+          );
         }
       } catch {
         if (!cancelled) {
@@ -247,7 +258,7 @@ export default function RevealPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomCode]);
+  }, [loading, roomCode, user]);
 
   // listen to game doc (for routing + player list + fixtureIds)
   useEffect(() => {
@@ -617,17 +628,15 @@ export default function RevealPage() {
     (players.length > 0 && lockedCount >= players.length);
   const nextGw = gw != null ? gw + 1 : null;
   const unlockAtMs = useMemo(() => {
+    if (serverUnlockAtMs != null) return serverUnlockAtMs;
     if (!fixtures?.length) return null;
     const kickoffTimes = fixtures
       .map((f) => Date.parse(String(f.kickoff || "")))
       .filter((n) => Number.isFinite(n))
       .sort((a, b) => a - b);
     if (!kickoffTimes.length) return null;
-    const unlock = new Date(kickoffTimes[kickoffTimes.length - 1]);
-    unlock.setUTCDate(unlock.getUTCDate() + 1);
-    unlock.setUTCHours(0, 1, 0, 0);
-    return unlock.getTime();
-  }, [fixtures]);
+    return nextLondonNoonMs(kickoffTimes[kickoffTimes.length - 1]);
+  }, [fixtures, serverUnlockAtMs]);
   const unlockMsLeft =
     unlockAtMs != null && clockReady ? Math.max(unlockAtMs - nowMs, 0) : 0;
   const unlockCountdown = getCountdownParts(unlockMsLeft);

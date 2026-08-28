@@ -2,147 +2,96 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { adminDb } from "../../../../firebase-admin";
+import { canonicalRoomCode } from "@/lib/roomCode";
 import { resolveSeasonKey } from "../../season";
-
-type PowerupBody = {
-  roomCode?: string;
-  gw?: number;
-  uid?: string;
-  fixtureId?: number;
-  powerupType?: "ALL_IN" | "SAFETY_NET";
-  seasonKey?: string;
-};
-
-type GameDoc = {
-  state?: string;
-  players?: string[];
-  powerupsEnabled?: boolean;
-};
-
-type PickDoc = {
-  score?: string;
-};
-
-type PowerupDoc = {
-  locked?: boolean;
-};
-
-type GoldenDoc = {
-  fixtureId?: number;
-  locked?: boolean;
-};
+import { AuthenticationError, requireFirebaseUser } from "@/lib/server/firebase-auth";
+import { getPostgresPool } from "@/lib/server/postgres";
+import { requirePostgresRoomMember } from "@/lib/server/postgres-read-model";
 
 export async function POST(req: Request) {
   try {
-    const { roomCode, gw, uid, fixtureId, powerupType, seasonKey } =
-      (await req.json()) as PowerupBody;
-    const rc = String(roomCode || "").toUpperCase();
-    const gwn = Number(gw);
-    const userUid = String(uid || "");
-    const fxId = Number(fixtureId);
-    const type = String(powerupType || "SAFETY_NET").toUpperCase();
-    const sk = resolveSeasonKey(seasonKey);
-
-    if (!rc || !Number.isFinite(gwn) || !userUid || !Number.isFinite(fxId)) {
+    const user = await requireFirebaseUser(req);
+    const body = (await req.json()) as {
+      roomCode?: string;
+      gw?: number;
+      uid?: string;
+      fixtureId?: number;
+      powerupType?: "ALL_IN" | "SAFETY_NET";
+      seasonKey?: string;
+    };
+    const requested = canonicalRoomCode(body.roomCode);
+    const gw = Number(body.gw);
+    const fixtureId = Number(body.fixtureId);
+    const powerupType = String(body.powerupType || "").toUpperCase();
+    const seasonKey = resolveSeasonKey(body.seasonKey);
+    if (!requested || !Number.isInteger(gw) || !Number.isFinite(fixtureId) || !["ALL_IN", "SAFETY_NET"].includes(powerupType)) {
       return NextResponse.json({ error: "Bad input" }, { status: 400 });
     }
-    if (type !== "ALL_IN" && type !== "SAFETY_NET") {
-      return NextResponse.json(
-        { error: "Unsupported power-up type" },
-        { status: 400 },
+    if (body.uid && body.uid !== user.uid) return NextResponse.json({ error: "User identity does not match session" }, { status: 401 });
+    const roomCode = await requirePostgresRoomMember(requested, user.uid);
+    const client = await getPostgresPool().connect();
+    try {
+      await client.query("BEGIN");
+      const gameResult = await client.query<{ state: string; data: Record<string, unknown> }>(
+        "SELECT state, data FROM games WHERE room_code = $1 AND season_key = $2 AND gameweek = $3 FOR UPDATE",
+        [roomCode, seasonKey, gw],
       );
+      const game = gameResult.rows[0];
+      if (!game) throw new Error("Game missing");
+      if (game.state !== "POWERUPS" || game.data?.powerupsEnabled !== true) throw new Error("Not in POWERUPS phase");
+      const players = Array.isArray(game.data?.players) ? game.data.players.map(String) : [];
+      if (!players.includes(user.uid)) throw new Error("You are not in this game");
+      const pick = await client.query<{ score: string | null }>(
+        `SELECT score FROM predictions WHERE room_code = $1 AND season_key = $2
+          AND gameweek = $3 AND user_id = $4 AND fixture_id = $5`,
+        [roomCode, seasonKey, gw, user.uid, fixtureId],
+      );
+      if (!pick.rowCount) throw new Error("You can only place a power-up on your own pick");
+      const golden = await client.query<{ fixture_id: number | null; locked: boolean }>(
+        `SELECT fixture_id, locked FROM golden_picks WHERE room_code = $1 AND season_key = $2
+          AND gameweek = $3 AND user_id = $4`,
+        [roomCode, seasonKey, gw, user.uid],
+      );
+      if (golden.rows[0]?.locked && Number(golden.rows[0].fixture_id) === fixtureId) {
+        throw new Error("Power-Up cannot be used on your Golden fixture");
+      }
+      const existing = await client.query<{ locked: boolean }>(
+        `SELECT locked FROM powerups WHERE room_code = $1 AND season_key = $2
+          AND gameweek = $3 AND user_id = $4`,
+        [roomCode, seasonKey, gw, user.uid],
+      );
+      if (existing.rows[0]?.locked) throw new Error("Power-up already locked");
+      await client.query(
+        `INSERT INTO powerups
+           (room_code, season_key, gameweek, user_id, fixture_id, powerup_type, locked, data, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true,
+           jsonb_build_object('uid', $4, 'fixtureId', $5, 'powerupType', $6, 'locked', true), now())
+         ON CONFLICT (room_code, season_key, gameweek, user_id)
+         DO UPDATE SET fixture_id = EXCLUDED.fixture_id, powerup_type = EXCLUDED.powerup_type,
+           locked = true, data = EXCLUDED.data, updated_at = now()`,
+        [roomCode, seasonKey, gw, user.uid, fixtureId, powerupType],
+      );
+      const count = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM powerups
+          WHERE room_code = $1 AND season_key = $2 AND gameweek = $3 AND locked = true`,
+        [roomCode, seasonKey, gw],
+      );
+      if (Number(count.rows[0]?.count || 0) >= players.length) {
+        await client.query(
+          "UPDATE games SET state = 'REVEAL', data = jsonb_set(data, '{state}', '\"REVEAL\"'::jsonb), updated_at = now() WHERE room_code = $1 AND season_key = $2 AND gameweek = $3",
+          [roomCode, seasonKey, gw],
+        );
+      }
+      await client.query("COMMIT");
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const seasonBase = `rooms/${rc}/seasons/${sk}`;
-    const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gwn}`);
-    const powerupRef = adminDb.doc(
-      `${seasonBase}/games/gw-${gwn}/powerups/${userUid}`,
-    );
-    const pickRef = adminDb.doc(
-      `${seasonBase}/games/gw-${gwn}/picks/${userUid}_${fxId}`,
-    );
-    const goldenRef = adminDb.doc(
-      `${seasonBase}/games/gw-${gwn}/golden/${userUid}`,
-    );
-
-    const preGameSnap = await gameRef.get();
-    if (!preGameSnap.exists) {
-      return NextResponse.json({ error: "Game missing" }, { status: 400 });
-    }
-
-    await adminDb.runTransaction(async (tx) => {
-      const gameSnap = await tx.get(gameRef);
-      if (!gameSnap.exists) throw new Error("Game missing");
-
-      const game = gameSnap.data() as GameDoc;
-      if (game.state !== "POWERUPS") throw new Error("Not in POWERUPS phase");
-      if (!game.powerupsEnabled) throw new Error("Power-ups are not enabled");
-
-      const players: string[] = Array.isArray(game.players) ? game.players : [];
-      if (players.length === 0) throw new Error("No players in game");
-
-      const pickSnap = await tx.get(pickRef);
-      if (!pickSnap.exists) {
-        throw new Error("You can only place a power-up on your own pick");
-      }
-      const pick = pickSnap.data() as PickDoc;
-      const pickScore = String(pick.score || "").trim();
-      if (!pickScore) throw new Error("Invalid picked score");
-
-      const goldenSnap = await tx.get(goldenRef);
-      if (goldenSnap.exists) {
-        const golden = goldenSnap.data() as GoldenDoc;
-        const goldenFixtureId = Number(golden.fixtureId);
-        if (
-          golden.locked &&
-          Number.isFinite(goldenFixtureId) &&
-          goldenFixtureId === fxId
-        ) {
-          throw new Error("Power-Up cannot be used on your Golden fixture");
-        }
-      }
-
-      const existingPowerupSnap = await tx.get(powerupRef);
-      const existingPowerup = existingPowerupSnap.exists
-        ? (existingPowerupSnap.data() as PowerupDoc)
-        : null;
-      if (existingPowerup?.locked) throw new Error("Power-up already locked");
-
-      const powerupRefs = players.map((puid) =>
-        adminDb.doc(`${seasonBase}/games/gw-${gwn}/powerups/${puid}`),
-      );
-      const powerupSnaps = powerupRefs.length
-        ? await tx.getAll(...powerupRefs)
-        : [];
-      const lockedBefore = powerupSnaps.reduce((acc, s) => {
-        const d = s.exists ? (s.data() as PowerupDoc) : null;
-        return acc + (d?.locked ? 1 : 0);
-      }, 0);
-
-      tx.set(
-        powerupRef,
-        {
-          uid: userUid,
-          fixtureId: fxId,
-          powerupType: type,
-          score: pickScore,
-          createdAt: new Date(),
-          locked: true,
-        },
-        { merge: true },
-      );
-
-      if (lockedBefore + 1 >= players.length) {
-        tx.update(gameRef, { state: "REVEAL" });
-      }
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "powerup failed" },
-      { status: 400 },
-    );
+  } catch (error) {
+    if (error instanceof AuthenticationError) return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "powerup failed" }, { status: 400 });
   }
 }

@@ -23,31 +23,18 @@ import {
   type YearTableClub,
 } from "@/lib/yearTableScoring";
 import { getFixturesCached } from "@/lib/fixturesClient";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 import { getCountdownParts } from "@/app/room/[roomCode]/minigame/lock-utils";
+import {
+  getYearTableCached,
+  type CachedYearPick as YearPick,
+} from "@/lib/yearTableClient";
+import { useCachedYearTable } from "@/lib/useRoomCache";
 
 type Player = {
   uid: string;
   displayName: string;
   nickName?: string;
-};
-
-type YearPick = {
-  uid: string;
-  order: string[];
-  submittedAt: string | null;
-};
-
-type YearTablePayload = {
-  ok?: boolean;
-  open?: boolean;
-  scoringOpen?: boolean;
-  currentGw?: number;
-  lockAfterGw?: number;
-  teamKeys?: string[];
-  clubs?: YearTableClub[];
-  myPick?: YearPick | null;
-  picks?: YearPick[];
-  error?: string;
 };
 
 type YearTableSectionProps = {
@@ -74,6 +61,8 @@ function cellTone(points: number, scoringOpen: boolean) {
 }
 
 const SLOT_COUNT = 20;
+const VIEW_ROW_BATCH_SIZE = 4;
+const VIEW_FIRST_BATCH_DELAY_MS = 90;
 
 const YEAR_TABLE_SCORING_ITEMS: ScoringKeyItem[] = [
   { label: "Exact", value: "3", tone: "exact" },
@@ -114,15 +103,23 @@ export default function YearTableSection({
   tableRows,
   players,
 }: YearTableSectionProps) {
+  const cachedSnapshot = useCachedYearTable(
+    roomCode,
+    seasonKey,
+    uid || "",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(currentGw <= YEAR_TABLE_LOCK_AFTER_GW);
+  const [open, setOpen] = useState(
+    () => currentGw <= YEAR_TABLE_LOCK_AFTER_GW,
+  );
   const [scoringOpen, setScoringOpen] = useState(false);
   const [clubs, setClubs] = useState<YearTableClub[]>([]);
   const [myPick, setMyPick] = useState<YearPick | null>(null);
   const [picks, setPicks] = useState<YearPick[]>([]);
   const [enterOpen, setEnterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [visibleViewRowCount, setVisibleViewRowCount] = useState(0);
   const [draftOrder, setDraftOrder] = useState<string[]>(() => emptyDraft());
   const [focusedRank, setFocusedRank] = useState(0);
   const slotRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -157,26 +154,31 @@ export default function YearTableSection({
     [tableRows],
   );
 
-  async function loadYearTable() {
+  useEffect(() => {
+    if (!cachedSnapshot) return;
+    setOpen(cachedSnapshot.open);
+    setScoringOpen(cachedSnapshot.scoringOpen);
+    setClubs(
+      cachedSnapshot.clubs.length ? cachedSnapshot.clubs : fallbackClubs,
+    );
+    setMyPick(cachedSnapshot.myPick);
+    setPicks(cachedSnapshot.picks);
+    setLoading(false);
+  }, [cachedSnapshot, fallbackClubs]);
+
+  async function loadYearTable(force = false) {
     if (!uid || !seasonKey) return;
-    setLoading(true);
+    if (!cachedSnapshot) setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        roomCode,
-        uid,
-        seasonKey,
+      const data = await getYearTableCached(roomCode, seasonKey, uid, {
+        force,
       });
-      const res = await fetch(`/api/game/year-table?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const data = (await res.json()) as YearTablePayload;
-      if (!res.ok) throw new Error(data.error || "Failed to load year predictions.");
-      setOpen(data.open !== false);
-      setScoringOpen(data.scoringOpen === true);
-      setClubs(Array.isArray(data.clubs) && data.clubs.length ? data.clubs : fallbackClubs);
-      setMyPick(data.myPick ?? null);
-      setPicks(Array.isArray(data.picks) ? data.picks : []);
+      setOpen(data.open);
+      setScoringOpen(data.scoringOpen);
+      setClubs(data.clubs.length ? data.clubs : fallbackClubs);
+      setMyPick(data.myPick);
+      setPicks(data.picks);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load year predictions.");
     } finally {
@@ -275,12 +277,11 @@ export default function YearTableSection({
     setSubmitBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/game/year-table", {
+      const res = await authenticatedFetch("/api/game/year-table", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomCode,
-          uid,
           seasonKey,
           order: draftOrder,
         }),
@@ -289,7 +290,7 @@ export default function YearTableSection({
       if (!res.ok) throw new Error(data.error || "Failed to lock year predictions.");
       setConfirmSubmitOpen(false);
       setEnterOpen(false);
-      await loadYearTable();
+      await loadYearTable(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to lock year predictions.");
       setConfirmSubmitOpen(false);
@@ -324,14 +325,59 @@ export default function YearTableSection({
       });
   }, [picks, scoringOpen, actualPositionByKey, playerByUid, uid]);
 
-  const statusLabel = myPick
-    ? "Locked"
-    : open
-      ? "Not entered"
-      : "Closed";
-  const statusTone = myPick ? "you" : open ? "waiting" : "neutral";
+  useEffect(() => {
+    if (!viewOpen || viewRows.length === 0) return;
+    let cancelled = false;
+    let frame = 0;
+    let rendered = 0;
+
+    setVisibleViewRowCount(0);
+    const timer = window.setTimeout(() => {
+      const renderNextBatch = () => {
+        if (cancelled) return;
+        rendered = Math.min(
+          viewRows.length,
+          rendered + VIEW_ROW_BATCH_SIZE,
+        );
+        setVisibleViewRowCount(rendered);
+        if (rendered < viewRows.length) {
+          frame = window.requestAnimationFrame(renderNextBatch);
+        }
+      };
+      frame = window.requestAnimationFrame(renderNextBatch);
+    }, VIEW_FIRST_BATCH_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [viewOpen, viewRows.length]);
+
+  const visibleViewRows = useMemo(
+    () => viewRows.slice(0, visibleViewRowCount),
+    [viewRows, visibleViewRowCount],
+  );
+
+  const statusLabel =
+    loading && !cachedSnapshot
+      ? "Loading"
+      : myPick
+        ? "Locked"
+        : open
+          ? "Not entered"
+          : "Closed";
+  const statusTone =
+    loading && !cachedSnapshot
+      ? "neutral"
+      : myPick
+        ? "you"
+        : open
+          ? "waiting"
+          : "neutral";
   const lockMsLeft = lockAtMs != null ? lockAtMs - nowMs : null;
-  const showLockCountdown = lockMsLeft != null && lockMsLeft > 0 && open;
+  const showLockCountdown =
+    !myPick && lockMsLeft != null && lockMsLeft > 0 && open;
 
   return (
     <>
@@ -365,39 +411,42 @@ export default function YearTableSection({
               </div>
             ) : null}
 
-            <div className="space-y-1.5 text-xs text-muted">
-              <div>
-                {myPick
-                  ? "Your table is locked to this account. Open the room list to compare."
-                  : open
+            {!myPick ? (
+              <div className="space-y-1.5 text-xs text-muted">
+                <div>
+                  {open
                     ? `Locks at the first GW${YEAR_TABLE_LOCK_GW} kickoff.`
                     : `Entries closed when GW${YEAR_TABLE_LOCK_GW} started.`}
-              </div>
-              <div>
-                One table for your account. Submit once and it follows you into
-                every room.
-              </div>
-              {showLockCountdown ? (
-                <div className="font-display text-sm font-semibold tracking-[0.04em] text-amber-100/80">
-                  Locks in {formatLockCountdown(lockMsLeft)}
                 </div>
-              ) : null}
-            </div>
+                {showLockCountdown ? (
+                  <div className="font-display text-sm font-semibold tracking-[0.04em] text-amber-100/80">
+                    Locks in {formatLockCountdown(lockMsLeft)}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={openEnter}
-                disabled={!canEnter}
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {myPick ? "Submitted" : "Enter year predictions"}
-              </button>
+            <div
+              className={
+                myPick ? "grid grid-cols-1" : "grid grid-cols-1 gap-2 sm:grid-cols-2"
+              }
+            >
+              {!myPick ? (
+                <button
+                  type="button"
+                  onClick={openEnter}
+                  disabled={!canEnter}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enter year predictions
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
+                  setVisibleViewRowCount(0);
                   setViewOpen(true);
-                  void loadYearTable();
+                  window.setTimeout(() => void loadYearTable(), 120);
                 }}
                 disabled={!hasAnyPicks || loading}
                 className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-display font-semibold text-foreground transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
@@ -564,6 +613,11 @@ export default function YearTableSection({
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
             Nobody has locked a year table yet.
           </div>
+        ) : visibleViewRows.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-sm text-muted">
+            <Loader2 size={14} className="animate-spin" />
+            <span>Opening predictions…</span>
+          </div>
         ) : (
           <div className="max-h-[62dvh] overflow-auto no-scrollbar">
             <table className="border-separate border-spacing-0">
@@ -583,7 +637,7 @@ export default function YearTableSection({
                 </tr>
               </thead>
               <tbody>
-                {viewRows.map(({ pick, scored, total }) => {
+                {visibleViewRows.map(({ pick, scored, total }) => {
                   const isYou = pick.uid === uid;
                   const scoredByPos = new Map(
                     scored.map((row) => [row.predictedPos, row]),
@@ -647,6 +701,12 @@ export default function YearTableSection({
                 })}
               </tbody>
             </table>
+            {visibleViewRows.length < viewRows.length ? (
+              <div className="sticky left-0 flex items-center gap-2 py-3 text-xs text-white/48">
+                <Loader2 size={12} className="animate-spin" />
+                Loading remaining predictions…
+              </div>
+            ) : null}
           </div>
         )}
       </ThemedSheetModal>

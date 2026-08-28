@@ -4,12 +4,7 @@ import LogoutButton from "../../../components/LogoutButton"; // adjust relative 
 import PageShell from "../../../components/PageShell";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  CalendarDays,
-  Gamepad2,
-  Loader2,
-  Trophy,
-} from "lucide-react";
+import { CalendarDays, Gamepad2, Loader2, Trophy } from "lucide-react";
 import SectionCard from "../../../components/SectionCard";
 import StatusPill from "../../../components/StatusPill";
 import {
@@ -24,7 +19,7 @@ import {
   SettingsDropdownPanel,
   SettingsTriggerButton,
 } from "../../../components/RoomSettingsMenu";
-import { useLeaguePredictionsBlocked } from "../../../components/RoomBottomNav";
+import { usePredictionsBlocked } from "../../../components/RoomBottomNav";
 import SpecialBreak from "../../../components/SpecialBreak";
 import SectionGrid from "../../../components/SectionGrid";
 import SectionStack from "../../../components/SectionStack";
@@ -34,7 +29,10 @@ import {
   patchRoomBootstrapCached,
   peekRoomBootstrapCached,
 } from "@/lib/roomBootstrapClient";
-import { getRoomPlayersCached } from "@/lib/roomPlayersClient";
+import {
+  getRoomPlayersCached,
+  peekRoomPlayersCached,
+} from "@/lib/roomPlayersClient";
 import { getTableCached } from "@/lib/tableClient";
 import {
   useCachedBootstrap,
@@ -49,15 +47,8 @@ import {
 } from "@/lib/roomCode";
 import YearTableSection from "../../../components/YearTableSection";
 import { APP_VERSION_LABEL } from "@/lib/appVersion";
-import { db } from "../../../firebase";
-import {
-  deleteDoc,
-  deleteField,
-  doc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
 import { fetchMemberRooms } from "@/lib/memberRoomsClient";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 type Player = {
   uid: string;
@@ -162,13 +153,11 @@ export default function RoomPage() {
 
   const { user, loading } = useAuth();
   const router = useRouter();
-  const leaguePredictionsBlocked = useLeaguePredictionsBlocked(roomCode);
+  const predictionsBlocked = usePredictionsBlocked(roomCode);
   const bootstrap = useCachedBootstrap(roomCode);
   const cachedPlayers = useCachedPlayers(roomCode);
   const seasonKey = String(bootstrap?.seasonKey || "");
-  const currentGw = bootstrap
-    ? Number(bootstrap.currentGameweek) || 1
-    : 1;
+  const currentGw = bootstrap ? Number(bootstrap.currentGameweek) || 1 : 1;
   const gameModeStyle = bootstrap?.gameModeStyle ?? "round_robin";
   const leaderUid = bootstrap?.leaderUid ?? null;
   const table = useCachedTable(seasonKey);
@@ -184,6 +173,7 @@ export default function RoomPage() {
     [cachedPlayers],
   );
   const tableRows = table?.standingsTotal ?? [];
+  const playersCacheReady = peekRoomPlayersCached(roomCode) !== null;
 
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -334,7 +324,7 @@ export default function RoomPage() {
   };
 
   async function openPredictionsTarget() {
-    if (gameModeStyle === "league" && leaguePredictionsBlocked) return;
+    if (predictionsBlocked) return;
     const cachedBootstrap = peekRoomBootstrapCached(roomCode);
     const mode = cachedBootstrap?.gameModeStyle ?? gameModeStyle;
     const immediateHref = predictionsRouteForState(
@@ -466,11 +456,11 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      await setDoc(
-        doc(db, "users", user.uid),
-        { currentRoomCode: targetCode },
-        { merge: true },
-      );
+      await authenticatedFetch("/api/user/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentRoomCode: targetCode }),
+      });
       setRoomSwitcherOpen(false);
       router.replace(`/room/${targetCode}`);
     } catch (e) {
@@ -495,7 +485,7 @@ export default function RoomPage() {
     try {
       const password = window.prompt("Enter room password");
       if (password === null) return;
-      const res = await fetch("/api/room/access", {
+      const res = await authenticatedFetch("/api/room/access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -540,7 +530,7 @@ export default function RoomPage() {
           throw new Error("Passwords do not match.");
         }
       }
-      const res = await fetch("/api/room/access", {
+      const res = await authenticatedFetch("/api/room/access", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -575,25 +565,25 @@ export default function RoomPage() {
     setSwitcherBusy(true);
     setSwitcherError(null);
     try {
-      await deleteDoc(doc(db, "rooms", roomCode, "players", user.uid));
       const remaining = memberRooms.filter((r) => r.roomCode !== roomCode);
-      if (remaining.length > 0) {
-        const next = remaining[0].roomCode;
-        await setDoc(
-          doc(db, "users", user.uid),
-          { currentRoomCode: next },
-          { merge: true },
-        );
+      const next = remaining[0]?.roomCode || null;
+      const res = await authenticatedFetch("/api/room/member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "leave",
+          roomCode,
+          nextRoomCode: next,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to leave room.");
+
+      if (data.nextRoomCode) {
         setRoomSwitcherOpen(false);
-        router.replace(`/room/${next}`);
+        router.replace(`/room/${data.nextRoomCode}`);
         return;
       }
-
-      await setDoc(
-        doc(db, "users", user.uid),
-        { currentRoomCode: null },
-        { merge: true },
-      );
       setRoomSwitcherOpen(false);
       router.replace("/room-gate");
     } catch (e) {
@@ -617,7 +607,7 @@ export default function RoomPage() {
     setError(null);
     setSwitcherError(null);
     try {
-      const res = await fetch("/api/room/delete", {
+      const res = await authenticatedFetch("/api/room/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomCode, leaderUid: user.uid }),
@@ -644,7 +634,17 @@ export default function RoomPage() {
     setKickBusy(true);
     setError(null);
     try {
-      await deleteDoc(doc(db, "rooms", roomCode, "players", kickTarget.uid));
+      const res = await authenticatedFetch("/api/room/member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "kick",
+          roomCode,
+          targetUid: kickTarget.uid,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to remove player.");
       setKickTarget(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove player.");
@@ -666,7 +666,7 @@ export default function RoomPage() {
     setPasswordBusy(true);
     setPasswordError(null);
     try {
-      const res = await fetch("/api/room/password", {
+      const res = await authenticatedFetch("/api/room/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -697,7 +697,7 @@ export default function RoomPage() {
     setRoomSettingsBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/room/settings", {
+      const res = await authenticatedFetch("/api/room/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -723,7 +723,7 @@ export default function RoomPage() {
     setRoomSettingsBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/room/settings", {
+      const res = await authenticatedFetch("/api/room/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -748,7 +748,7 @@ export default function RoomPage() {
     setRoomSettingsBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/room/settings", {
+      const res = await authenticatedFetch("/api/room/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -774,7 +774,7 @@ export default function RoomPage() {
     setRoomSettingsBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/room/settings", {
+      const res = await authenticatedFetch("/api/room/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -799,7 +799,7 @@ export default function RoomPage() {
     setRecalcBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/game/score", {
+      const res = await authenticatedFetch("/api/game/score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -831,14 +831,21 @@ export default function RoomPage() {
     setNickNameBusy(true);
     setError(null);
     try {
-      await setDoc(
-        doc(db, "rooms", roomCode, "players", user.uid),
-        {
-          nickName: trimmed ? trimmed : deleteField(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      const response = await authenticatedFetch("/api/room/member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "nickname",
+          roomCode,
+          nickname: trimmed,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to update nickname.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update nickname.");
     } finally {
@@ -921,8 +928,8 @@ export default function RoomPage() {
                         {nickNameBusy ? "Saving..." : "Save"}
                       </button>
                       <div className="text-xs text-muted">
-                        Nickname shows across the room. Leave blank to use
-                        your name.
+                        Nickname shows across the room. Leave blank to use your
+                        name.
                       </div>
                     </div>
                   </div>
@@ -987,7 +994,7 @@ export default function RoomPage() {
                       Players
                     </div>
                     <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
-                      {players.length}
+                      {playersCacheReady ? players.length : "—"}
                     </div>
                   </div>
                   <div className="rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
@@ -995,10 +1002,10 @@ export default function RoomPage() {
                       Mode
                     </div>
                     <div className="mt-0.5 font-display text-[0.78rem] font-semibold text-foreground">
-                      {gameModeLabel}
+                      {bootstrap ? gameModeLabel : "—"}
                     </div>
                     <div className="mt-0.5 text-[0.62rem] leading-tight text-muted">
-                      {resultLockSubtext}
+                      {bootstrap ? resultLockSubtext : "Loading room settings"}
                     </div>
                   </div>
                 </div>
@@ -1032,12 +1039,12 @@ export default function RoomPage() {
                   <HubNavTile
                     label="Predictions"
                     hint={
-                      leaguePredictionsBlocked
-                        ? "Locked until next gameweek"
+                      predictionsBlocked
+                        ? "Locked until next gameweek · 12pm"
                         : "Current mini-game flow"
                     }
                     icon={Gamepad2}
-                    disabled={leaguePredictionsBlocked}
+                    disabled={predictionsBlocked}
                     onClick={() => {
                       void openPredictionsTarget();
                     }}

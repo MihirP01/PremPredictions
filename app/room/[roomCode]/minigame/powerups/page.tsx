@@ -24,6 +24,7 @@ import {
   subscribeRoomPicks,
   subscribeRoomPowerups,
 } from "@/lib/liveGameBus";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 
 type GameDoc = {
   state: "LOBBY" | "DRAFT" | "GOLDEN" | "POWERUPS" | "REVEAL";
@@ -624,7 +625,7 @@ export default function PowerupsPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/game/powerup", {
+      const res = await authenticatedFetch("/api/game/powerup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

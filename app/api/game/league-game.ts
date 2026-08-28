@@ -1,35 +1,16 @@
-import { adminDb } from "../../../firebase-admin";
+import { canonicalRoomCode } from "@/lib/roomCode";
 import { getBaseUrl, loadGwFixturesWithLockWindow } from "./lock-window";
+import { getPostgresPool } from "@/lib/server/postgres";
+import { getPostgresGameState, getPostgresRoomSummary, requirePostgresRoomMember } from "@/lib/server/postgres-read-model";
+import { mirrorGameStateToPostgres } from "@/lib/server/postgres-room-repository";
 
-type RoomDoc = {
-  leaderUid?: string;
-  settings?: {
-    leagueFairPlayEnabled?: boolean;
-    gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
-  };
-};
-
-type GameDoc = {
-  state?: string;
-  players?: string[];
-  order?: string[];
-  fixtureIds?: number[];
-  gameModeStyle?: string;
-  leagueSubmittedByUid?: Record<string, boolean>;
-  voidedFixtureIds?: number[];
-};
-
-function shuffle<T>(arr: T[]) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+function shuffle<T>(values: T[]) {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swap]] = [result[swap], result[index]];
   }
-  return a;
-}
-
-function uniqueIds(ids: string[]) {
-  return [...new Set(ids.filter(Boolean))];
+  return result;
 }
 
 export async function ensureLeagueDraftGame(opts: {
@@ -39,91 +20,58 @@ export async function ensureLeagueDraftGame(opts: {
   seasonKey: string;
   uid: string;
 }) {
-  const { req, roomCode, gw, seasonKey, uid } = opts;
-  const roomRef = adminDb.doc(`rooms/${roomCode}`);
-  const roomSnap = await roomRef.get();
-  if (!roomSnap.exists) throw new Error("Room not found");
-
-  const room = roomSnap.data() as RoomDoc;
-  if ((room.settings?.gameModeStyle ?? "round_robin") !== "league") {
-    throw new Error("This room is not in League mode");
-  }
-
-  const playerSnap = await adminDb
-    .doc(`rooms/${roomCode}/players/${uid}`)
-    .get();
-  if (!playerSnap.exists) throw new Error("You are not in this room");
-
-  const roomPlayersSnap = await adminDb
-    .collection(`rooms/${roomCode}/players`)
-    .get();
-  const roomPlayers = roomPlayersSnap.docs.map((d) => d.id);
-  if (roomPlayers.length < 2) {
-    throw new Error("Need at least 2 room players to open League predictions");
-  }
-
-  const loaded = await loadGwFixturesWithLockWindow(
-    getBaseUrl(req),
-    gw,
-    seasonKey,
-    { lockMode: "league" },
+  const { req, gw, seasonKey, uid } = opts;
+  const room = await getPostgresRoomSummary(opts.roomCode);
+  const roomCode = room.code;
+  if (room.gameModeStyle !== "league") throw new Error("This room is not in League mode");
+  await requirePostgresRoomMember(roomCode, uid);
+  const members = await getPostgresPool().query<{ user_id: string }>(
+    "SELECT user_id FROM room_members WHERE upper(room_code) = $1 ORDER BY user_id",
+    [canonicalRoomCode(roomCode)],
   );
+  const roomPlayers = members.rows.map((row) => row.user_id);
+  if (roomPlayers.length < 2) throw new Error("Need at least 2 room players to open League predictions");
+  const loaded = await loadGwFixturesWithLockWindow(getBaseUrl(req), gw, seasonKey, { lockMode: "league" });
   if (Date.now() >= loaded.lockAt.getTime()) {
-    throw new Error(
-      "League predictions lock 30 minutes before the first game of the gameweek.",
-    );
+    throw new Error("League predictions lock 30 minutes before the first game of the gameweek.");
   }
-  if (!loaded.fixtureIds.length) {
-    throw new Error(
-      "No eligible fixtures for this GW (played/postponed/cancelled).",
-    );
-  }
+  if (!loaded.fixtureIds.length) throw new Error("No eligible fixtures for this GW (played/postponed/cancelled).");
 
-  const seasonBase = `rooms/${roomCode}/seasons/${seasonKey}`;
-  const gameRef = adminDb.doc(`${seasonBase}/games/gw-${gw}`);
-  const leagueFairPlayEnabled = room.settings?.leagueFairPlayEnabled === true;
-
-  await adminDb.runTransaction(async (tx) => {
-    const existing = await tx.get(gameRef);
-    if (existing.exists) {
-      const game = (existing.data() as GameDoc | undefined) ?? {};
-      const state = String(game.state || "")
-        .trim()
-        .toUpperCase();
-      if (
-        game.gameModeStyle === "league" &&
-        (state === "DRAFT" || state === "LOBBY" || state === "CLOSED")
-      ) {
-        const mergedPlayers = uniqueIds([
-          ...(Array.isArray(game.players) ? game.players : []),
-          ...roomPlayers,
-        ]);
-        const mergedOrder = uniqueIds([
-          ...(Array.isArray(game.order) ? game.order : []),
-          ...mergedPlayers,
-        ]);
-        tx.set(
-          gameRef,
-          {
-            state: "DRAFT",
-            players: mergedPlayers,
-            order: mergedOrder,
-            firstKickoffAt: loaded.firstKickoffAt,
-            lockAt: loaded.lockAt,
-            leagueFairPlayEnabled,
-            seasonKey,
-          },
-          { merge: true },
-        );
-        return;
-      }
-      if (state && state !== "LOBBY") throw new Error("Game already started");
-    }
-
+  const existing = await getPostgresGameState(roomCode, seasonKey, gw);
+  const state = String(existing?.state || "LOBBY").toUpperCase();
+  if (existing && existing.gameModeStyle === "league" && ["DRAFT", "LOBBY", "CLOSED"].includes(state)) {
+    const players = [...new Set([
+      ...(Array.isArray(existing.players) ? existing.players.map(String) : []),
+      ...roomPlayers,
+    ])];
+    const order = [...new Set([
+      ...(Array.isArray(existing.order) ? existing.order.map(String) : []),
+      ...players,
+    ])];
+    await mirrorGameStateToPostgres({
+      roomCode,
+      seasonKey,
+      gameweek: gw,
+      data: {
+        ...existing,
+        state: "DRAFT",
+        players,
+        order,
+        firstKickoffAt: loaded.firstKickoffAt.toISOString(),
+        lockAt: loaded.lockAt.toISOString(),
+        leagueFairPlayEnabled: room.leagueFairPlayEnabled,
+        seasonKey,
+      },
+    });
+  } else if (existing && state !== "LOBBY") {
+    throw new Error("Game already started");
+  } else {
     const order = shuffle(roomPlayers);
-    tx.set(
-      gameRef,
-      {
+    await mirrorGameStateToPostgres({
+      roomCode,
+      seasonKey,
+      gameweek: gw,
+      data: {
         state: "DRAFT",
         leaderUid: room.leaderUid || uid,
         players: roomPlayers,
@@ -136,23 +84,17 @@ export async function ensureLeagueDraftGame(opts: {
         sameResultLock: false,
         powerupsEnabled: false,
         gameModeStyle: "league",
-        leagueFairPlayEnabled,
+        leagueFairPlayEnabled: room.leagueFairPlayEnabled,
         leagueSubmittedByUid: {},
         voidedFixtureIds: [],
         draftReadyByUid: {},
-        firstKickoffAt: loaded.firstKickoffAt,
-        lockAt: loaded.lockAt,
+        firstKickoffAt: loaded.firstKickoffAt.toISOString(),
+        lockAt: loaded.lockAt.toISOString(),
         seasonKey,
-        createdAt: new Date(),
-        startedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        startedAt: new Date().toISOString(),
       },
-      { merge: true },
-    );
-  });
-
-  return {
-    ok: true as const,
-    lockAt: loaded.lockAt,
-    firstKickoffAt: loaded.firstKickoffAt,
-  };
+    });
+  }
+  return { ok: true as const, lockAt: loaded.lockAt, firstKickoffAt: loaded.firstKickoffAt };
 }

@@ -1,52 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "../../../firebase-admin";
+import { canonicalRoomCode } from "@/lib/roomCode";
 import { GET as getCurrentGameweek } from "../current-gameweek/route";
+import {
+  AuthenticationError,
+  requireFirebaseUser,
+} from "@/lib/server/firebase-auth";
+import {
+  getPostgresGameState,
+  getPostgresRoomSummary,
+  PostgresRoomAccessError,
+  PostgresRoomNotFoundError,
+  requirePostgresRoomMember,
+} from "@/lib/server/postgres-read-model";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type CurrentGwPayload = {
   currentGameweek?: number;
   seasonKey?: string;
+  predictionLockAt?: string | null;
+  nextGameweekAt?: string | null;
 };
-
-function normalizeRoomCode(value: string) {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
-}
 
 export async function GET(req: NextRequest) {
   try {
-    const roomCode = normalizeRoomCode(
-      req.nextUrl.searchParams.get("roomCode") || "",
-    );
-    if (!roomCode) {
-      return NextResponse.json(
-        { error: "roomCode is required" },
-        { status: 400 },
-      );
+    const requested = canonicalRoomCode(req.nextUrl.searchParams.get("roomCode"));
+    if (!requested) {
+      return NextResponse.json({ error: "roomCode is required" }, { status: 400 });
     }
 
-    const roomRef = adminDb.doc(`rooms/${roomCode}`);
-    const roomSnap = await roomRef.get();
-    const room = roomSnap.data() as
-      | {
-          leaderUid?: string;
-          settings?: {
-            themeAccent?: string;
-            gameModeStyle?: "round_robin" | "sprint" | "captain" | "league";
-            sameResultLock?: boolean;
-            powerupsEnabled?: boolean;
-            leagueFairPlayEnabled?: boolean;
-          };
-        }
-      | undefined;
-    const gameModeStyle = room?.settings?.gameModeStyle ?? "sprint";
+    const user = await requireFirebaseUser(req);
+    const roomCode = await requirePostgresRoomMember(requested, user.uid);
+    const room = await getPostgresRoomSummary(roomCode);
     const currentGwUrl = new URL("/api/current-gameweek", req.url);
-    if (gameModeStyle === "league")
-      currentGwUrl.searchParams.set("mode", "league");
-
-    const currentGwRes = await getCurrentGameweek(
-      new NextRequest(currentGwUrl),
-    );
+    if (room.gameModeStyle === "league") currentGwUrl.searchParams.set("mode", "league");
+    const currentGwRes = await getCurrentGameweek(new NextRequest(currentGwUrl));
     if (!currentGwRes.ok) {
       return NextResponse.json(
         { error: "Failed to resolve current gameweek" },
@@ -57,57 +46,50 @@ export async function GET(req: NextRequest) {
     const currentGwData = (await currentGwRes.json()) as CurrentGwPayload;
     const seasonKey = String(currentGwData.seasonKey || "");
     const currentGameweek = Number(currentGwData.currentGameweek ?? 1);
-
-    let gameState = "LOBBY";
-    if (seasonKey && Number.isFinite(currentGameweek)) {
-      const gameRef = adminDb.doc(
-        `rooms/${roomCode}/seasons/${seasonKey}/games/gw-${currentGameweek}`,
-      );
-      const gameSnap = await gameRef.get();
-      const raw = gameSnap.data() as { state?: string } | undefined;
-      gameState =
-        String(raw?.state || "LOBBY")
-          .trim()
-          .toUpperCase() || "LOBBY";
-    }
-
-    const seasonsSnap = await adminDb
-      .collection(`rooms/${roomCode}/seasons`)
-      .get();
-    const seasonOptions = seasonsSnap.docs
-      .map((d) => String(d.id))
-      .filter((id) => /^\d{4}$/.test(id))
-      .sort((a, b) => b.localeCompare(a));
-    if (seasonKey && !seasonOptions.includes(seasonKey))
-      seasonOptions.unshift(seasonKey);
+    const game =
+      seasonKey && Number.isFinite(currentGameweek)
+        ? await getPostgresGameState(roomCode, seasonKey, currentGameweek)
+        : null;
+    const seasonOptions = [...room.seasonOptions];
+    if (seasonKey && !seasonOptions.includes(seasonKey)) seasonOptions.unshift(seasonKey);
 
     return NextResponse.json(
       {
         ok: true,
-        roomCode,
+        roomCode: canonicalRoomCode(roomCode),
         seasonKey,
         currentGameweek: Number.isFinite(currentGameweek) ? currentGameweek : 1,
-        gameState,
-        leaderUid: room?.leaderUid ?? null,
-        themeAccent: room?.settings?.themeAccent ?? "teal",
-        gameModeStyle,
-        allowIdenticalPicks: room?.settings?.sameResultLock === false,
-        powerupsEnabled: room?.settings?.powerupsEnabled === true,
-        leagueFairPlayEnabled: room?.settings?.leagueFairPlayEnabled === true,
+        predictionLockAt: currentGwData.predictionLockAt ?? null,
+        nextGameweekAt: currentGwData.nextGameweekAt ?? null,
+        gameState: String(game?.state || "LOBBY").toUpperCase(),
+        leaderUid: room.leaderUid,
+        themeAccent: room.themeAccent,
+        gameModeStyle: room.gameModeStyle,
+        allowIdenticalPicks: room.allowIdenticalPicks,
+        powerupsEnabled: room.powerupsEnabled,
+        leagueFairPlayEnabled: room.leagueFairPlayEnabled,
+        hasPassword: room.hasPassword,
         seasonOptions,
       },
       {
         headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          "Cache-Control": "private, no-store, no-cache, must-revalidate",
+          "Server-Timing": "source;desc=postgres",
         },
       },
     );
   } catch (error) {
+    if (error instanceof AuthenticationError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof PostgresRoomAccessError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 403 });
+    }
+    if (error instanceof PostgresRoomNotFoundError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 404 });
+    }
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Failed to bootstrap",
-      },
+      { ok: false, error: error instanceof Error ? error.message : "Failed to bootstrap" },
       { status: 500 },
     );
   }

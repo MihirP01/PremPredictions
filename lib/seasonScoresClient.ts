@@ -1,7 +1,6 @@
 "use client";
 
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import { authenticatedFetch } from "./authenticatedFetch";
 import { notifyRoomCache } from "./cacheStore";
 import {
   peekSessionRecord,
@@ -49,40 +48,13 @@ const memCache = new Map<
 >();
 const pending = new Map<string, Promise<SeasonScoresSnapshot>>();
 
-function parseGwId(id: string): number | null {
-  const m = /^gw-(\d+)$/.exec(id);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
-function asDateMs(value: unknown): number | null {
-  if (!value) return null;
-  if (value instanceof Date) {
-    const ms = value.getTime();
-    return Number.isFinite(ms) ? ms : null;
-  }
-  if (typeof value === "string" || typeof value === "number") {
-    const d = new Date(value);
-    const ms = d.getTime();
-    return Number.isFinite(ms) ? ms : null;
-  }
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const maybeTimestamp = value as { toDate?: () => Date };
-    if (typeof maybeTimestamp.toDate === "function") {
-      const d = maybeTimestamp.toDate();
-      const ms = d.getTime();
-      return Number.isFinite(ms) ? ms : null;
-    }
-  }
-  return null;
-}
-
 function keyFor(roomCode: string, seasonKey: string) {
   return `${String(roomCode || "").toUpperCase()}::${String(seasonKey || "")}`;
 }
 
-function getStorage(key: string): { expiresAt: number; data: SeasonScoresSnapshot } | null {
+function getStorage(
+  key: string,
+): { expiresAt: number; data: SeasonScoresSnapshot } | null {
   return readFreshSessionRecord<SeasonScoresSnapshot>(STORAGE_PREFIX, key);
 }
 
@@ -96,79 +68,26 @@ async function fetchSnapshot(
 ): Promise<SeasonScoresSnapshot> {
   const upperRoom = String(roomCode || "").toUpperCase();
   const season = String(seasonKey || "");
-
-  const scoreWeeksSnap = await getDocs(
-    collection(db, "rooms", upperRoom, "seasons", season, "scores"),
+  const params = new URLSearchParams({
+    roomCode: upperRoom,
+    seasonKey: season,
+  });
+  const response = await authenticatedFetch(
+    `/api/game/season-scores?${params}`,
+    { cache: "no-store" },
   );
-
-  const weeksBase = scoreWeeksSnap.docs
-    .map((docSnap) => {
-      const gw = parseGwId(docSnap.id);
-      if (gw == null) return null;
-      const data = docSnap.data() as { computedAt?: unknown };
-      return {
-        gw,
-        computedAtMs: asDateMs(data?.computedAt),
-      };
-    })
-    .filter((w): w is { gw: number; computedAtMs: number | null } => !!w)
-    .sort((a, b) => a.gw - b.gw);
-
-  const weeks: SeasonScoreWeek[] = await Promise.all(
-    weeksBase.map(async (week) => {
-      const usersSnap = await getDocs(
-        collection(
-          db,
-          "rooms",
-          upperRoom,
-          "seasons",
-          season,
-          "scores",
-          `gw-${week.gw}`,
-          "users",
-        ),
-      );
-      const users: SeasonScoreUserDoc[] = usersSnap.docs.map((userDoc) => {
-        const data = userDoc.data() as {
-          uid?: string;
-          points?: number;
-          breakdown?: Record<string, ScoreBreakdownItem>;
-          scoreStatus?: "scored" | "missed" | "fair_play_bye";
-          fairPlayApplied?: boolean;
-          fairPlayMedian?: number | null;
-        };
-        return {
-          uid: String(data.uid ?? userDoc.id),
-          points: Number(data.points ?? 0),
-          breakdown: data.breakdown ?? {},
-          scoreStatus: data.scoreStatus,
-          fairPlayApplied: data.fairPlayApplied === true,
-          fairPlayMedian:
-            data.fairPlayMedian == null ? null : Number(data.fairPlayMedian),
-        };
-      });
-      return {
-        gw: week.gw,
-        computedAtMs: week.computedAtMs,
-        users,
-      };
-    }),
-  );
-
-  const gameWeeksSnap = await getDocs(
-    collection(db, "rooms", upperRoom, "seasons", season, "games"),
-  );
-  const gameWeeks = gameWeeksSnap.docs
-    .map((d) => parseGwId(d.id))
-    .filter((n): n is number => n != null)
-    .sort((a, b) => a - b);
-
+  const payload = (await response
+    .json()
+    .catch(() => ({}))) as Partial<SeasonScoresSnapshot> & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || `scores ${response.status}`);
+  }
   return {
     roomCode: upperRoom,
     seasonKey: season,
-    fetchedAtMs: Date.now(),
-    weeks,
-    gameWeeks,
+    fetchedAtMs: Number(payload.fetchedAtMs || Date.now()),
+    weeks: Array.isArray(payload.weeks) ? payload.weeks : [],
+    gameWeeks: Array.isArray(payload.gameWeeks) ? payload.gameWeeks : [],
   };
 }
 

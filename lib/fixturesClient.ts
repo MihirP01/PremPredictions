@@ -61,33 +61,9 @@ function getStorageStale(key: string): FixturesCachedData | null {
   return readSessionRecord<FixturesCachedData>(STORAGE_PREFIX, key)?.data ?? null;
 }
 
-function mergeFixtureResults(
-  previous: FixturesCachedData | null,
-  next: FixturesCachedData,
-): FixturesCachedData {
-  if (!previous?.fixtures?.length || !next.fixtures.length) return next;
-  const prevById = new Map(
-    previous.fixtures.map((fixture) => [fixture.fixtureId, fixture]),
-  );
-  return {
-    ...next,
-    fixtures: next.fixtures.map((fixture) => {
-      if (fixture.result != null) return fixture;
-      const prev = prevById.get(fixture.fixtureId);
-      if (!prev?.result) return fixture;
-      return {
-        ...fixture,
-        result: prev.result,
-      };
-    }),
-  };
-}
-
 function setCached(key: string, data: FixturesCachedData) {
-  const previous = memCache.get(key)?.data ?? getStorageStale(key);
-  const merged = mergeFixtureResults(previous, data);
-  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, merged, TTL_MS);
-  memCache.set(key, { expiresAt, data: merged });
+  const expiresAt = writeSessionRecord(STORAGE_PREFIX, key, data, TTL_MS);
+  memCache.set(key, { expiresAt, data });
   notifyRoomCache();
 }
 
@@ -126,26 +102,6 @@ export async function getFixturesCached(
   }
   const staleStorage = getStorageStale(key);
   const stale = staleMem || staleStorage;
-  if (stale) {
-    const existing = pending.get(key);
-    if (!existing) {
-      const req = (async () => {
-        const res = await fetch(
-          `/api/fixtures?gameweek=${encodeURIComponent(String(gw))}&seasonKey=${encodeURIComponent(sk)}`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) {
-          if (stale) return stale;
-          throw new Error(`fixtures ${res.status}`);
-        }
-        const data = normalize(await res.json());
-        setCached(key, data);
-        return data;
-      })().finally(() => pending.delete(key));
-      pending.set(key, req);
-    }
-    return stale;
-  }
   const existing = pending.get(key);
   if (existing) return existing;
 
@@ -154,15 +110,16 @@ export async function getFixturesCached(
       `/api/fixtures?gameweek=${encodeURIComponent(String(gw))}&seasonKey=${encodeURIComponent(sk)}`,
       { cache: "no-store" },
     );
-    if (!res.ok) {
-      const stale = staleMem || staleStorage;
-      if (stale) return stale;
-      throw new Error(`fixtures ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`fixtures ${res.status}`);
     const data = normalize(await res.json());
     setCached(key, data);
     return data;
-  })().finally(() => pending.delete(key));
+  })()
+    .catch((error) => {
+      if (stale) return stale;
+      throw error;
+    })
+    .finally(() => pending.delete(key));
   pending.set(key, req);
   return req;
 }

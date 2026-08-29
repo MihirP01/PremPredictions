@@ -24,7 +24,8 @@ export default function PWAEntryGuard() {
     if (seen) return;
     window.sessionStorage.setItem(SESSION_KEY, "1");
 
-    if (window.location.pathname !== "/") {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (path !== "/" && path !== "/reset") {
       window.location.replace("/");
     }
   }, []);

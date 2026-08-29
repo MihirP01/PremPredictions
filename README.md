@@ -73,6 +73,10 @@ FIREBASE_PRIVATE_KEY=
 # Football data provider
 FOOTBALLDATA_KEY=
 
+# Resend password-reset email
+RESEND_API_KEY=
+RESEND_FROM="PL Predictions <noreply@prem.thinktimeless.co.uk>"
+
 # PostgreSQL application database
 DATABASE_URL=
 POSTGRES_POOL_MAX=10
@@ -82,9 +86,11 @@ Notes:
 
 - `FIREBASE_PRIVATE_KEY` supports multiline PEM and `\n` format.
 - Firebase Admin is used only to verify Authentication tokens.
+- Forgot password uses Firebase Auth to create the reset code, then Resend to send `https://prem.thinktimeless.co.uk/reset?...` to that inbox. Add `RESEND_API_KEY`. Keep `prem.thinktimeless.co.uk` on Firebase Authentication authorized domains.
 
 ## API Endpoints
 
+- `POST /api/auth/password-reset`
 - `GET /api/current-gameweek`
 - `GET /api/fixtures?gameweek=<n>`
 - `POST /api/game/start`

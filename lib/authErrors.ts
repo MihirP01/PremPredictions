@@ -25,6 +25,10 @@ export function authErrorMessage(error: unknown, fallback = "Sign in failed.") {
       return "That email already has an account. Sign in instead.";
     case "auth/weak-password":
       return "Password must be at least 6 characters.";
+    case "auth/expired-action-code":
+      return "This reset link has expired. Send a new one.";
+    case "auth/invalid-action-code":
+      return "This reset link is invalid or already used.";
     case "auth/user-disabled":
       return "This account is disabled.";
     case "auth/missing-password":

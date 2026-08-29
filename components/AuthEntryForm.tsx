@@ -4,12 +4,12 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { authenticatedFetch } from "@/lib/authenticatedFetch";
 import { authErrorMessage, normalizeAuthEmail } from "@/lib/authErrors";
+import { sendAppPasswordResetEmail } from "@/lib/passwordReset";
 import AnimatedModal from "./AnimatedModal";
 
 type InstallPlatform = "ios" | "android" | "other";
@@ -132,10 +132,14 @@ export default function AuthEntryForm() {
     }
     setBusy(true);
     try {
-      await sendPasswordResetEmail(auth, nextEmail);
+      await sendAppPasswordResetEmail(nextEmail);
       setNotice("Check that inbox for a reset link.");
     } catch (e: unknown) {
-      setError(authErrorMessage(e, "Could not send a reset email."));
+      setError(
+        e instanceof Error
+          ? e.message
+          : authErrorMessage(e, "Could not send a reset email."),
+      );
     } finally {
       setBusy(false);
     }

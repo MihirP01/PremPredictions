@@ -33,6 +33,8 @@ services:
       FIREBASE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nREPLACE_ME\n-----END PRIVATE KEY-----"
       FOOTBALLDATA_KEY: REPLACE_ME
       CRON_SECRET: REPLACE_ME
+      RESEND_API_KEY: REPLACE_ME
+      RESEND_FROM: "PL Predictions <noreply@prem.thinktimeless.co.uk>"
     ports:
       - "3010:3000"
     healthcheck:

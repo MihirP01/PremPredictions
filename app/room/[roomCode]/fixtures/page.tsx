@@ -76,6 +76,18 @@ import {
   formatKickoffParts,
 } from "@/lib/dateDisplay";
 import { teamAbbr } from "@/lib/teamDisplay";
+import {
+  fixtureNeedsScoreRefresh,
+  hasFixtureScore,
+  isExplicitLiveFixtureStatus,
+  isFinalFixtureStatus,
+  isFixtureLiveWindow,
+  isPastExpectedFullTime,
+  isScoredFixtureStatus,
+  mergeFixtureLiveOverlay,
+  mergeProviderFixtures,
+  normalizeTeamNameForCompare,
+} from "@/lib/fixtureLive";
 
 type Fixture = {
   fixtureId: number;
@@ -317,17 +329,6 @@ function firstScheduledKickoffMs(list: Fixture[]) {
   return times[0] ?? null;
 }
 
-function normalizeTeamNameForCompare(value?: string | null) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/\butd\b/g, "united")
-    .replace(/\bman\b/g, "manchester")
-    .replace(/\b(fc|afc|cf|sc)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
 function displayResult(status: string, actual: string | null) {
   if (actual) return actual.replace("-", " – ");
   const s = String(status || "").toUpperCase();
@@ -337,59 +338,19 @@ function displayResult(status: string, actual: string | null) {
     s.includes("PAUSED") ||
     s === "1H" ||
     s === "2H" ||
-    s === "HT";
+    s === "HT" ||
+    isExplicitLiveFixtureStatus(status);
   return inPlay ? "LIVE" : "TBD";
 }
 
-function isFinalFixtureStatus(status?: string | null) {
-  const s = String(status || "")
-    .trim()
-    .toUpperCase();
-  return (
-    s === "FINISHED" ||
-    s === "FT" ||
-    s.startsWith("FT ") ||
-    s === "FULLTIME" ||
-    s === "FULL_TIME" ||
-    s.includes("FULL TIME") ||
-    s === "AET" ||
-    s === "PEN" ||
-    s === "PENALTIES" ||
-    s === "AWARDED" ||
-    s === "POSTPONED" ||
-    s === "CANCELLED"
-  );
-}
-
-const MAX_LIVE_MS = (2 * 60 + 15) * 60 * 1000;
-
-function isPastExpectedFullTime(fixture: Fixture, nowMs: number) {
-  const kickoffMs = Date.parse(String(fixture.kickoff || ""));
-  if (!Number.isFinite(kickoffMs)) return false;
-  return nowMs - kickoffMs >= MAX_LIVE_MS;
-}
-
-function isFixtureLiveWindow(fixture: Fixture, nowMs: number) {
-  const kickoffMs = Date.parse(String(fixture.kickoff || ""));
-  if (!Number.isFinite(kickoffMs)) return false;
-  if (kickoffMs > nowMs) return false;
-  if (isFinalFixtureStatus(fixture.status)) return false;
-  return !isPastExpectedFullTime(fixture, nowMs);
-}
-
-function isExplicitLiveFixtureStatus(status?: string | null) {
+function statusHeading(
+  status: string,
+  opts?: { hasResult?: boolean; awaitingScore?: boolean },
+) {
   const raw = String(status || "").trim();
   const s = raw.toUpperCase();
-  if (!raw) return false;
-  if (s === "TIMED" || s === "SCHEDULED" || s === "NOT_STARTED" || s === "TBD")
-    return false;
-  if (isFinalFixtureStatus(s)) return false;
-  return true;
-}
-
-function statusHeading(status: string) {
-  const raw = String(status || "").trim();
-  const s = raw.toUpperCase();
+  if (opts?.awaitingScore && opts.hasResult) return "FT";
+  if (opts?.awaitingScore && !opts.hasResult) return "Waiting for score";
   if (
     !raw ||
     s === "TIMED" ||
@@ -399,9 +360,11 @@ function statusHeading(status: string) {
   ) {
     return "Scheduled";
   }
-  if (s === "FINISHED" || s === "FT" || s === "AWARDED") return "FT";
+  if (isScoredFixtureStatus(s) || (opts?.hasResult && !isExplicitLiveFixtureStatus(s))) {
+    return "FT";
+  }
   if (s === "CANCELLED" || s === "POSTPONED") return "Postponed";
-  if (raw.toUpperCase() === "LIVE") return "Live";
+  if (s === "LIVE") return "Live";
   return `Live - ${raw}`;
 }
 
@@ -413,62 +376,6 @@ function asDate(value: unknown): Date | null {
     return Number.isNaN(d.getTime()) ? null : d;
   }
   return null;
-}
-
-function fixtureTimeBucket(value: string) {
-  const ms = Date.parse(String(value || ""));
-  return Number.isFinite(ms) ? Math.round(ms / 60000) : null;
-}
-
-function overlayKeyForFixture(fixture: {
-  kickoff: string;
-  home?: { name?: string; shortName?: string; tla?: string | null };
-  away?: { name?: string; shortName?: string; tla?: string | null };
-}) {
-  const kick = fixtureTimeBucket(fixture.kickoff);
-  const home = normalizeTeamNameForCompare(
-    fixture.home?.name || fixture.home?.shortName || fixture.home?.tla || "",
-  );
-  const away = normalizeTeamNameForCompare(
-    fixture.away?.name || fixture.away?.shortName || fixture.away?.tla || "",
-  );
-  return `${kick ?? "na"}|${home}|${away}`;
-}
-
-function mergeFixtureResults(prev: Fixture[] | null, next: Fixture[]) {
-  if (!prev?.length) return next;
-  const prevById = new Map(prev.map((fixture) => [fixture.fixtureId, fixture]));
-  return next.map((fixture) => {
-    if (fixture.result != null) return fixture;
-    const previous = prevById.get(fixture.fixtureId);
-    if (!previous?.result) return fixture;
-    return {
-      ...fixture,
-      result: previous.result,
-    };
-  });
-}
-
-function mergeFixtureLiveOverlay(
-  prev: Fixture[] | null,
-  overlay: LiveOverlayFixture[],
-) {
-  if (!prev?.length || !overlay.length) return prev;
-  const overlayByKey = new Map(
-    overlay.map((fixture) => [overlayKeyForFixture(fixture), fixture]),
-  );
-
-  return prev.map((fixture) => {
-    const live = overlayByKey.get(overlayKeyForFixture(fixture));
-    if (!live) return fixture;
-
-    return {
-      ...fixture,
-      status: live.status || fixture.status,
-      result: live.result ?? fixture.result,
-      redCards: live.redCards ?? fixture.redCards ?? null,
-    };
-  });
 }
 
 function toInt(value: unknown) {
@@ -1033,7 +940,7 @@ export default function FixturesPage() {
   useEffect(() => {
     if (!seededFixtures || gw !== seededGw || seasonKey !== seededSeason) return;
     setFixtures((previous) =>
-      mergeFixtureResults(
+      mergeProviderFixtures(
         previous,
         (seededFixtures.fixtures ?? []) as Fixture[],
       ),
@@ -1289,7 +1196,8 @@ export default function FixturesPage() {
       if (isFixtureLiveWindow(fixture, nowMs)) buckets.live.push(fixture);
       else if (
         isFinalFixtureStatus(fixture.status) ||
-        isPastExpectedFullTime(fixture, nowMs)
+        (hasFixtureScore(fixture.result) &&
+          isPastExpectedFullTime(fixture, nowMs))
       )
         buckets.completed.push(fixture);
       else buckets.upcoming.push(fixture);
@@ -1541,17 +1449,15 @@ export default function FixturesPage() {
   }, [roomCode, gw, seasonKey]);
 
   useEffect(() => {
-    if (gameModeStyle !== "league") return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [gameModeStyle]);
+  }, []);
 
   useEffect(() => {
-    if (gameModeStyle === "league") return;
     if (refreshLockedUntil <= nowMs) return;
     const timer = window.setInterval(() => setNowMs(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, [gameModeStyle, refreshLockedUntil, nowMs]);
+  }, [refreshLockedUntil, nowMs]);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -1584,7 +1490,7 @@ export default function FixturesPage() {
           : await getFixturesCached(gw, seasonKey);
         if (loadSeq !== fixturesLoadSeqRef.current) return;
         const fx: Fixture[] = Array.isArray(data.fixtures) ? data.fixtures : [];
-        setFixtures((prev) => mergeFixtureResults(prev, fx));
+        setFixtures((prev) => mergeProviderFixtures(prev, fx));
         setFixturesGeneratedAt(asDate(data.generatedAt));
         setFixturesRefreshedAt(new Date());
       } finally {
@@ -1848,13 +1754,26 @@ export default function FixturesPage() {
         const response = await fetch(`/api/live-preview?${params.toString()}`, {
           cache: "no-store",
         });
-        if (!response.ok) return;
-        const data = (await response.json().catch(() => ({}))) as {
-          fixtures?: LiveOverlayFixture[];
-        };
-        const liveFixtures = Array.isArray(data.fixtures) ? data.fixtures : [];
-        if (!liveFixtures.length) return;
-        setFixtures((prev) => mergeFixtureLiveOverlay(prev, liveFixtures));
+        if (response.ok) {
+          const data = (await response.json().catch(() => ({}))) as {
+            fixtures?: LiveOverlayFixture[];
+          };
+          const liveFixtures = Array.isArray(data.fixtures)
+            ? data.fixtures
+            : [];
+          if (liveFixtures.length) {
+            setFixtures((prev) => mergeFixtureLiveOverlay(prev, liveFixtures));
+          }
+        }
+
+        const snapshot = await getFixturesCached(gw, seasonKey);
+        setFixtures((prev) =>
+          mergeProviderFixtures(
+            prev,
+            (snapshot.fixtures ?? []) as Fixture[],
+          ),
+        );
+        setFixturesGeneratedAt(asDate(snapshot.generatedAt));
         setFixturesRefreshedAt(new Date());
       } catch {
         // Keep the current snapshot on live overlay refresh failures.
@@ -1889,10 +1808,10 @@ export default function FixturesPage() {
       }
 
       const now = Date.now();
-      const hasLiveFixture = fixtures.some((fixture) =>
-        isFixtureLiveWindow(fixture, now),
+      const needsLiveRefresh = fixtures.some((fixture) =>
+        fixtureNeedsScoreRefresh(fixture, now),
       );
-      if (hasLiveFixture) {
+      if (needsLiveRefresh) {
         liveRefreshInterval = window.setInterval(() => {
           void softRefreshLive();
         }, 12_000);
@@ -2397,7 +2316,12 @@ export default function FixturesPage() {
             (() => {
               const renderFixtureCard = (f: Fixture, idx: number) => {
                 const actual = f.result ?? null;
-                const fixtureStatusHeading = statusHeading(f.status);
+                const fixtureStatusHeading = statusHeading(f.status, {
+                  hasResult: hasFixtureScore(actual),
+                  awaitingScore:
+                    !isFinalFixtureStatus(f.status) &&
+                    isPastExpectedFullTime(f, nowMs),
+                });
                 const kickoffParts = formatKickoffParts(f.kickoff);
                 const isExpanded =
                   expandedFixtures[f.fixtureId] ?? !compactMode;

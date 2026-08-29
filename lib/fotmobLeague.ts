@@ -3,6 +3,7 @@ const LIVE_TTL_MS = 15_000;
 const UPCOMING_TTL_MS = 45_000;
 const IDLE_TTL_MS = 3 * 60_000;
 const UPCOMING_WINDOW_MS = 30 * 60_000;
+const RECENTLY_KICKED_OFF_MS = 4 * 60 * 60 * 1000;
 
 export type FotmobLeagueMatch = {
   id?: number;
@@ -45,6 +46,10 @@ function isLiveStatus(status: FotmobLeagueMatch["status"]) {
   );
 }
 
+function isSettledStatus(status: FotmobLeagueMatch["status"]) {
+  return Boolean(status?.finished || status?.awarded || status?.cancelled);
+}
+
 function ttlForMatches(matches: FotmobLeagueMatch[]) {
   if (!matches.length) return LIVE_TTL_MS;
   const now = Date.now();
@@ -52,11 +57,15 @@ function ttlForMatches(matches: FotmobLeagueMatch[]) {
   for (const match of matches) {
     if (isLiveStatus(match.status)) return LIVE_TTL_MS;
     const kickoffMs = Date.parse(String(match.status?.utcTime || ""));
+    if (!Number.isFinite(kickoffMs)) continue;
     if (
-      Number.isFinite(kickoffMs) &&
-      kickoffMs > now &&
-      kickoffMs - now <= UPCOMING_WINDOW_MS
+      kickoffMs <= now &&
+      now - kickoffMs <= RECENTLY_KICKED_OFF_MS &&
+      !isSettledStatus(match.status)
     ) {
+      return LIVE_TTL_MS;
+    }
+    if (kickoffMs > now && kickoffMs - now <= UPCOMING_WINDOW_MS) {
       upcoming = true;
     }
   }
@@ -66,7 +75,7 @@ function ttlForMatches(matches: FotmobLeagueMatch[]) {
 const FOTMOB_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-  Accept: "text/html,application/json;q=0.9,*/*;q=0.8",
+  Accept: "application/json, text/html;q=0.9,*/*;q=0.8",
 };
 
 function matchesFromPayload(data: unknown): FotmobLeagueMatch[] | null {
@@ -92,15 +101,42 @@ function parseNextData(html: string) {
   return JSON.parse(match[1]);
 }
 
+function jsonUrlsForSeason(season: string) {
+  const encoded = encodeURIComponent(season);
+  return [
+    `https://www.fotmob.com/api/data/leagues?id=${FOTMOB_LEAGUE_ID}&season=${encoded}`,
+    `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encoded}`,
+  ];
+}
+
+async function parseJsonResponse(response: Response) {
+  const contentType = String(response.headers.get("content-type") || "");
+  const body = await response.text();
+  if (!body.trim()) return null;
+  if (
+    !contentType.includes("json") &&
+    body.trimStart().startsWith("<")
+  ) {
+    return null;
+  }
+  try {
+    return matchesFromPayload(JSON.parse(body));
+  } catch {
+    return null;
+  }
+}
+
 async function fetchLeagueMatchesJson(season: string) {
-  const url = `https://www.fotmob.com/api/leagues?id=${FOTMOB_LEAGUE_ID}&tab=fixtures&season=${encodeURIComponent(season)}`;
-  const response = await fetch(url, {
-    headers: FOTMOB_HEADERS,
-    cache: "no-store",
-  });
-  if (!response.ok) return null;
-  const data = await response.json().catch(() => null);
-  return matchesFromPayload(data);
+  for (const url of jsonUrlsForSeason(season)) {
+    const response = await fetch(url, {
+      headers: FOTMOB_HEADERS,
+      cache: "no-store",
+    }).catch(() => null);
+    if (!response?.ok) continue;
+    const matches = await parseJsonResponse(response);
+    if (matches?.length) return matches;
+  }
+  return null;
 }
 
 async function fetchLeagueMatchesHtml(season: string) {

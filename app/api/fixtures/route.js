@@ -533,6 +533,13 @@ export async function GET(req) {
       const status = String(match?.status || "").toUpperCase();
 
       const hasFT = Number.isFinite(homeFT) && Number.isFinite(awayFT);
+      const liveHome = match?.score?.regularTime?.home ?? match?.score?.halfTime?.home;
+      const liveAway = match?.score?.regularTime?.away ?? match?.score?.halfTime?.away;
+      const hasLiveScore =
+        !hasFT &&
+        Number.isFinite(liveHome) &&
+        Number.isFinite(liveAway) &&
+        (status === "IN_PLAY" || status === "PAUSED" || status === "LIVE");
 
       const baseFixture = {
         fixtureId: match.id,
@@ -562,10 +569,17 @@ export async function GET(req) {
         },
 
         // ✅ actual result (past gameweeks will populate automatically)
-        result: hasFT ? `${homeFT}-${awayFT}` : null,
+        result: hasFT
+          ? `${homeFT}-${awayFT}`
+          : hasLiveScore
+            ? `${liveHome}-${liveAway}`
+            : null,
 
-        // (optional) keep raw numbers if you prefer rendering without parsing
-        resultFT: hasFT ? { home: homeFT, away: awayFT } : null,
+        resultFT: hasFT
+          ? { home: homeFT, away: awayFT }
+          : hasLiveScore
+            ? { home: liveHome, away: liveAway }
+            : null,
       };
 
       const fotmobMatch = findFotmobMatch(fotmobIndex, baseFixture);

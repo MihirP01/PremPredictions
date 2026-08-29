@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { canonicalRoomCode } from "@/lib/roomCode";
 import { resolveSeasonKey } from "../../season";
 import { applyFixtureScoring, getBasePointsFromScores } from "@/lib/powerupScoring";
+import { isScoredFixtureStatus } from "@/lib/fixtureLive";
 import {
   getPostgresGameData,
   getPostgresGameState,
@@ -56,7 +57,7 @@ async function actualResults(url: string, gw: number, seasonKey: string) {
     if (!Number.isFinite(id)) continue;
     const status = String(fixture.status || "").toUpperCase();
     if (VOIDED.has(status)) voided.add(id);
-    else if (fixture.result && ["FINISHED", "FT", "AWARDED"].includes(status)) {
+    else if (fixture.result && isScoredFixtureStatus(fixture.status)) {
       actual.set(id, String(fixture.result));
     }
   }

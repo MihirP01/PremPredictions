@@ -2076,6 +2076,23 @@ export default function FixturesPage() {
           </div>
         </SectionCard>
 
+        <SectionCard className={standardSectionCardClass}>
+          <div className="space-y-2">
+            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
+              Matchweek
+            </div>
+            <GameweekNavigator
+              value={gw}
+              min={MIN_GW}
+              max={MAX_GW}
+              disabled={navLoading}
+              onChange={selectGameweek}
+              buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
+              selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
+            />
+          </div>
+        </SectionCard>
+
         {gameModeStyle === "league" && !isLoading ? (
           <SectionCard className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.014))] p-4 sm:p-5">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -2277,22 +2294,6 @@ export default function FixturesPage() {
 
         {/* Fixtures */}
 
-        <SectionCard className={standardSectionCardClass}>
-          <div className="space-y-2">
-            <div className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-white/48">
-              Matchweek
-            </div>
-            <GameweekNavigator
-              value={gw}
-              min={MIN_GW}
-              max={MAX_GW}
-              disabled={navLoading}
-              onChange={selectGameweek}
-              buttonClassName="flex h-[clamp(2.75rem,3vw,3rem)] w-[clamp(2.75rem,3vw,3rem)] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] p-0 text-foreground shadow-[0_10px_24px_rgba(3,8,20,0.14)] transition hover:bg-white/[0.06] disabled:opacity-40"
-              selectClassName="h-[clamp(2.75rem,3vw,3rem)] w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.035] px-8 font-display text-[clamp(0.9rem,1vw,1rem)] font-semibold text-foreground outline-none [text-align-last:center]"
-            />
-          </div>
-        </SectionCard>
         <SectionStack gap="fixture">
           {isLoading && (
             <SectionCard className={standardSectionCardClass}>

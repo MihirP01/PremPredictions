@@ -1047,54 +1047,110 @@ select:-webkit-autofill:focus {
   }
 }
 
-.liquid-glass-nav {
+.liquid-glass-viewport {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   background:
+    radial-gradient(
+      120% 110% at 18% -22%,
+      rgba(255, 255, 255, 0.24) 0%,
+      rgba(255, 255, 255, 0.06) 38%,
+      transparent 62%
+    ),
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.12) 0%,
-      rgba(12, 18, 32, 0.42) 46%,
-      rgba(8, 12, 22, 0.5) 100%
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.055) 48%,
+      rgba(3, 9, 18, 0.2) 100%
     );
   box-shadow:
-    0 18px 36px rgba(2, 7, 18, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+    0 20px 42px rgba(2, 7, 18, 0.3),
+    0 3px 10px rgba(2, 7, 18, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset -1px 0 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(26px) saturate(175%) contrast(106%);
+  -webkit-backdrop-filter: blur(26px) saturate(175%) contrast(106%);
+  will-change: left, width;
 }
 
-.liquid-glass-nav::before {
+.liquid-glass-viewport::before {
   content: "";
   position: absolute;
-  inset: 0;
+  z-index: 2;
+  inset: 0 8% auto;
+  height: 42%;
+  border-radius: 999px 999px 50% 50%;
   pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      transparent 8%,
-      rgba(255, 255, 255, 0.2) 50%,
-      transparent 92%
-    );
-  height: 1px;
-  top: 0;
-}
-
-.liquid-glass-nav::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.045;
-  background-image: repeating-linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.35) 0 1px,
-    transparent 1px 3px
+  background: radial-gradient(
+    80% 100% at 50% 0%,
+    rgba(255, 255, 255, 0.22),
+    transparent 72%
   );
+  mix-blend-mode: screen;
+}
+
+.liquid-glass-viewport::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.2),
+    inset 0 9px 12px -13px rgba(255, 255, 255, 0.95),
+    inset 0 -12px 18px -16px rgba(var(--room-accent-rgb), 0.62);
+}
+
+.liquid-glass-caustic {
+  position: absolute;
+  z-index: 0;
+  inset: -24px -18%;
+  pointer-events: none;
+  opacity: 0.5;
+  background:
+    radial-gradient(
+      ellipse at 22% 36%,
+      rgba(255, 255, 255, 0.16),
+      transparent 24%
+    ),
+    radial-gradient(
+      ellipse at 78% 72%,
+      rgba(var(--room-accent-rgb), 0.2),
+      transparent 28%
+    );
+  filter: blur(9px);
+}
+
+.liquid-glass-expand-button {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.liquid-glass-expand-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  outline-offset: -4px;
+}
+
+.liquid-glass-nav {
+  z-index: 1;
+  transition: padding 420ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.room-bottom-nav[data-collapsed="true"] .liquid-glass-nav {
+  padding: 5px 7px;
 }
 
 .liquid-glass-pill {
@@ -1105,17 +1161,28 @@ select:-webkit-autofill:focus {
   left: 8px;
   width: var(--pill-width, 20%);
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.16) 0%,
-    rgba(var(--room-accent-rgb), 0.12) 100%
-  );
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background:
+    radial-gradient(
+      100% 80% at 50% 0%,
+      rgba(255, 255, 255, 0.2),
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.13),
+      rgba(var(--room-accent-rgb), 0.16)
+    );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 8px 18px rgba(2, 7, 18, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(var(--room-accent-rgb), 0.2),
+    0 8px 18px rgba(2, 7, 18, 0.16);
+  backdrop-filter: blur(8px) saturate(130%);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
   transform: translate3d(var(--pill-x, 0px), 0, 0);
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    width 420ms cubic-bezier(0.32, 0.72, 0, 1),
+    transform 420ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
 
@@ -1126,7 +1193,30 @@ select:-webkit-autofill:focus {
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.68);
-  transition: color 180ms ease, opacity 140ms ease;
+  transition:
+    min-height 420ms cubic-bezier(0.32, 0.72, 0, 1),
+    color 180ms ease,
+    opacity 140ms ease,
+    filter 180ms ease;
+}
+
+.room-bottom-nav[data-collapsed="true"] .liquid-glass-tab {
+  min-height: 40px;
+  gap: 0;
+  padding-block: 4px;
+}
+
+.liquid-glass-tab > span:last-child {
+  max-height: 12px;
+  transition:
+    max-height 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 160ms ease;
+}
+
+.room-bottom-nav[data-collapsed="true"] .liquid-glass-tab > span:last-child {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .liquid-glass-tab:active {
@@ -1135,6 +1225,12 @@ select:-webkit-autofill:focus {
 
 .liquid-glass-tab-active {
   color: #fff;
+  filter: drop-shadow(0 1px 4px rgba(255, 255, 255, 0.12));
+}
+
+.liquid-glass-tab:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -4px;
 }
 
 .room-bottom-nav button,
@@ -1414,6 +1510,12 @@ select:-webkit-autofill:focus {
     animation: none;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .liquid-glass-viewport,
+  .liquid-glass-nav,
+  .liquid-glass-pill {
+    transition-duration: 0.01ms !important;
   }
 }
 

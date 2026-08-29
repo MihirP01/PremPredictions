@@ -233,8 +233,8 @@ type NavItem = {
   disabled?: boolean;
 };
 
-const NAV_MOTION_MS = 320;
-const NAV_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const NAV_MOTION_MS = 420;
+const NAV_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const PILL_INSET = 8;
 
 export default function RoomBottomNav() {
@@ -254,7 +254,7 @@ export default function RoomBottomNav() {
     : null;
 
   const lastTouchHandledAtRef = useRef(0);
-  const navRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const expandResetTimerRef = useRef<number | null>(null);
   const collapseLockUntilRef = useRef(0);
   const [slotWidth, setSlotWidth] = useState(0);
@@ -417,6 +417,15 @@ export default function RoomBottomNav() {
     0,
     items.findIndex((item) => item.key === activeItem.key),
   );
+  const expandedWidth =
+    slotWidth > 0 ? slotWidth * items.length + PILL_INSET * 2 : 0;
+  const collapsedWidth =
+    expandedWidth > 0 ? Math.min(248, Math.max(196, expandedWidth * 0.58)) : 0;
+  const collapsedLeft = Math.max(0, (expandedWidth - collapsedWidth) / 2);
+  const visibleSlotWidth =
+    collapsed && collapsedWidth > 0
+      ? (collapsedWidth - PILL_INSET * 2) / items.length
+      : slotWidth;
 
   useEffect(() => {
     const el = navRef.current;
@@ -562,8 +571,10 @@ export default function RoomBottomNav() {
 
   return (
     <nav
+      ref={navRef}
       aria-label="Room navigation"
-      className="room-bottom-nav sm:hidden mx-auto w-[min(94vw,520px)] pointer-events-auto"
+      className="room-bottom-nav pointer-events-none mx-auto w-[min(94vw,520px)] sm:hidden"
+      data-collapsed={collapsed ? "true" : "false"}
       style={{
         WebkitTapHighlightColor: "transparent",
         touchAction: "manipulation",
@@ -572,90 +583,107 @@ export default function RoomBottomNav() {
       }}
     >
       <div
-        className="overflow-hidden rounded-[30px]"
+        className="liquid-glass-viewport pointer-events-auto"
         style={{
-          clipPath:
-            slotWidth > 0
-              ? `inset(0 0 0 ${collapsed ? (items.length - 1) * slotWidth : 0}px round 30px)`
-              : undefined,
-          transition: `clip-path ${NAV_MOTION_MS}ms ${NAV_EASE}`,
+          left: collapsed && slotWidth > 0 ? `${collapsedLeft}px` : "0px",
+          width:
+            collapsed && collapsedWidth > 0 ? `${collapsedWidth}px` : "100%",
+          transition: [
+            `left ${NAV_MOTION_MS}ms ${NAV_EASE}`,
+            `width ${NAV_MOTION_MS}ms ${NAV_EASE}`,
+            `border-radius ${NAV_MOTION_MS}ms ${NAV_EASE}`,
+          ].join(", "),
         }}
       >
-      <div
-        ref={navRef}
-        className="liquid-glass-nav relative w-full px-2 py-2"
-      >
-        <div
-          aria-hidden="true"
-          className="liquid-glass-pill"
-          style={
-            {
-              ["--pill-width" as string]:
-                slotWidth > 0 ? `${slotWidth}px` : "20%",
-              ["--pill-x" as string]: `${(collapsed ? items.length - 1 : activeIndex) * (slotWidth || 0)}px`,
-            } as React.CSSProperties
-          }
-        />
-        <div
-          className="relative z-[1] flex items-stretch"
-          style={{
-            transform: `translate3d(${collapsed ? (items.length - 1 - activeIndex) * (slotWidth || 0) : 0}px,0,0)`,
-            transition: `transform ${NAV_MOTION_MS}ms ${NAV_EASE}`,
-            willChange: "transform",
-          }}
-        >
-          {items.map((item) => {
-            const Icon = item.icon;
-            const itemCollapsed = collapsed && !item.active;
+        <div aria-hidden="true" className="liquid-glass-caustic" />
+        {collapsed ? (
+          <button
+            type="button"
+            className="liquid-glass-expand-button"
+            aria-label="Expand room navigation"
+            aria-expanded="false"
+            onClick={() => setExpandedCycle(affordanceCycle)}
+          />
+        ) : null}
+        <div className="liquid-glass-nav relative px-2 py-2">
+          <div
+            aria-hidden="true"
+            className="liquid-glass-pill"
+            style={
+              {
+                ["--pill-width" as string]:
+                  visibleSlotWidth > 0 ? `${visibleSlotWidth}px` : "25%",
+                ["--pill-x" as string]: `${activeIndex * (visibleSlotWidth || 0)}px`,
+              } as React.CSSProperties
+            }
+          />
+          <div className="relative z-[1] flex items-stretch">
+            {items.map((item) => {
+              const Icon = item.icon;
+              const itemCollapsed = collapsed && !item.active;
 
-            return (
-              <div
-                key={item.key}
-                className="relative min-w-0"
-                style={{
-                  flex: "1 1 0%",
-                  width: 0,
-                  pointerEvents: itemCollapsed || item.disabled ? "none" : "auto",
-                }}
-              >
-                <button
-                  type="button"
-                  onPointerDown={(event) => onNavPointerDown(event, item)}
-                  onClick={() => {
-                    if (performance.now() - lastTouchHandledAtRef.current < 450)
-                      return;
-                    onNavClick(item.key, item.href, item.active, item.disabled);
+              return (
+                <div
+                  key={item.key}
+                  className="relative min-w-0"
+                  style={{
+                    flex: "1 1 0%",
+                    width: 0,
+                    pointerEvents:
+                      itemCollapsed || item.disabled ? "none" : "auto",
                   }}
-                  disabled={item.disabled}
-                  aria-disabled={item.disabled ? "true" : undefined}
-                  className={[
-                    "liquid-glass-tab flex w-full min-w-0 touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5",
-                    item.disabled
-                      ? "pointer-events-none cursor-not-allowed opacity-50"
-                      : "pointer-events-auto",
-                    item.active && !item.disabled ? "liquid-glass-tab-active" : "",
-                  ].join(" ")}
                 >
-                  <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
-                    <Icon
-                      size={16}
-                      className={item.active ? "text-white" : "text-white/64"}
-                    />
-                  </span>
-                  <span
+                  <button
+                    type="button"
+                    onPointerDown={(event) => onNavPointerDown(event, item)}
+                    onClick={() => {
+                      if (
+                        performance.now() - lastTouchHandledAtRef.current <
+                        450
+                      )
+                        return;
+                      onNavClick(
+                        item.key,
+                        item.href,
+                        item.active,
+                        item.disabled,
+                      );
+                    }}
+                    disabled={item.disabled}
+                    tabIndex={collapsed || itemCollapsed ? -1 : undefined}
+                    aria-disabled={item.disabled ? "true" : undefined}
+                    aria-current={item.active ? "page" : undefined}
+                    aria-label={item.label}
                     className={[
-                      "truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]",
-                      item.active ? "text-white" : "text-white/68",
+                      "liquid-glass-tab flex w-full min-w-0 touch-manipulation select-none flex-col items-center justify-center gap-1 rounded-[24px] px-1 py-1.5",
+                      item.disabled
+                        ? "pointer-events-none cursor-not-allowed opacity-50"
+                        : "pointer-events-auto",
+                      item.active && !item.disabled
+                        ? "liquid-glass-tab-active"
+                        : "",
                     ].join(" ")}
                   >
-                    {item.label}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+                    <span className="nav-icon-wrap relative inline-flex h-5 w-5 items-center justify-center">
+                      <Icon
+                        size={16}
+                        className={item.active ? "text-white" : "text-white/64"}
+                      />
+                    </span>
+                    <span
+                      className={[
+                        "truncate font-display text-[8px] font-semibold leading-none tracking-[0.03em]",
+                        item.active ? "text-white" : "text-white/68",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
       </div>
     </nav>
   );

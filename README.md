@@ -93,6 +93,9 @@ Notes:
 - `POST /api/auth/password-reset`
 - `GET /api/current-gameweek`
 - `GET /api/fixtures?gameweek=<n>`
+- `GET /api/fixtures?gameweek=<n>&at=<iso>` (shared SQL snapshot as of that time)
+- `GET /api/table?seasonKey=<key>`
+- `GET /api/provider-snapshots?kind=fixtures|fotmob-league|standings|match-info&seasonKey=<key>`
 - `POST /api/game/start`
 - `POST /api/game/pick`
 - `POST /api/game/league-picks`

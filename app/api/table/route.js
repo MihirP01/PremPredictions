@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSeasonClubCatalog } from "@/lib/server/season-clubs";
+import {
+  PROVIDER_SNAPSHOT_KIND,
+  getLatestProviderSnapshot,
+  getProviderSnapshotAt,
+  isSnapshotFresh,
+  parseSnapshotAt,
+  saveProviderSnapshot,
+} from "@/lib/server/provider-snapshots";
 
 const LEAGUE = "PL";
 const SEASON_START_MONTH_UTC = 7; // Aug
@@ -36,18 +44,64 @@ function seasonStartYearFromKey(seasonKey) {
 }
 
 export async function GET(req) {
-  const API_KEY = process.env.FOOTBALLDATA_KEY;
-  if (!API_KEY) {
-    return NextResponse.json(
-      { error: "API key not configured" },
-      { status: 500 },
-    );
-  }
-
   const { searchParams } = new URL(req.url);
   const requestedSeason = searchParams.get("seasonKey");
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
+  const snapshotAt = parseSnapshotAt(searchParams.get("at"));
+  const forceRefresh =
+    searchParams.get("refresh") === "1" || searchParams.has("t");
   const season = seasonStartYearFromKey(seasonKey);
+  const snapshotKey = {
+    kind: PROVIDER_SNAPSHOT_KIND.standings,
+    seasonKey,
+  };
+
+  if (snapshotAt) {
+    const stored = await getProviderSnapshotAt(snapshotKey, snapshotAt).catch(
+      () => null,
+    );
+    return stored?.payload
+      ? NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "No standings snapshot at that time" },
+          { status: 404 },
+        );
+  }
+
+  if (!forceRefresh) {
+    const latest = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
+    );
+    if (latest && isSnapshotFresh(latest.capturedAt, 45_000) && latest.payload) {
+      return NextResponse.json(
+        { ...latest.payload, capturedAt: latest.capturedAt.toISOString() },
+        {
+          headers: {
+            "Cache-Control": "s-maxage=45, stale-while-revalidate=15",
+          },
+        },
+      );
+    }
+  }
+
+  const API_KEY = process.env.FOOTBALLDATA_KEY;
+  if (!API_KEY) {
+    const stored = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
+    );
+    return stored?.payload
+      ? NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "API key not configured" },
+          { status: 500 },
+        );
+  }
 
   const url = `https://api.football-data.org/v4/competitions/${LEAGUE}/standings?season=${season}`;
 
@@ -62,10 +116,18 @@ export async function GET(req) {
       getSeasonClubCatalog(seasonKey, API_KEY).catch(() => []),
     ]);
   } catch {
-    return NextResponse.json(
-      { error: "Upstream fetch failed" },
-      { status: 502 },
+    const stored = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
     );
+    return stored?.payload
+      ? NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "Upstream fetch failed" },
+          { status: 502 },
+        );
   }
 
   const clubByTeamId = new Map(
@@ -104,10 +166,18 @@ export async function GET(req) {
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     console.error("Football-Data standings error:", response.status, body);
-    return NextResponse.json(
-      { error: "Football API error", status: response.status },
-      { status: 502 },
+    const stored = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
     );
+    return stored?.payload
+      ? NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "Football API error", status: response.status },
+          { status: 502 },
+        );
   }
 
   const data = await response.json();
@@ -123,8 +193,18 @@ export async function GET(req) {
     data?.standings?.find((s) => s?.type === "AWAY")?.table || [],
   );
 
+  const payload = { seasonKey, standingsTotal, standingsHome, standingsAway };
+  const snapshot = await saveProviderSnapshot(
+    snapshotKey,
+    payload,
+    "football-data",
+  ).catch(() => null);
+
   return NextResponse.json(
-    { seasonKey, standingsTotal, standingsHome, standingsAway },
+    {
+      ...payload,
+      capturedAt: snapshot?.capturedAt?.toISOString() || new Date().toISOString(),
+    },
     { headers: { "Cache-Control": "s-maxage=45, stale-while-revalidate=15" } },
   );
 }

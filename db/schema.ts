@@ -327,6 +327,35 @@ export const fixtureSnapshots = pgTable(
   (table) => [primaryKey({ columns: [table.seasonKey, table.gameweek] })],
 );
 
+export const providerSnapshots = pgTable(
+  "provider_snapshots",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    kind: varchar("kind", { length: 32 }).notNull(),
+    seasonKey: varchar("season_key", { length: 16 }).notNull(),
+    gameweek: integer("gameweek"),
+    fixtureId: bigint("fixture_id", { mode: "number" }),
+    source: varchar("source", { length: 48 }),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("provider_snapshots_lookup_idx").on(
+      table.kind,
+      table.seasonKey,
+      table.gameweek,
+      table.fixtureId,
+      table.capturedAt,
+    ),
+  ],
+);
+
 export const seasonClubs = pgTable(
   "season_clubs",
   {

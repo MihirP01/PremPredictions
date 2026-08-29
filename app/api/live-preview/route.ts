@@ -3,6 +3,11 @@ import {
   getFotmobLeagueMatches,
   type FotmobLeagueMatch,
 } from "@/lib/fotmobLeague";
+import {
+  PROVIDER_SNAPSHOT_KIND,
+  getProviderSnapshotAt,
+  parseSnapshotAt,
+} from "@/lib/server/provider-snapshots";
 
 const SEASON_START_MONTH_UTC = 7;
 
@@ -155,7 +160,26 @@ export async function GET(req: NextRequest) {
     : null;
 
   try {
-    const matches = await getFotmobLeagueMatches(season).catch(() => []);
+    const snapshotAt = parseSnapshotAt(req.nextUrl.searchParams.get("at"));
+    let matches: FotmobLeagueMatch[] = [];
+    let capturedAt: string | null = null;
+    if (snapshotAt) {
+      const snapshot = await getProviderSnapshotAt<{
+        matches?: FotmobLeagueMatch[];
+      }>(
+        {
+          kind: PROVIDER_SNAPSHOT_KIND.fotmobLeague,
+          seasonKey,
+        },
+        snapshotAt,
+      ).catch(() => null);
+      matches = Array.isArray(snapshot?.payload?.matches)
+        ? snapshot.payload.matches
+        : [];
+      capturedAt = snapshot?.capturedAt?.toISOString() || null;
+    } else {
+      matches = await getFotmobLeagueMatches(season).catch(() => []);
+    }
 
     const filtered =
       gameweek == null
@@ -168,12 +192,15 @@ export async function GET(req: NextRequest) {
       {
         seasonKey,
         source: "fotmob",
-        generatedAt: new Date().toISOString(),
+        generatedAt: capturedAt || new Date().toISOString(),
+        capturedAt,
         fixtures: filtered.map((match) => mapMatchToOverlay(match, gameweek)),
       },
       {
         headers: {
-          "Cache-Control": "s-maxage=10, stale-while-revalidate=5",
+          "Cache-Control": snapshotAt
+            ? "no-store"
+            : "s-maxage=10, stale-while-revalidate=5",
         },
       },
     );

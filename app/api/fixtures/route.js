@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
-import { getPostgresPool } from "@/lib/server/postgres";
+import {
+  PROVIDER_SNAPSHOT_KIND,
+  getLatestProviderSnapshot,
+  getProviderSnapshotAt,
+  isSnapshotFresh,
+  parseSnapshotAt,
+  saveProviderSnapshot,
+} from "@/lib/server/provider-snapshots";
 
 const LEAGUE = "PL";
 const SEASON_START_MONTH_UTC = 7; // Aug
@@ -305,45 +312,95 @@ function fallbackFixtureFromFotmob(match, forceGameweek) {
   };
 }
 
-async function persistFixtures(seasonKey, gameweek, payload) {
-  const gw = Number(gameweek);
-  if (!Number.isInteger(gw) || !Array.isArray(payload?.fixtures) || !payload.fixtures.length) return;
-  await getPostgresPool().query(
-    `INSERT INTO fixture_snapshots
-       (season_key, gameweek, fixtures, source, generated_at, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4, $5, now())
-     ON CONFLICT (season_key, gameweek) DO UPDATE SET
-       fixtures = EXCLUDED.fixtures,
-       source = EXCLUDED.source,
-       generated_at = EXCLUDED.generated_at,
-       updated_at = now()`,
-    [seasonKey, gw, JSON.stringify(payload.fixtures), payload.source || "football-data", payload.generatedAt || new Date().toISOString()],
-  );
+function fixturesTtlMs(fixtures) {
+  const now = Date.now();
+  for (const fixture of Array.isArray(fixtures) ? fixtures : []) {
+    const status = String(fixture?.status || "").trim().toUpperCase();
+    if (
+      status &&
+      status !== "TIMED" &&
+      status !== "SCHEDULED" &&
+      status !== "FINISHED" &&
+      status !== "FT" &&
+      status !== "POSTPONED" &&
+      status !== "CANCELLED" &&
+      status !== "AWARDED"
+    ) {
+      return 15_000;
+    }
+    const kickoffMs = Date.parse(String(fixture?.kickoff || ""));
+    if (
+      Number.isFinite(kickoffMs) &&
+      kickoffMs <= now &&
+      now - kickoffMs < 4 * 60 * 60 * 1000 &&
+      status !== "FINISHED" &&
+      status !== "FT"
+    ) {
+      return 15_000;
+    }
+  }
+  return 60_000;
 }
 
-async function storedFixtures(seasonKey, gameweek) {
+async function persistFixtures(seasonKey, gameweek, payload) {
   const gw = Number(gameweek);
-  if (!Number.isInteger(gw)) return null;
-  const result = await getPostgresPool().query(
-    `SELECT fixtures, source, generated_at FROM fixture_snapshots
-      WHERE season_key = $1 AND gameweek = $2 LIMIT 1`,
-    [seasonKey, gw],
+  if (!Number.isInteger(gw) || !Array.isArray(payload?.fixtures) || !payload.fixtures.length) return null;
+  return saveProviderSnapshot(
+    {
+      kind: PROVIDER_SNAPSHOT_KIND.fixtures,
+      seasonKey,
+      gameweek: gw,
+    },
+    {
+      seasonKey,
+      fixtures: payload.fixtures,
+      source: payload.source || "football-data",
+      generatedAt: payload.generatedAt || new Date().toISOString(),
+    },
+    payload.source || "football-data",
   );
-  const row = result.rows[0];
-  if (!row || !Array.isArray(row.fixtures) || !row.fixtures.length) return null;
-  return {
-    fixtures: row.fixtures,
-    source: `${row.source || "provider"}-postgres-fallback`,
-    generatedAt: row.generated_at ? new Date(row.generated_at).toISOString() : null,
-    stale: true,
-  };
 }
 
 async function fixtureResponse(seasonKey, gameweek, payload, init) {
-  await persistFixtures(seasonKey, gameweek, payload).catch((error) => {
+  const snapshot = await persistFixtures(seasonKey, gameweek, payload).catch((error) => {
     console.error("Fixture snapshot write failed", error);
+    return null;
   });
-  return NextResponse.json(payload, init);
+  return NextResponse.json(
+    {
+      ...payload,
+      capturedAt:
+        snapshot?.capturedAt?.toISOString() ||
+        payload.generatedAt ||
+        new Date().toISOString(),
+    },
+    init,
+  );
+}
+
+async function storedFixtures(seasonKey, gameweek, at) {
+  const gw = Number(gameweek);
+  if (!Number.isInteger(gw)) return null;
+  const key = {
+    kind: PROVIDER_SNAPSHOT_KIND.fixtures,
+    seasonKey,
+    gameweek: gw,
+  };
+  const snapshot = at
+    ? await getProviderSnapshotAt(key, at)
+    : await getLatestProviderSnapshot(key);
+  const fixtures = Array.isArray(snapshot?.payload?.fixtures)
+    ? snapshot.payload.fixtures
+    : [];
+  if (!snapshot || !fixtures.length) return null;
+  return {
+    fixtures,
+    source: String(snapshot.payload?.source || snapshot.source || "provider"),
+    generatedAt:
+      snapshot.payload?.generatedAt || snapshot.capturedAt.toISOString(),
+    capturedAt: snapshot.capturedAt.toISOString(),
+    stale: !isSnapshotFresh(snapshot.capturedAt, fixturesTtlMs(fixtures)),
+  };
 }
 
 export async function GET(req) {
@@ -353,9 +410,35 @@ export async function GET(req) {
     searchParams.get("refresh") === "1" || searchParams.has("t");
   const requestedSeason = searchParams.get("seasonKey");
   const seasonKey = normalizeSeasonKey(requestedSeason) || inferSeasonKey();
+  const snapshotAt = parseSnapshotAt(searchParams.get("at"));
   const season = seasonStartYearFromKey(seasonKey);
   const fotmobSeason = fotmobSeasonFromStartYear(season);
   const API_KEY = process.env.FOOTBALLDATA_KEY;
+
+  if (snapshotAt) {
+    const stored = await storedFixtures(seasonKey, gameweek, snapshotAt).catch(
+      () => null,
+    );
+    return stored
+      ? NextResponse.json(
+          { ...stored, stale: true },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "No fixture snapshot at that time" },
+          { status: 404 },
+        );
+  }
+
+  if (!forceRefresh) {
+    const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
+    if (stored && !stored.stale) {
+      return NextResponse.json(stored, {
+        headers: { "Cache-Control": "s-maxage=15, stale-while-revalidate=15" },
+      });
+    }
+  }
+
   if (!API_KEY) {
     const stored = await storedFixtures(seasonKey, gameweek).catch(() => null);
     return stored

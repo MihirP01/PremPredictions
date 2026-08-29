@@ -1,3 +1,10 @@
+import {
+  PROVIDER_SNAPSHOT_KIND,
+  getLatestProviderSnapshot,
+  isSnapshotFresh,
+  saveProviderSnapshot,
+} from "@/lib/server/provider-snapshots";
+
 const FOTMOB_LEAGUE_ID = 47;
 const LIVE_TTL_MS = 15_000;
 const UPCOMING_TTL_MS = 45_000;
@@ -160,6 +167,59 @@ async function fetchLeagueMatches(season: string) {
   return fetchLeagueMatchesHtml(season);
 }
 
+export function fotmobSeasonFromSeasonKey(seasonKey: string) {
+  const startYear = 2000 + Number(String(seasonKey).slice(0, 2));
+  return `${startYear}/${startYear + 1}`;
+}
+
+export function seasonKeyFromFotmobSeason(season: string) {
+  const match = /^(\d{4})\s*[/-]\s*(\d{2,4})$/.exec(String(season || "").trim());
+  if (match) {
+    const startYY = String(Number(match[1]) % 100).padStart(2, "0");
+    const endYY = String(Number(match[2]) % 100).padStart(2, "0");
+    return `${startYY}${endYY}`;
+  }
+  const digits = String(season || "").replace(/\D/g, "");
+  return /^\d{4}$/.test(digits) ? digits : "";
+}
+
+export { ttlForMatches };
+
+async function matchesFromSnapshot(
+  season: string,
+  opts?: { allowStale?: boolean },
+) {
+  const seasonKey = seasonKeyFromFotmobSeason(season);
+  const snapshot = await getLatestProviderSnapshot<{
+    matches?: FotmobLeagueMatch[];
+  }>({
+    kind: PROVIDER_SNAPSHOT_KIND.fotmobLeague,
+    seasonKey,
+  }).catch(() => null);
+  const matches = Array.isArray(snapshot?.payload?.matches)
+    ? snapshot.payload.matches
+    : [];
+  if (!matches.length || !snapshot) return null;
+  const ttl = opts?.allowStale
+    ? Number.MAX_SAFE_INTEGER
+    : ttlForMatches(matches);
+  if (!isSnapshotFresh(snapshot.capturedAt, ttl)) return null;
+  return matches;
+}
+
+async function persistLeagueMatches(season: string, matches: FotmobLeagueMatch[]) {
+  if (!matches.length) return;
+  const seasonKey = seasonKeyFromFotmobSeason(season);
+  await saveProviderSnapshot(
+    {
+      kind: PROVIDER_SNAPSHOT_KIND.fotmobLeague,
+      seasonKey,
+    },
+    { season, matches },
+    "fotmob",
+  ).catch(() => null);
+}
+
 export async function getFotmobLeagueMatches(
   season: string,
   opts?: { force?: boolean },
@@ -178,15 +238,30 @@ export async function getFotmobLeagueMatches(
 
   const req = (async () => {
     try {
+      if (!opts?.force) {
+        const stored = await matchesFromSnapshot(key).catch(() => null);
+        if (stored?.length) {
+          cache.set(key, {
+            matches: stored,
+            expiresAt: Date.now() + ttlForMatches(stored),
+          });
+          return stored;
+        }
+      }
       const matches = await fetchLeagueMatches(key);
       cache.set(key, {
         matches,
         expiresAt: Date.now() + ttlForMatches(matches),
       });
+      void persistLeagueMatches(key, matches);
       return matches;
     } catch (error) {
-      const stale = cache.get(key);
-      if (stale) return stale.matches;
+      const staleMem = cache.get(key);
+      if (staleMem) return staleMem.matches;
+      const staleSql = await matchesFromSnapshot(key, { allowStale: true }).catch(
+        () => null,
+      );
+      if (staleSql?.length) return staleSql;
       throw error;
     }
   })().finally(() => pending.delete(key));

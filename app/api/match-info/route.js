@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { getFotmobLeagueMatches } from "@/lib/fotmobLeague";
 import { attachFplPointsToLineups } from "@/lib/fplPoints";
+import {
+  PROVIDER_SNAPSHOT_KIND,
+  getLatestProviderSnapshot,
+  getProviderSnapshotAt,
+  isSnapshotFresh,
+  parseSnapshotAt,
+  saveProviderSnapshot,
+} from "@/lib/server/provider-snapshots";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -470,6 +478,42 @@ export async function GET(req) {
     );
   }
 
+  const snapshotKey = {
+    kind: PROVIDER_SNAPSHOT_KIND.matchInfo,
+    seasonKey,
+    fixtureId,
+  };
+  const snapshotAt = parseSnapshotAt(searchParams.get("at"));
+  const forceRefresh = searchParams.has("_t");
+
+  if (snapshotAt) {
+    const stored = await getProviderSnapshotAt(snapshotKey, snapshotAt).catch(
+      () => null,
+    );
+    return stored?.payload
+      ? NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        )
+      : NextResponse.json(
+          { error: "No match-info snapshot at that time" },
+          { status: 404 },
+        );
+  }
+
+  if (!forceRefresh) {
+    const latest = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
+    );
+    const ttl = 90_000;
+    if (latest?.payload && isSnapshotFresh(latest.capturedAt, ttl)) {
+      return NextResponse.json(
+        { ...latest.payload, capturedAt: latest.capturedAt.toISOString() },
+        { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=30" } },
+      );
+    }
+  }
+
   try {
     void attachFplPointsToLineups(
       {
@@ -489,6 +533,15 @@ export async function GET(req) {
     });
 
     if (!leagueMatch?.pageUrl) {
+      const stored = await getLatestProviderSnapshot(snapshotKey).catch(
+        () => null,
+      );
+      if (stored?.payload) {
+        return NextResponse.json(
+          { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      }
       return NextResponse.json(
         { error: "Match details unavailable." },
         { status: 404 },
@@ -584,8 +637,7 @@ export async function GET(req) {
       ? "no-store"
       : "s-maxage=300, stale-while-revalidate=120";
 
-    return NextResponse.json(
-      {
+    const payload = {
         fixtureId,
         generatedAt: new Date().toISOString(),
         lineups,
@@ -593,6 +645,17 @@ export async function GET(req) {
         headToHead,
         form,
         liveWidgetUrl,
+      };
+    const snapshot = await saveProviderSnapshot(
+      snapshotKey,
+      payload,
+      "fotmob",
+    ).catch(() => null);
+
+    return NextResponse.json(
+      {
+        ...payload,
+        capturedAt: snapshot?.capturedAt?.toISOString() || payload.generatedAt,
       },
       {
         headers: {
@@ -601,6 +664,15 @@ export async function GET(req) {
       },
     );
   } catch {
+    const stored = await getLatestProviderSnapshot(snapshotKey).catch(
+      () => null,
+    );
+    if (stored?.payload) {
+      return NextResponse.json(
+        { ...stored.payload, capturedAt: stored.capturedAt.toISOString() },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     return NextResponse.json(
       { error: "Match details unavailable." },
       { status: 502 },

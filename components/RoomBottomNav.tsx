@@ -400,12 +400,12 @@ export default function RoomBottomNav() {
   );
   const activeItem = items.find((item) => item.active) || items[2];
   const {
-    visible: showScrollAffordance,
+    compact: compactForScroll,
     cycle: affordanceCycle,
   } = useRoomScrollAffordance(pathname);
   const [expandedCycle, setExpandedCycle] = useState<number | null>(null);
   const desiredCollapsed =
-    showScrollAffordance && expandedCycle !== affordanceCycle;
+    compactForScroll && expandedCycle !== affordanceCycle;
   const [collapsed, setCollapsed] = useState(desiredCollapsed);
 
   const hideForActiveGamePhase =
@@ -457,20 +457,20 @@ export default function RoomBottomNav() {
   }, [collapsed, desiredCollapsed]);
 
   useEffect(() => {
-    if (collapsed || !showScrollAffordance) return;
+    if (collapsed || !compactForScroll) return;
     const onPointerDown = (event: PointerEvent) => {
       if (navRef.current?.contains(event.target as Node)) return;
       setExpandedCycle(null);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [collapsed, showScrollAffordance]);
+  }, [collapsed, compactForScroll]);
 
   useEffect(() => {
-    if (showScrollAffordance || !expandResetTimerRef.current) return;
+    if (compactForScroll || !expandResetTimerRef.current) return;
     window.clearTimeout(expandResetTimerRef.current);
     expandResetTimerRef.current = null;
-  }, [showScrollAffordance]);
+  }, [compactForScroll]);
 
   useEffect(() => {
     return () => {
@@ -542,11 +542,11 @@ export default function RoomBottomNav() {
         predictionsRouteForState(cachedBootstrap?.gameState || "");
       router.push(immediateHref);
       if (!cachedBootstrap) syncPredictionsRoute(immediateHref);
-      if (showScrollAffordance) collapseNavSoon();
+      if (compactForScroll) collapseNavSoon();
       return;
     }
     router.push(href);
-    if (showScrollAffordance) collapseNavSoon();
+    if (compactForScroll) collapseNavSoon();
   };
 
   const onNavPointerDown = (
@@ -595,7 +595,6 @@ export default function RoomBottomNav() {
           ].join(", "),
         }}
       >
-        <div aria-hidden="true" className="liquid-glass-caustic" />
         {collapsed ? (
           <button
             type="button"

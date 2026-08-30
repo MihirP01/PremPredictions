@@ -25,6 +25,7 @@ import AnimatedModal from "../../../../components/AnimatedModal";
 import ModalExitButton from "../../../../components/ModalExitButton";
 import PageBackButton from "../../../../components/PageBackButton";
 import GameweekNavigator from "../../../../components/GameweekNavigator";
+import PendulumName from "../../../../components/PendulumName";
 import PageShell from "../../../../components/PageShell";
 import SectionCard from "../../../../components/SectionCard";
 import SectionStack from "../../../../components/SectionStack";
@@ -2711,11 +2712,22 @@ export default function FixturesPage() {
                                                 accentBarClass,
                                               ].join(" ")}
                                             />
+                                            {p.uid === user?.uid ? (
+                                              <span
+                                                className="absolute right-3 top-3 z-10 h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_7px_rgba(56,189,248,0.65)]"
+                                              >
+                                                <span className="sr-only">
+                                                  You
+                                                </span>
+                                              </span>
+                                            ) : null}
                                             <div className="relative pl-3">
-                                              <div className="font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold truncate text-muted">
-                                                {p.displayName.length > 6
-                                                  ? p.displayName.slice(0, 6)
-                                                  : p.displayName}
+                                              <div className="min-w-0 pr-4 font-display text-[clamp(0.66rem,0.85vw,0.82rem)] font-semibold text-muted">
+                                                <PendulumName
+                                                  text={p.displayName}
+                                                  windowPx={null}
+                                                  className="w-full"
+                                                />
                                               </div>
                                               <span
                                                 className={[

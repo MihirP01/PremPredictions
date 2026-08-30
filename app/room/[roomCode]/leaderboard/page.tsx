@@ -25,6 +25,7 @@ import {
   getSeasonScoresSnapshotCached,
   type SeasonScoresSnapshot,
 } from "@/lib/seasonScoresClient";
+import { authenticatedFetch } from "@/lib/authenticatedFetch";
 import {
   useCachedBootstrap,
   useCachedPlayers,
@@ -277,6 +278,7 @@ export default function LeaderboardMatrixPage() {
     () => String(bootstrap?.seasonKey || ""),
   );
   const currentGw = bootstrap ? Number(bootstrap.currentGameweek) || 1 : 1;
+  const isLeader = !!user && bootstrap?.leaderUid === user.uid;
   const gameModeStyle = String(bootstrap?.gameModeStyle || "");
   const [seasonOptions, setSeasonOptions] = useState<string[]>(() => {
     const options = Array.isArray(bootstrap?.seasonOptions)
@@ -640,7 +642,28 @@ export default function LeaderboardMatrixPage() {
     setRefreshLockedUntil(Date.now() + 10_000);
     setNowMs(Date.now());
     try {
+      if (isLeader && seasonKey) {
+        const response = await authenticatedFetch("/api/game/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomCode,
+            gw: currentGw,
+            seasonKey,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to recalculate scores.");
+        }
+      }
       await loadSavedScores({ force: true });
+    } catch (refreshError) {
+      setError(
+        toErrorMessage(refreshError, "Failed to refresh the leaderboard."),
+      );
     } finally {
       const elapsed = Date.now() - startedAt;
       const minSpinMs = 450;
@@ -677,7 +700,9 @@ export default function LeaderboardMatrixPage() {
           title={
             refreshLockSeconds > 0
               ? `Refresh locked (${refreshLockSeconds}s)`
-              : "Refresh leaderboard"
+              : isLeader
+                ? "Recalculate recent scores and refresh leaderboard"
+                : "Refresh leaderboard"
           }
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
@@ -813,9 +838,6 @@ export default function LeaderboardMatrixPage() {
                 const hasPred = slot.player
                   ? hasPredForTopView(slot.player.uid)
                   : false;
-                const hasFairPlay = slot.player
-                  ? hasFairPlayForTopView(slot.player.uid)
-                  : false;
                 const barHeight =
                   slot.tier === "gold"
                     ? "132px"
@@ -858,11 +880,6 @@ export default function LeaderboardMatrixPage() {
                       <div className="mt-3 text-center font-display text-xl font-semibold text-foreground">
                         {slot.player ? scoreLabel(points, hasPred) : "—"}
                       </div>
-                      {hasFairPlay ? (
-                        <div className="mt-2 text-center">
-                          <FairPlayPill includes={topView === "overall"} />
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 );

@@ -3,6 +3,7 @@ import { AuthProvider } from "../components/AuthProvider";
 import PWARegister from "../components/PWARegister";
 import PWAEntryGuard from "../components/PWAEntryGuard";
 import { Orbitron } from "next/font/google";
+import type { Viewport } from "next";
 
 const displayFont = Orbitron({
   subsets: ["latin"],
@@ -28,9 +29,11 @@ export const metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#0ea5a4",
 };

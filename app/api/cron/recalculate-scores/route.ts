@@ -36,41 +36,53 @@ export async function GET(req: Request) {
     const currentData = (await current.json()) as { currentGameweek?: number };
     const gw = Number(currentData.currentGameweek);
     if (!Number.isInteger(gw) || gw < 1 || gw > 38) throw new Error("Invalid gameweek");
+    const targetGws = [gw];
 
     stage = "load-rooms";
     const rooms = await getPostgresPool().query<{ code: string }>("SELECT code FROM rooms ORDER BY code");
     stage = "recalculate";
     const results = [];
     for (const room of rooms.rows) {
-      try {
-        const result = await scoreRoomGameweek(baseUrl(req), room.code, gw, seasonKey);
-        results.push({
-          roomCode: room.code,
-          ok: true,
-          status: 200,
-          payload: {
-            ok: true,
-            scored: result.status === "scored" ? result.scoredUsers : 0,
-            scoredGameweeks: result.status === "scored" ? 1 : 0,
-            targetGws: [gw],
-            seasonKey,
-            results: [result],
-          },
-        });
-      } catch (error) {
-        results.push({
-          roomCode: room.code,
-          ok: false,
-          status: 500,
-          error: error instanceof Error ? error.message : "Recalc failed",
-        });
+      const roomResults = [];
+      for (const target of targetGws) {
+        try {
+          roomResults.push(
+            await scoreRoomGameweek(baseUrl(req), room.code, target, seasonKey),
+          );
+        } catch (error) {
+          roomResults.push({
+            gw: target,
+            status: "error" as const,
+            scoredUsers: 0,
+            message: error instanceof Error ? error.message : "Recalc failed",
+          });
+        }
       }
+      const ok = roomResults.every((result) => result.status !== "error");
+      results.push({
+        roomCode: room.code,
+        ok,
+        status: ok ? 200 : 500,
+        payload: {
+          ok,
+          scored: roomResults
+            .filter((result) => result.status === "scored")
+            .reduce((sum, result) => sum + result.scoredUsers, 0),
+          scoredGameweeks: roomResults.filter(
+            (result) => result.status === "scored",
+          ).length,
+          targetGws,
+          seasonKey,
+          results: roomResults,
+        },
+      });
     }
     const success = results.filter((result) => result.ok).length;
     return NextResponse.json({
       ok: true,
       seasonKey,
       gw,
+      targetGws,
       rooms: rooms.rows.length,
       success,
       failed: rooms.rows.length - success,

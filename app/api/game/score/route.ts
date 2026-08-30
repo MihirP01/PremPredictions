@@ -72,7 +72,10 @@ export async function scoreRoomGameweek(
 ): Promise<GwRunResult> {
   const game = await getPostgresGameState(roomCode, seasonKey, gw);
   if (!game) return { gw, status: "skipped", scoredUsers: 0, message: "Game not found" };
-  const players = Array.isArray(game.players) ? game.players.map(String) : [];
+  const isLeague = game.gameModeStyle === "league";
+  const players = Array.isArray(game.players)
+    ? game.players.map(String)
+    : [];
   const fixtureIds = Array.isArray(game.fixtureIds)
     ? game.fixtureIds.map(Number).filter(Number.isFinite)
     : [];
@@ -121,8 +124,8 @@ export async function scoreRoomGameweek(
     return { uid, rawPoints, hasPrediction, breakdown };
   });
 
-  const isLeague = game.gameModeStyle === "league";
-  const fairPlayEnabled = isLeague && game.leagueFairPlayEnabled === true;
+  const fairPlayEnabled =
+    isLeague && game.leagueFairPlayEnabled === true;
   const fairPlayMedian = median(calculated.filter((entry) => entry.hasPrediction).map((entry) => entry.rawPoints));
   const scores: Parameters<typeof mirrorWeeklyScoresToPostgres>[0]["scores"] = calculated.map((entry) => {
     const missed = isLeague && !entry.hasPrediction;
@@ -156,7 +159,6 @@ export async function POST(req: Request) {
       roomCode?: string;
       gw?: number;
       seasonKey?: string;
-      currentOnly?: boolean;
     };
     const requested = canonicalRoomCode(body.roomCode);
     const gw = Number(body.gw);
@@ -164,12 +166,12 @@ export async function POST(req: Request) {
     if (!requested || !Number.isInteger(gw) || gw < 1 || gw > 38) {
       return NextResponse.json({ error: "Bad scoring request" }, { status: 400 });
     }
-    const room = await getPostgresRoomSummary(requested);
-    const roomCode = room.code;
-    if (room.leaderUid !== user.uid) {
+    const roomSummary = await getPostgresRoomSummary(requested);
+    const roomCode = roomSummary.code;
+    if (roomSummary.leaderUid !== user.uid) {
       return NextResponse.json({ error: "Not leader" }, { status: 403 });
     }
-    const targetGws = body.currentOnly ? [gw] : [gw, gw - 1, gw - 2].filter((n) => n >= 1);
+    const targetGws = [gw];
     const results: GwRunResult[] = [];
     for (const target of targetGws) {
       try {

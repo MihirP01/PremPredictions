@@ -45,6 +45,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/db/migrations ./db/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-postgres.mjs ./scripts/migrate-postgres.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/backfill-fair-play.mjs ./scripts/backfill-fair-play.mjs
 
 USER nextjs
 EXPOSE 3000

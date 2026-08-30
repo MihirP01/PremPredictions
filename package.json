@@ -1,6 +1,6 @@
 {
   "name": "score-predictorv2",
-  "version": "3.6.0",
+  "version": "3.6.1",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node scripts/migrate-postgres.mjs"
+    "db:migrate": "node scripts/migrate-postgres.mjs",
+    "db:backfill-fair-play": "node scripts/backfill-fair-play.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
